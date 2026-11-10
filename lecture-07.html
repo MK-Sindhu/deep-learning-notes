@@ -1,0 +1,1519 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lecture 7 · Activations, initialization, batch norm · DL Notes</title>
+<meta name="description" content="CS6910 Deep Learning (IIT Madras) notes, Lecture 7: greedy layerwise pre-training, activation functions from sigmoid to GELU and SiLU, weight initialization and batch normalization.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<style>
+.seg { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn.sm { padding: 8px 12px; font-size: 13px; }
+.btn[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.controls .grp { font: 500 12px/1.3 var(--font-mono); color: var(--muted); }
+.controls input[type="range"]:disabled { opacity: .4; }
+pre.codeblock { margin: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 18px; overflow-x: auto; font: 13.5px/1.6 var(--font-mono); color: var(--ink); max-width: 100%; }
+pre.codeblock code { background: none; padding: 0; font-size: inherit; border-radius: 0; }
+.l07-wide { min-width: 720px; }
+.l07-f { fill: none; stroke: var(--accent); stroke-width: 2.6; stroke-linejoin: round; }
+.l07-df { fill: none; stroke: var(--ink-2); stroke-width: 1.8; stroke-dasharray: 6 4; }
+.l07-ghost { fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-dasharray: 2 3; }
+.l07-approx { fill: none; stroke: var(--ok); stroke-width: 1.8; stroke-dasharray: 5 3; }
+.l07-piece { stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 3 4; }
+.l07-probe { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.l07-dot-d { fill: var(--surface); stroke: var(--ink-2); stroke-width: 2; }
+.l07-bar { fill: var(--accent); }
+.l07-over { fill: var(--mark); stroke: var(--ink); stroke-width: 1; }
+.l07-panel { fill: none; stroke: var(--rule); stroke-width: 1; }
+</style>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <!-- PARTNAV:START --><nav class="partnav" aria-label="Lectures"><a href="index.html">DL Notes</a><span class="sep">/</span><span>Lecture 7</span><span class="sep">·</span><a href="lecture-05.html">← Lecture 5</a><span class="sep">·</span><a href="lecture-08.html">Lecture 8 →</a></nav><!-- PARTNAV:END -->
+    <div class="eyebrow">CS6910 · Deep Learning · IIT Madras</div>
+    <h1>Pre-training, activation functions, initialization and batch norm</h1>
+    <p class="lede">Until 2006, deep networks trained with backpropagation rarely converged, and greedy layerwise pre-training was the first fix that worked. This lecture asks why it worked, then follows the levers it pointed to: activation functions that keep gradients alive, weight scales that keep activations spread out from layer to layer, and batch normalization, which enforces that spread directly.</p>
+    <div class="meta">
+      <span><b>Lecture 7</b></span>
+      <span>Instructor <b>Prof. Mitesh M. Khapra</b></span>
+      <span>About <b>120 min</b> of video</span>
+      <span><b>6</b> modules</span>
+    </div>
+    <div class="watch">
+      <a class="btn solid" href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-6/fullscreen" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 0.5 H6.5 L8.5 2.5 V9.5 H2 Z"/></svg>Slides</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=PwKAEs9uuZw" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 8:54</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=TNcZ5l54pLc" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 22:11</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=n5ZP4Ek9cxE" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 14:29</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=4eQiXN69FdQ" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 34:11</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=oW7ZBLss2L0" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 19:42</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=srcPpAV6Yfs" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 20:59</a>
+    </div>
+  </div>
+</header>
+
+<div class="page gutter">
+  <nav class="toc" aria-label="Contents">
+    <div>
+      <h4>Module 7.1 · Recap</h4>
+      <ul>
+        <li><a href="#recap">A game of gradients</a></li>
+        <li><a href="#before-2006">Why depth was hard</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 7.2 · Pre-training</h4>
+      <ul>
+        <li><a href="#pretraining">Greedy layerwise pre-training</a></li>
+        <li><a href="#optimization-view">Better optimization?</a></li>
+        <li><a href="#regularization-view">Better regularization?</a></li>
+        <li><a href="#initialization-view">Better initialization?</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 7.3 · Classic activations</h4>
+      <ul>
+        <li><a href="#nonlinearity">Why non-linearity</a></li>
+        <li><a href="#sigmoid">Sigmoid</a></li>
+        <li><a href="#tanh">tanh</a></li>
+        <li><a href="#relu">ReLU and dead units</a></li>
+        <li><a href="#relu-variants">Leaky, parametric, ELU</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 7.3 · Newer activations</h4>
+      <ul>
+        <li><a href="#maxout">Maxout</a></li>
+        <li><a href="#gelu">GELU</a></li>
+        <li><a href="#selu-swish">SELU, Swish, SiLU</a></li>
+        <li><a href="#which-activation">Compare and choose</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 7.4 · Initialization</h4>
+      <ul>
+        <li><a href="#zero-init">Equal weights: symmetry</a></li>
+        <li><a href="#init-scale">Too small, too large</a></li>
+        <li><a href="#xavier">Keep n·Var(w) = 1</a></li>
+        <li><a href="#he-init">ReLU: a factor of 2</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 7.5 · Batch norm</h4>
+      <ul>
+        <li><a href="#batchnorm">Standardize pre-activations</a></li>
+        <li><a href="#batchnorm-scale">Learnable γ and β</a></li>
+        <li><a href="#layernorm">Limits; layer norm</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Revision</h4>
+      <ul>
+        <li><a href="#terms">Key terms</a></li>
+        <li><a href="#test">Test yourself</a></li>
+        <li><a href="index.html">All lectures</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="glance" id="glance">
+      <h2>At a glance</h2>
+      <ul>
+        <li>Training is <b>a game of gradients</b>. Whatever the optimizer, each weight moves by its gradient, and the gradient of a weight is <b>proportional to the input it multiplies</b>, \(h_{i-1}\). Backpropagation was popular from 1986, yet until 2006 deep networks trained with it rarely converged.</li>
+        <li>Hinton and Salakhutdinov (2006) revived the field with <dfn>greedy layerwise unsupervised pre-training</dfn>: train each hidden layer, one at a time, to reconstruct its own input, then add the output layer and fine-tune everything on the supervised loss. Later studies found evidence that it helps optimization when capacity is small, acts as a regularizer, and makes results robust to the random initialization.</li>
+        <li>Those studies pointed at four levers: optimizers, regularizers, <b>activation functions</b> and <b>initialization</b>. Sigmoid saturates, is not zero-centred and is costly; tanh fixes only the centring; ReLU is cheap and does not saturate for \(x > 0\), but its units can die. Leaky and parametric ReLU, ELU and maxout keep a gradient flowing, and GELU \(= x\Phi(x)\), Swish \(= x\sigma(\beta x)\) and SiLU \(= x\sigma(x)\) are smooth newer choices.</li>
+        <li>Equal initial weights never break symmetry. Weights that are too small shrink activations toward 0, and weights that are too large saturate them; either way gradients vanish. Since each layer multiplies the variance by \(n\operatorname{Var}(w)\), choose \(n\operatorname{Var}(w) = 1\) (<code>randn/sqrt(fan_in)</code>), and twice that for ReLU.</li>
+        <li><dfn>Batch normalization</dfn> standardizes every pre-activation over the mini-batch, then applies a learnable scale \(\gamma\) and shift \(\beta\). It is differentiable and makes training less sensitive to initialization, but it fails for very small batches, where <b>layer normalization</b> (statistics across the units of one sample) takes over.</li>
+      </ul>
+    </div>
+
+    <!-- ============ MODULE 7.1 ============ -->
+    <section id="recap">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=PwKAEs9uuZw&amp;t=33s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 0:33</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=PwKAEs9uuZw&amp;t=155s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 2:35 deeper network</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=PwKAEs9uuZw&amp;t=278s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 4:38 things to remember</a>
+        </div>
+        <h2>Training is a game of gradients</h2>
+      </div>
+      <p>The lecture starts by recalling how networks are trained. For a single sigmoid neuron \(f(x) = \sigma(wx)\) with the squared-error loss of <a href="lecture-03.html">Lecture 3</a>, gradient descent repeats</p>
+      <div class="eq">\[ w_{t+1} = w_t - \eta\,\nabla w_t, \qquad \nabla w_t = \frac{\partial \mathcal{L}(w)}{\partial w_t} = (f(x) - y)\, f(x)\,\big(1 - f(x)\big)\, x \]</div>
+      <p>A wider network, with inputs \(x_1, x_2, x_3\) feeding one sigmoid neuron, changes nothing. Each weight gets its own copy of the rule, \(w_i \leftarrow w_i - \eta\,\nabla w_i\), with \(\nabla w_i = (f(x) - y)\,f(x)(1 - f(x))\,x_i\).</p>
+      <p>A deeper, thin network chains sigmoid neurons: \(a_i = w_i h_{i-1}\) and \(h_i = \sigma(a_i)\), starting from \(h_0 = x\). The chain rule gives</p>
+      <div class="eq">\[ \frac{\partial \mathcal{L}(w)}{\partial w_1} = \frac{\partial \mathcal{L}(w)}{\partial y}\cdot\frac{\partial y}{\partial a_3}\cdot\frac{\partial a_3}{\partial h_2}\cdot\frac{\partial h_2}{\partial a_2}\cdot\frac{\partial a_2}{\partial h_1}\cdot\frac{\partial h_1}{\partial a_1}\cdot\frac{\partial a_1}{\partial w_1}, \qquad \frac{\partial a_1}{\partial w_1} = h_0 \]</div>
+      <p>In general \(\nabla w_i = \frac{\partial \mathcal{L}(w)}{\partial y} \cdots h_{i-1}\). The gradient of a weight is <b>proportional to the input \(h_{i-1}\) it multiplies</b>, and the lecture uses this fact again and again. A network that is both deep and wide applies the same chain rule along every path from the weight to the output and adds the paths up, as in backpropagation (<a href="lecture-04.html">Lecture 4</a>).</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 720 236" role="img" aria-label="A thin network: input x equals h0, weight w1, sigmoid unit h1, weight w2, sigmoid unit h2, weight w3, sigmoid output y, then the loss. Below it, the gradient of the loss with respect to w1 is written as one local factor per step: h0, sigma prime of a1, w2, sigma prime of a2, w3, sigma prime of a3, and the derivative of the loss with respect to y.">
+            <defs><marker id="l07-f1-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker><marker id="l07-f1-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-row" x="20" y="26">forward</text>
+            <rect class="d-box" x="24" y="62" width="72" height="36" rx="8"/>
+            <text x="60" y="85" text-anchor="middle">x = h₀</text>
+            <line class="d-ln" x1="96" y1="80" x2="194" y2="80" marker-end="url(#l07-f1-ah)"/>
+            <text class="d-t" x="146" y="72" text-anchor="middle">w₁</text>
+            <circle class="node" cx="220" cy="80" r="24"/>
+            <text x="220" y="85" text-anchor="middle">σ</text>
+            <text class="d-s" x="220" y="46" text-anchor="middle">h₁ = σ(a₁)</text>
+            <text class="d-s" x="220" y="124" text-anchor="middle">a₁ = w₁h₀</text>
+            <line class="d-ln" x1="244" y1="80" x2="344" y2="80" marker-end="url(#l07-f1-ah)"/>
+            <text class="d-t" x="295" y="72" text-anchor="middle">w₂</text>
+            <circle class="node" cx="370" cy="80" r="24"/>
+            <text x="370" y="85" text-anchor="middle">σ</text>
+            <text class="d-s" x="370" y="46" text-anchor="middle">h₂ = σ(a₂)</text>
+            <text class="d-s" x="370" y="124" text-anchor="middle">a₂ = w₂h₁</text>
+            <line class="d-ln" x1="394" y1="80" x2="494" y2="80" marker-end="url(#l07-f1-ah)"/>
+            <text class="d-t" x="445" y="72" text-anchor="middle">w₃</text>
+            <circle class="node" cx="520" cy="80" r="24"/>
+            <text x="520" y="85" text-anchor="middle">σ</text>
+            <text class="d-s" x="520" y="46" text-anchor="middle">y = σ(a₃)</text>
+            <text class="d-s" x="520" y="124" text-anchor="middle">a₃ = w₃h₂</text>
+            <line class="d-ln" x1="544" y1="80" x2="614" y2="80" marker-end="url(#l07-f1-ah)"/>
+            <rect class="d-box-acc" x="616" y="62" width="80" height="36" rx="8"/>
+            <text x="656" y="85" text-anchor="middle">ℒ(w)</text>
+            <text class="d-row" x="20" y="156">backward</text>
+            <line class="d-ln-acc d-dash" x1="656" y1="152" x2="112" y2="152" marker-end="url(#l07-f1-aha)"/>
+            <text class="d-t" x="110" y="190" text-anchor="end">∇w₁ =</text>
+            <text class="d-t" x="145" y="190" text-anchor="middle" style="fill: var(--accent)">h₀</text>
+            <text class="d-s" x="182.5" y="190" text-anchor="middle">×</text>
+            <text class="d-t" x="220" y="190" text-anchor="middle">σ′(a₁)</text>
+            <text class="d-s" x="257.5" y="190" text-anchor="middle">×</text>
+            <text class="d-t" x="295" y="190" text-anchor="middle">w₂</text>
+            <text class="d-s" x="332.5" y="190" text-anchor="middle">×</text>
+            <text class="d-t" x="370" y="190" text-anchor="middle">σ′(a₂)</text>
+            <text class="d-s" x="407.5" y="190" text-anchor="middle">×</text>
+            <text class="d-t" x="445" y="190" text-anchor="middle">w₃</text>
+            <text class="d-s" x="482.5" y="190" text-anchor="middle">×</text>
+            <text class="d-t" x="520" y="190" text-anchor="middle">σ′(a₃)</text>
+            <text class="d-s" x="588" y="190" text-anchor="middle">×</text>
+            <text class="d-t" x="656" y="190" text-anchor="middle">∂ℒ/∂y</text>
+            <text class="d-s" x="20" y="224">Each factor sits under the step it comes from. The last one, h₀, is the input that w₁ multiplies.</text>
+          </svg>
+        </div>
+        <figcaption><b>One factor per step.</b> In the thin network, the gradient for \(w_1\) multiplies the local derivative of every step between \(w_1\) and the loss. Two kinds of factor matter later: the activation derivatives \(\sigma'(a_i)\), which vanish when a unit saturates, and the input \(h_0\) at the end, which makes every weight's gradient proportional to its own input.</figcaption>
+      </figure>
+
+      <p class="rule-of-thumb">Things to remember: training is a game of gradients, played with any gradient-based method from <a href="lecture-05.html">Lecture 5</a>. A gradient measures a parameter's responsibility for the loss, and it is proportional to the input to that parameter.</p>
+    </section>
+
+    <section id="before-2006">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=PwKAEs9uuZw&amp;t=308s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 5:08</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=PwKAEs9uuZw&amp;t=369s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 6:09 backprop since 1986</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=PwKAEs9uuZw&amp;t=461s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 7:41 what changed</a>
+        </div>
+        <h2>Why deep networks were hard to train before 2006</h2>
+      </div>
+      <p>Backpropagation is old. It existed before 1986, when Rumelhart and colleagues made it popular for neural networks, and it is still how every network in this course is trained. In principle it trains a network of any depth by chaining gradients. In practice, networks as deep as four or five layers were not trained successfully with it: even after a large number of epochs, training did not converge reliably. Until 2006 it was very hard to train deep networks.</p>
+      <p>Three things have changed since the 1990s. There is far more data, which a network with many parameters needs. Compute is much faster. And several ideas fell into place that make deep networks trainable at all, which is what this lecture is about. The turning point was a 2006 paper by Hinton and Salakhutdinov, "Reducing the dimensionality of data with neural networks" (<i>Science</i>), which revived the field through <b>unsupervised pre-training</b>.</p>
+    </section>
+
+    <!-- ============ MODULE 7.2 ============ -->
+    <section id="pretraining">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=TNcZ5l54pLc&amp;t=91s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 1:31</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=TNcZ5l54pLc&amp;t=212s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 3:32 reconstruct x</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=TNcZ5l54pLc&amp;t=645s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 10:45 next layer</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=TNcZ5l54pLc&amp;t=860s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 14:20 fine-tune</a>
+        </div>
+        <h2>Greedy layerwise unsupervised pre-training</h2>
+      </div>
+      <p>The 2006 paper introduced the idea with restricted Boltzmann machines (RBMs). The lecture explains it with <dfn>autoencoders</dfn> instead. Autoencoders are not otherwise part of this offering of the course, so only the part that is needed is introduced here.</p>
+      <p>Take a deep network from \(\mathbf{x} \in \mathbb{R}^n\) to an output \(y\), and look only at its first two layers, the input \(\mathbf{x}\) and the first hidden layer \(\mathbf{h}_1\). Cut the network after \(\mathbf{h}_1\) and attach a new output layer whose job is to reproduce the input, \(\hat{\mathbf{x}}\), from \(\mathbf{h}_1\). Train these weights to make the reconstruction good on all \(m\) training inputs:</p>
+      <div class="eq">\[ \min \; \frac{1}{m}\sum_{i=1}^{m}\sum_{j=1}^{n} \big(\hat{x}_{ij} - x_{ij}\big)^2 \]</div>
+      <p>This objective is <b>unsupervised</b>. It uses only the inputs and never the label \(y\).</p>
+      <p>Why is a good reconstruction useful? Suppose \(\mathbf{x}\) has 1024 dimensions and \(\mathbf{h}_1\) only 256, and the network rebuilds \(\mathbf{x}\) from \(\mathbf{h}_1\) with zero error. Then \(\mathbf{h}_1\) holds everything that matters in \(\mathbf{x}\). That is plausible because real inputs are redundant: weight, height and BMI (BMI follows from the other two), weight in kilograms and in pounds, salary and income tax. Squeezing the input through a smaller layer and rebuilding it is exactly what an autoencoder does, and under certain conditions it is equivalent to principal component analysis. The weights of layer 1 now compute an abstract representation \(\mathbf{h}_1\) of the input, and learning them only required training a network with one hidden layer. Shallow networks were never the problem.</p>
+      <p>Now repeat one level up. Fix the weights of layer 1 and compute \(\mathbf{h}_1\) for every training input. Treat these as the new data, add \(\mathbf{h}_2\), and train it to reconstruct \(\mathbf{h}_1\) with the same objective:</p>
+      <div class="eq">\[ \min \; \frac{1}{m}\sum_{i=1}^{m}\sum_{j} \big(\hat{h}_{1_{ij}} - h_{1_{ij}}\big)^2 \]</div>
+      <p>\(\mathbf{h}_2\) is then an abstract representation of \(\mathbf{h}_1\), and so a deeper abstraction of \(\mathbf{x}\). Continue in the same way up to the last hidden layer, the one just before the output layer.</p>
+      <p>Finally, return to the original problem. Keep the pre-trained weights, add the output layer with random weights, and train the whole network on the task's supervised objective, \(\min \frac{1}{m}\sum_i \big(y_i - f(\mathbf{x}_i)\big)^2\), with full backpropagation. Every weight is updated, but the hidden layers start from their pre-trained values instead of random ones.</p>
+      <ol class="algo">
+        <li class="algo-title">Greedy layerwise pre-training, then fine-tuning</li>
+        <li>Set \(\mathbf{h}_0 = \mathbf{x}\) for every training input.</li>
+        <li>For each hidden layer \(k = 1, \dots, L\): keep layers \(1, \dots, k-1\) fixed, and train the weights into \(\mathbf{h}_k\), together with a temporary output layer, to reconstruct \(\mathbf{h}_{k-1}\) from \(\mathbf{h}_k\) with the squared error. Then compute \(\mathbf{h}_k\) for every input.</li>
+        <li>Remove the temporary reconstruction layers and add the real output layer with random weights.</li>
+        <li>Fine-tune all the weights on the supervised loss with backpropagation, starting from the pre-trained values.</li>
+      </ol>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 760 304" role="img" aria-label="Three panels. One: input x, hidden layer h1 and a reconstruction x-hat; the weights into h1 and out to x-hat are trained to rebuild x. Two: x to h1 is frozen; h2 is trained to rebuild h1. Three: an output node y is added and every weight in the network is trained on the supervised loss.">
+            <line class="d-rule" x1="250" y1="10" x2="250" y2="280"/>
+            <line class="d-rule" x1="505" y1="10" x2="505" y2="280"/>
+            <line class="d-ln-acc" x1="58.7" y1="77.32" x2="116.3" y2="92.68" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="57.03" y1="80.62" x2="117.97" y2="129.38" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="55.4" y1="82.2" x2="119.6" y2="167.8" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="58.7" y1="112.68" x2="116.3" y2="97.32" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="58.7" y1="117.32" x2="116.3" y2="132.68" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="57.03" y1="120.62" x2="117.97" y2="169.38" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="57.03" y1="149.38" x2="117.97" y2="100.62" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="58.7" y1="152.68" x2="116.3" y2="137.32" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="58.7" y1="157.32" x2="116.3" y2="172.68" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="55.4" y1="187.8" x2="119.6" y2="102.2" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="57.03" y1="189.38" x2="117.97" y2="140.62" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="58.7" y1="192.68" x2="116.3" y2="177.32" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc d-dash" x1="133.7" y1="92.68" x2="191.3" y2="77.32" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc d-dash" x1="133.7" y1="97.32" x2="191.3" y2="112.68" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc d-dash" x1="132.03" y1="100.62" x2="192.97" y2="149.38" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc d-dash" x1="130.4" y1="102.2" x2="194.6" y2="187.8" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc d-dash" x1="132.03" y1="129.38" x2="192.97" y2="80.62" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc d-dash" x1="133.7" y1="132.68" x2="191.3" y2="117.32" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc d-dash" x1="133.7" y1="137.32" x2="191.3" y2="152.68" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc d-dash" x1="132.03" y1="140.62" x2="192.97" y2="189.38" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc d-dash" x1="130.4" y1="167.8" x2="194.6" y2="82.2" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc d-dash" x1="132.03" y1="169.38" x2="192.97" y2="120.62" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc d-dash" x1="133.7" y1="172.68" x2="191.3" y2="157.32" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc d-dash" x1="133.7" y1="177.32" x2="191.3" y2="192.68" style="stroke-width: 1.1"/>
+            <circle class="node" cx="50" cy="75" r="9"/>
+            <circle class="node" cx="50" cy="115" r="9"/>
+            <circle class="node" cx="50" cy="155" r="9"/>
+            <circle class="node" cx="50" cy="195" r="9"/>
+            <circle class="node-acc" cx="125" cy="95" r="9"/>
+            <circle class="node-acc" cx="125" cy="135" r="9"/>
+            <circle class="node-acc" cx="125" cy="175" r="9"/>
+            <circle class="d-off" cx="200" cy="75" r="9"/>
+            <circle class="d-off" cx="200" cy="115" r="9"/>
+            <circle class="d-off" cx="200" cy="155" r="9"/>
+            <circle class="d-off" cx="200" cy="195" r="9"/>
+            <text class="d-h" x="16" y="24">1 · Pre-train layer 1</text>
+            <text class="d-s" x="16" y="44">reconstruct x from h₁</text>
+            <text class="d-t" x="50" y="226" text-anchor="middle">x</text>
+            <text class="d-t" x="125" y="226" text-anchor="middle">h₁</text>
+            <text class="d-t" x="200" y="226" text-anchor="middle">x̂</text>
+            <text class="d-s" x="125" y="252" text-anchor="middle">min Σ ‖x̂ − x‖² over the m inputs</text>
+            <text class="d-s" x="125" y="272" text-anchor="middle">no labels y used</text>
+            <line class="d-ln" x1="293.6" y1="77.65" x2="341.4" y2="92.35" style="stroke: var(--muted); stroke-width: 1"/>
+            <line class="d-ln" x1="291.61" y1="81.1" x2="343.39" y2="128.9" style="stroke: var(--muted); stroke-width: 1"/>
+            <line class="d-ln" x1="289.9" y1="82.55" x2="345.1" y2="167.45" style="stroke: var(--muted); stroke-width: 1"/>
+            <line class="d-ln" x1="293.6" y1="112.35" x2="341.4" y2="97.65" style="stroke: var(--muted); stroke-width: 1"/>
+            <line class="d-ln" x1="293.6" y1="117.65" x2="341.4" y2="132.35" style="stroke: var(--muted); stroke-width: 1"/>
+            <line class="d-ln" x1="291.61" y1="121.1" x2="343.39" y2="168.9" style="stroke: var(--muted); stroke-width: 1"/>
+            <line class="d-ln" x1="291.61" y1="148.9" x2="343.39" y2="101.1" style="stroke: var(--muted); stroke-width: 1"/>
+            <line class="d-ln" x1="293.6" y1="152.35" x2="341.4" y2="137.65" style="stroke: var(--muted); stroke-width: 1"/>
+            <line class="d-ln" x1="293.6" y1="157.65" x2="341.4" y2="172.35" style="stroke: var(--muted); stroke-width: 1"/>
+            <line class="d-ln" x1="289.9" y1="187.45" x2="345.1" y2="102.55" style="stroke: var(--muted); stroke-width: 1"/>
+            <line class="d-ln" x1="291.61" y1="188.9" x2="343.39" y2="141.1" style="stroke: var(--muted); stroke-width: 1"/>
+            <line class="d-ln" x1="293.6" y1="192.35" x2="341.4" y2="177.65" style="stroke: var(--muted); stroke-width: 1"/>
+            <line class="d-ln-acc" x1="358.6" y1="97.65" x2="406.4" y2="112.35" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="356.61" y1="101.1" x2="408.39" y2="148.9" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="358.6" y1="132.35" x2="406.4" y2="117.65" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="358.6" y1="137.65" x2="406.4" y2="152.35" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="356.61" y1="168.9" x2="408.39" y2="121.1" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="358.6" y1="172.35" x2="406.4" y2="157.65" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc d-dash" x1="423.6" y1="112.35" x2="471.4" y2="97.65" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc d-dash" x1="423.6" y1="117.65" x2="471.4" y2="132.35" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc d-dash" x1="421.61" y1="121.1" x2="473.39" y2="168.9" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc d-dash" x1="421.61" y1="148.9" x2="473.39" y2="101.1" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc d-dash" x1="423.6" y1="152.35" x2="471.4" y2="137.65" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc d-dash" x1="423.6" y1="157.65" x2="471.4" y2="172.35" style="stroke-width: 1.1"/>
+            <circle class="node" cx="285" cy="75" r="9"/>
+            <circle class="node" cx="285" cy="115" r="9"/>
+            <circle class="node" cx="285" cy="155" r="9"/>
+            <circle class="node" cx="285" cy="195" r="9"/>
+            <circle class="node" cx="350" cy="95" r="9"/>
+            <circle class="node" cx="350" cy="135" r="9"/>
+            <circle class="node" cx="350" cy="175" r="9"/>
+            <circle class="node-acc" cx="415" cy="115" r="9"/>
+            <circle class="node-acc" cx="415" cy="155" r="9"/>
+            <circle class="d-off" cx="480" cy="95" r="9"/>
+            <circle class="d-off" cx="480" cy="135" r="9"/>
+            <circle class="d-off" cx="480" cy="175" r="9"/>
+            <text class="d-h" x="266" y="24">2 · Pre-train layer 2</text>
+            <text class="d-s" x="266" y="44">layer 1 fixed; reconstruct h₁ from h₂</text>
+            <text class="d-t" x="285" y="226" text-anchor="middle">x</text>
+            <text class="d-t" x="350" y="226" text-anchor="middle">h₁</text>
+            <text class="d-t" x="415" y="226" text-anchor="middle">h₂</text>
+            <text class="d-t" x="480" y="226" text-anchor="middle">ĥ₁</text>
+            <text class="d-s" x="382" y="252" text-anchor="middle">min Σ ‖ĥ₁ − h₁‖² over the m inputs</text>
+            <text class="d-s" x="382" y="272" text-anchor="middle">grey: frozen weights</text>
+            <line class="d-ln-acc" x1="548.6" y1="77.65" x2="596.4" y2="92.35" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="546.61" y1="81.1" x2="598.39" y2="128.9" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="544.9" y1="82.55" x2="600.1" y2="167.45" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="548.6" y1="112.35" x2="596.4" y2="97.65" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="548.6" y1="117.65" x2="596.4" y2="132.35" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="546.61" y1="121.1" x2="598.39" y2="168.9" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="546.61" y1="148.9" x2="598.39" y2="101.1" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="548.6" y1="152.35" x2="596.4" y2="137.65" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="548.6" y1="157.65" x2="596.4" y2="172.35" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="544.9" y1="187.45" x2="600.1" y2="102.55" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="546.61" y1="188.9" x2="598.39" y2="141.1" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="548.6" y1="192.35" x2="596.4" y2="177.65" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="613.6" y1="97.65" x2="661.4" y2="112.35" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="611.61" y1="101.1" x2="663.39" y2="148.9" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="613.6" y1="132.35" x2="661.4" y2="117.65" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="613.6" y1="137.65" x2="661.4" y2="152.35" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="611.61" y1="168.9" x2="663.39" y2="121.1" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="613.6" y1="172.35" x2="661.4" y2="157.65" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="678.6" y1="117.65" x2="726.4" y2="132.35" style="stroke-width: 1.1"/>
+            <line class="d-ln-acc" x1="678.6" y1="152.35" x2="726.4" y2="137.65" style="stroke-width: 1.1"/>
+            <circle class="node" cx="540" cy="75" r="9"/>
+            <circle class="node" cx="540" cy="115" r="9"/>
+            <circle class="node" cx="540" cy="155" r="9"/>
+            <circle class="node" cx="540" cy="195" r="9"/>
+            <circle class="node-acc" cx="605" cy="95" r="9"/>
+            <circle class="node-acc" cx="605" cy="135" r="9"/>
+            <circle class="node-acc" cx="605" cy="175" r="9"/>
+            <circle class="node-acc" cx="670" cy="115" r="9"/>
+            <circle class="node-acc" cx="670" cy="155" r="9"/>
+            <circle class="pt-new" cx="735" cy="135" r="9"/>
+            <text class="d-h" x="521" y="24">3 · Fine-tune everything</text>
+            <text class="d-s" x="521" y="44">add the output layer; supervised loss</text>
+            <text class="d-t" x="540" y="226" text-anchor="middle">x</text>
+            <text class="d-t" x="605" y="226" text-anchor="middle">h₁</text>
+            <text class="d-t" x="670" y="226" text-anchor="middle">h₂</text>
+            <text class="d-t" x="735" y="226" text-anchor="middle">y</text>
+            <text class="d-al" x="735" y="116" text-anchor="middle">new</text>
+            <text class="d-s" x="637" y="252" text-anchor="middle">min Σ (y − f(x))² over the m inputs</text>
+            <text class="d-s" x="637" y="272" text-anchor="middle">all weights updated by backprop</text>
+            <text class="d-s" x="16" y="296">Accent: weights being trained · dashed nodes: temporary reconstruction layer, used only in that step</text>
+          </svg>
+        </div>
+        <figcaption><b>Pre-train one layer at a time, then fine-tune.</b> Each pre-training step trains a shallow network on an unsupervised reconstruction task, so it never meets the difficulty of training a deep network. Only the last step uses the labels, and it starts from the weights the earlier steps found.</figcaption>
+      </figure>
+
+      <p>In effect, the weights of the network have been <b>initialized</b> with a greedy unsupervised objective and then <b>fine-tuned</b> with the supervised one. It is <dfn>greedy</dfn> because each layer is trained to do well on its own, without regard to the layers above it. With this procedure, networks that had been hard to train could be trained effectively (deep for the time, though shallow by today's standards). Unsupervised pre-training still exists, today mostly in the context of Transformers, with different objectives but a similar idea.</p>
+    </section>
+
+    <section id="optimization-view">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=TNcZ5l54pLc&amp;t=1014s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 16:54 two questions</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=n5ZP4Ek9cxE&amp;t=30s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 0:30</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=n5ZP4Ek9cxE&amp;t=154s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 2:34 capacity experiment</a>
+        </div>
+        <h2>Why does it work? Better optimization</h2>
+      </div>
+      <p>Why does pre-training work better? Two explanations were put forward, and studies in 2009 (Erhan et al.; Larochelle et al.) looked at both. Does pre-training lead to <b>better optimization</b>, or to <b>better regularization</b>?</p>
+      <p>The questions are different. Optimization concerns the training data only: can the training loss be driven down? Regularization concerns generalization, doing better on test data the model was not trained on. So the first question asks whether, without pre-training, the error could not even be brought to zero on the training set.</p>
+      <div class="eq">\[ \text{minimize}\;\; \mathcal{L}(\theta) = \frac{1}{m}\sum_{i=1}^{m} \big(y_i - f(\mathbf{x}_i)\big)^2 \]</div>
+      <p>The error surface of a deep network's supervised objective is highly non-convex, with many hills, plateaus and valleys. Even so, deep networks have large capacity. By the universal approximation theorem (<a href="lecture-03.html">Lecture 3</a>), a large enough network can make the error as small as we like. So it should still be easy to land in one of the many zero-error regions.</p>
+      <p>Larochelle et al. tested this by increasing the capacity of the <b>last layer</b>: many neurons in the layer before the output means many weights in the last layer. With a large-capacity last layer, \(\mathcal{L}(\theta)\) went to 0 even without pre-training. When capacity was small, pre-training helped, so in that case it was helping the optimization itself.</p>
+      <p class="note">These were empirical experiments, small in scale compared with deep learning today. Their value was the direction they suggested: if optimization is a bottleneck, it is worth looking for better optimization methods as well.</p>
+    </section>
+
+    <section id="regularization-view">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=n5ZP4Ek9cxE&amp;t=336s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 5:36</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=n5ZP4Ek9cxE&amp;t=396s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 6:36 constrained weights</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=n5ZP4Ek9cxE&amp;t=518s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 8:38 Ω then ℒ</a>
+        </div>
+        <h2>Or better regularization</h2>
+      </div>
+      <p>Regularization constrains the weights to certain regions of the parameter space. L1 regularization pushes most weights to 0 (the diamond-shaped region), L2 regularization keeps most weights from taking large values (the circle), and early stopping has a similar effect (<a href="lecture-06.html">Lecture 6</a>).</p>
+      <p>Pre-training does the same. It constrains the weights to regions where the characteristics of the data are captured well, as measured by the unsupervised objective</p>
+      <div class="eq">\[ \Omega(\theta) = \frac{1}{m}\sum_{i=1}^{m}\sum_{j=1}^{n} \big(x_{ij} - \hat{x}_{ij}\big)^2 \]</div>
+      <p>Supervised training of \(\mathcal{L}(\theta)\) then starts inside that region, so where the weights end up depends on where pre-training put them. The unsupervised objective works like an additional constraint on the optimization problem: learning is not greedy with respect to the supervised objective alone, and the solution also satisfies the unsupervised one.</p>
+      <p>Compare the regularized loss of Lecture 6, \(\mathcal{L}(\theta) + \Omega(\theta)\), which minimizes both terms together. Pre-training minimizes the two terms <b>one after the other</b>: first \(\Omega(\theta)\), then \(\mathcal{L}(\theta)\) starting from where \(\Omega\) left the weights. Seen this way, it acts as a regularizer.</p>
+    </section>
+
+    <section id="initialization-view">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=n5ZP4Ek9cxE&amp;t=549s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 9:09</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=n5ZP4Ek9cxE&amp;t=731s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 12:11 four directions</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=TNcZ5l54pLc&amp;t=1165s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 19:25</a>
+        </div>
+        <h2>Or a better initialization</h2>
+      </div>
+      <p>Other experiments (Erhan et al., 2009) showed that pre-training makes training more <b>robust to random initialization</b>. Initialize a network at random, train it, and record its final error. Repeat this many times (around 100) with different random initializations and summarize the errors in a box plot. For shallow networks the spread is small. For deep networks without pre-training it is large: the result depends heavily on the particular initialization. With pre-training inserted between the random initialization and the supervised training, the spread stays small even for deep networks.</p>
+      <p>One accepted hypothesis is therefore that pre-training leads to <b>better weight initializations</b>, from which the layers capture the internal characteristics of the data.</p>
+      <h3>What has happened since 2006–2009</h3>
+      <p>None of these studies gave a conclusive answer, and that was not what mattered. Each lens (optimization, regularization, initialization) suggested a research direction, and deep learning has advanced along all of them:</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Direction</th><th>What it led to</th><th>Where</th></tr></thead>
+          <tbody>
+            <tr><td>Better optimization algorithms</td><td>Momentum, NAG, AdaGrad, RMSProp, Adam and its variants</td><td><a href="lecture-05.html">Lecture 5</a></td></tr>
+            <tr><td>Better regularization methods</td><td>L2, early stopping and others adopted in deep learning; dropout, made for it</td><td><a href="lecture-06.html">Lecture 6</a></td></tr>
+            <tr><td>Better activation functions</td><td>ReLU and its variants, maxout, GELU, Swish, SiLU</td><td><a href="#nonlinearity">Module 7.3</a></td></tr>
+            <tr><td>Better weight initialization</td><td>Scaling by the fan-in, the factor of 2 for ReLU, and batch normalization</td><td><a href="#zero-init">Modules 7.4–7.5</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ MODULE 7.3 ============ -->
+    <section id="nonlinearity">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=4eQiXN69FdQ&amp;t=32s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 0:32</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=4eQiXN69FdQ&amp;t=94s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 1:34 linear layers</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=4eQiXN69FdQ&amp;t=290s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 4:50 non-linearity</a>
+        </div>
+        <h2>Non-linearity is what makes depth useful</h2>
+      </div>
+      <p>Before comparing activation functions, the lecture asks what makes deep networks powerful. Take a thin deep network and replace every sigmoid by the identity, so that \(h_i = a_i\). Then</p>
+      <div class="eq">\[ y = w_4\,\big(w_3\,\big(w_2\,(w_1 x)\big)\big) = (w_4 w_3 w_2 w_1)\,x \]</div>
+      <p>which is a single linear transformation of \(x\), however many layers there are. (With vectors and matrices the product \(W_4W_3W_2W_1\) is still a single matrix.) Such a network can only learn linear decision boundaries. If one class of points surrounds the other, no line or hyperplane separates them without a large error, and a deep linear network cannot learn the boundary. A deep non-linear network can, as the universal approximation theorem says (<a href="lecture-03.html">Lecture 3</a>).</p>
+      <p>The power of deep networks comes from the non-linearities, and the non-linearities come from the activation functions. That is why it pays to ask which non-linear functions train well. Much of the material that follows is based on Andrej Karpathy's lecture notes.</p>
+    </section>
+
+    <section id="sigmoid">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=4eQiXN69FdQ&amp;t=350s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 5:50</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=4eQiXN69FdQ&amp;t=547s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 9:07 saturation</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=4eQiXN69FdQ&amp;t=742s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 12:22 not zero-centred</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=4eQiXN69FdQ&amp;t=1061s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 17:41 zigzag</a>
+        </div>
+        <h2>Sigmoid: saturating, not zero-centred, costly</h2>
+      </div>
+      <div class="eq">\[ \sigma(x) = \frac{1}{1 + e^{-x}}, \qquad \frac{\partial \sigma(x)}{\partial x} = \sigma(x)\,\big(1 - \sigma(x)\big) \]</div>
+      <p>The sigmoid compresses every input into the range \([0, 1]\). Training is about gradients, so look at its derivative. In a deep sigmoid network, the chain rule for \(\nabla w_2\) passes through the later layers and meets factors such as</p>
+      <div class="eq">\[ \frac{\partial h_3}{\partial a_3} = \frac{\partial \sigma(a_3)}{\partial a_3} = \sigma(a_3)\,\big(1 - \sigma(a_3)\big), \qquad a_3 = w_3 h_2, \quad h_3 = \sigma(a_3) \]</div>
+
+      <h3>Problem 1: saturated neurons make the gradient vanish</h3>
+      <p>A sigmoid neuron is <dfn>saturated</dfn> when its output sits at an extreme, \(\sigma(x) = 0\) or \(\sigma(x) = 1\). There the derivative \(\sigma(1 - \sigma)\) is 0, as the formula or the flat ends of the curve show. Any gradient that has to pass through a saturated neuron vanishes, so the weights before it stop learning. A neuron saturated at 1 is one whose weights contributed strongly to the output, yet that signal never gets back to them.</p>
+      <p>Why would a neuron saturate? Its output is \(\sigma\big(\sum_{i=1}^{n} w_i x_i\big)\). Inputs are usually standardized, so they are small. If the weights are initialized to large values, the sum is large and the neuron saturates almost at once; large negative weights saturate it at 0. Small weights do not settle the matter either. With a thousand inputs, a sum of a thousand small terms easily reaches 2 or 3, and already \(\sigma(2.5) \approx 0.92\) with \(\sigma'(2.5) \approx 0.07\), against a peak of \(0.25\) at \(x = 0\). The weights must be initialized carefully, which is the topic of <a href="#zero-init">Module 7.4</a>.</p>
+
+      <h3>Problem 2: the outputs are not zero-centred</h3>
+      <p>The sigmoid's outputs lie in \([0, 1]\), centred around 0.5 instead of 0. Take a sigmoid neuron with pre-activation \(a_3 = w_1 h_{21} + w_2 h_{22}\), where \(h_{21}, h_{22}\) come from sigmoid neurons in the previous layer, \(h_3 = \sigma(a_3)\), and output \(y\). Its two weight gradients are</p>
+      <div class="eq">\[ \nabla w_1 = \underbrace{\frac{\partial \mathcal{L}(w)}{\partial y}\,\frac{\partial y}{\partial h_3}\,\frac{\partial h_3}{\partial a_3}}_{\text{common to both}}\; h_{21}, \qquad \nabla w_2 = \underbrace{\frac{\partial \mathcal{L}(w)}{\partial y}\,\frac{\partial y}{\partial h_3}\,\frac{\partial h_3}{\partial a_3}}_{\text{common to both}}\; h_{22} \]</div>
+      <p>\(h_{21}\) and \(h_{22}\) are sigmoid outputs, so both are positive. The sign of each gradient is therefore the sign of the common factor. If it is positive, both gradients are positive; if it is negative, both are negative. The argument is the same for \(n\) inputs, so all the gradients of the weights feeding a neuron share one sign.</p>
+      <p>That restricts the directions in which the weights can move. In the plane of \((\nabla w_1, \nabla w_2)\), only the quadrant where both are positive and the quadrant where both are negative can occur. If the optimum requires increasing \(w_1\) while decreasing \(w_2\), no single step can head straight for it, and gradient descent has to zigzag, taking more steps to converge. It is like driving from A to B when certain kinds of turns are forbidden.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 700 300" role="img" aria-label="Left: the plane of the two weight gradients. Only the quadrant where both are positive and the quadrant where both are negative are shaded as allowed; the other two are marked not possible. Right: weight space with an initial point and the optimum down and to the right. The direct dashed move is impossible; the path instead zigzags, alternating steps that increase both weights and steps that decrease both.">
+            <defs><marker id="l07-f3-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker><marker id="l07-f3-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="20" y="22">Possible gradient directions</text>
+            <rect class="d-plot" x="160" y="50" width="105" height="105" style="fill: var(--accent-soft); stroke: none"/>
+            <rect class="d-plot" x="55" y="155" width="105" height="105" style="fill: var(--accent-soft); stroke: none"/>
+            <line class="d-ln" x1="45" y1="155" x2="279" y2="155" marker-end="url(#l07-f3-ah)"/>
+            <line class="d-ln" x1="160" y1="270" x2="160" y2="36" marker-end="url(#l07-f3-ah)"/>
+            <text class="d-t" x="283" y="159">∇w₁</text>
+            <text class="d-t" x="168" y="40">∇w₂</text>
+            <text class="d-t" x="212.5" y="95" text-anchor="middle">both +ve</text>
+            <text class="d-s" x="212.5" y="113" text-anchor="middle">allowed</text>
+            <text class="d-t" x="107.5" y="203" text-anchor="middle">both −ve</text>
+            <text class="d-s" x="107.5" y="221" text-anchor="middle">allowed</text>
+            <text class="d-s t-off" x="107.5" y="105" text-anchor="middle">not possible</text>
+            <text class="d-s t-off" x="212.5" y="213" text-anchor="middle">not possible</text>
+            <line class="d-rule" x1="340" y1="12" x2="340" y2="286"/>
+            <text class="d-h" x="360" y="22">Reaching w* takes a zigzag</text>
+            <line class="d-ln" x1="374" y1="266" x2="662" y2="266" marker-end="url(#l07-f3-ah)"/>
+            <line class="d-ln" x1="380" y1="272" x2="380" y2="44" marker-end="url(#l07-f3-ah)"/>
+            <text class="d-t" x="666" y="270">w₁</text>
+            <text class="d-t" x="388" y="50">w₂</text>
+            <line class="d-ln d-dash" x1="460" y1="110" x2="640" y2="230"/>
+            <line class="d-ln-acc" x1="460" y1="110" x2="565.08" y2="90.89" marker-end="url(#l07-f3-aha)"/>
+            <line class="d-ln-acc" x1="570" y1="90" x2="551.21" y2="165.15" marker-end="url(#l07-f3-aha)"/>
+            <line class="d-ln-acc" x1="550" y1="170" x2="655.08" y2="150.89" marker-end="url(#l07-f3-aha)"/>
+            <line class="d-ln-acc" x1="660" y1="150" x2="641.21" y2="225.15" marker-end="url(#l07-f3-aha)"/>
+            <circle class="pt-plain" cx="460" cy="110" r="5"/>
+            <text class="d-s" x="452" y="104" text-anchor="end">initial w</text>
+            <circle class="pt-new" cx="640" cy="230" r="6"/>
+            <text class="d-s" x="632" y="250" text-anchor="end">w* (optimum)</text>
+            <text class="d-s" x="352" y="292">dashed: direct move, impossible · accent: allowed steps</text>
+          </svg>
+        </div>
+        <figcaption><b>Why non-zero-centred inputs slow learning.</b> With positive inputs, the gradient for all the weights into a neuron lies in the first or third quadrant, and so does the update \(-\eta\nabla w\). An optimum to the lower right of the start can only be reached by alternating steps that raise both weights and steps that lower both (an illustrative path, after the lecture's toy example).</figcaption>
+      </figure>
+
+      <h3>Problem 3: cost</h3>
+      <p>Finally, sigmoids are computationally expensive, because every evaluation needs \(\exp(x)\).</p>
+    </section>
+
+    <section id="tanh">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=4eQiXN69FdQ&amp;t=1189s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 19:49</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=4eQiXN69FdQ&amp;t=1221s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 20:21 derivative</a>
+        </div>
+        <h2>tanh: zero-centred, still saturating</h2>
+      </div>
+      <div class="eq">\[ \tanh(x) = \frac{e^{x} - e^{-x}}{e^{x} + e^{-x}}, \qquad \frac{\partial \tanh(x)}{\partial x} = 1 - \tanh^2(x) \]</div>
+      <p>tanh compresses its inputs into \([-1, 1]\) and is <b>zero-centred</b>, so the next layer's inputs can be positive or negative and the gradients of a neuron's weights no longer have to share one sign. That removes the restriction on update directions. The other two problems remain. At saturation, \(\tanh(x) = \pm 1\), the derivative \(1 - \tanh^2(x)\) is 0, so gradients still vanish there; the flat ends of the curve show the same thing. It is also still expensive to compute. tanh is not new; it has been in use since the 1990s.</p>
+      <p class="note">Standard identity, not on the slides: \(\tanh(x) = 2\sigma(2x) - 1\). tanh is a sigmoid stretched to \([-1, 1]\) and recentred at 0, which is why it keeps the sigmoid's flat ends.</p>
+    </section>
+
+    <section id="relu">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=4eQiXN69FdQ&amp;t=1288s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 21:28</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=4eQiXN69FdQ&amp;t=1382s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 23:02 ReLU6</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=4eQiXN69FdQ&amp;t=1547s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 25:47 dead units</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=4eQiXN69FdQ&amp;t=1746s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 29:06 learning rate</a>
+        </div>
+        <h2>ReLU: cheap and non-saturating, but units can die</h2>
+      </div>
+      <div class="eq">\[ f(x) = \max(0, x) \]</div>
+      <p>The <dfn>rectified linear unit</dfn> passes a positive pre-activation through unchanged and clamps a negative one to 0. It looks almost linear, so the lecture first asks whether it is non-linear at all. It is, since a linear function would behave the same way on both sides of 0 and ReLU does not. Combining two ReLUs shows what it can do:</p>
+      <div class="eq">\[ f(x) = \max(0, x) - \max(0, x - 6) = \begin{cases} 0 & x \le 0 \\ x & 0 \lt x \lt 6 \\ 6 & x \ge 6 \end{cases} \]</div>
+      <p>This is a piecewise-linear approximation of a scaled sigmoid, and is called <b>ReLU6</b>, where 6 is its maximum value. Adjusting the pieces brings it even closer to a step.</p>
+      <p>ReLU has three advantages:</p>
+      <ul>
+        <li>It does not saturate in the positive region, since nothing clamps that side. It still has zero gradient for negative inputs, so roughly half of the saturation problem is solved.</li>
+        <li>It is computationally efficient: one comparison and no exponential.</li>
+        <li>In practice it converges much faster than sigmoid or tanh, as Krizhevsky, Sutskever and Hinton found for deep convolutional networks in 2012 (<a href="lecture-08.html">Lecture 8</a>). It has since been used in feedforward, recurrent and Transformer networks too.</li>
+      </ul>
+
+      <h3>The caveat: dead neurons</h3>
+      <p>The derivative of ReLU is 1 for \(x > 0\) and 0 for \(x \lt 0\). Take a ReLU unit \(h_1\) with \(a_1 = w_1x_1 + w_2x_2 + b\), feeding the output through \(w_3\). Suppose that at some point a large gradient updates the bias \(b\) to a large negative value. Then \(w_1x_1 + w_2x_2 + b \lt 0\) for every input, and the unit outputs 0: it is a <dfn>dead neuron</dfn>. During backpropagation \(\partial h_1/\partial a_1 = 0\) as well, so</p>
+      <div class="eq">\[ \nabla w_1 = \frac{\partial \mathcal{L}(\theta)}{\partial y}\,\frac{\partial y}{\partial a_2}\,\frac{\partial a_2}{\partial h_1}\,\underbrace{\frac{\partial h_1}{\partial a_1}}_{=\,0}\,\frac{\partial a_1}{\partial w_1} = 0 \]</div>
+      <p>and likewise \(\nabla w_2 = \nabla b = 0\). None of \(w_1\), \(w_2\), \(b\) changes, so on the next input \(b\) is still very negative and the unit is dead again. Once dead, it stays dead for the rest of training.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 680 256" role="img" aria-label="Left: inputs x1, x2 and a bias input 1 feed a ReLU unit through w1, w2 and a very negative bias b; the unit outputs 0 for every input. A backward gradient arriving from the output y stops at the unit because the derivative of h1 with respect to a1 is 0, so w1, w2 and b get zero gradient. Right: the ReLU and its derivative, with the band of negative pre-activations highlighted where the derivative is 0.">
+            <defs><marker id="l07-f4-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker><marker id="l07-f4-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="20" y="22">A ReLU unit whose bias went very negative</text>
+            <circle class="node" cx="50" cy="70" r="14"/>
+            <text x="50" y="74" text-anchor="middle">x₁</text>
+            <line class="d-ln" x1="63.11" y1="74.92" x2="185.66" y2="120.87" marker-end="url(#l07-f4-ah)"/>
+            <circle class="node" cx="50" cy="130" r="14"/>
+            <text x="50" y="134" text-anchor="middle">x₂</text>
+            <line class="d-ln" x1="64" y1="130" x2="184" y2="130" marker-end="url(#l07-f4-ah)"/>
+            <circle class="node" cx="50" cy="190" r="14"/>
+            <text x="50" y="194" text-anchor="middle">1</text>
+            <line class="d-ln" x1="63.11" y1="185.08" x2="185.66" y2="139.13" marker-end="url(#l07-f4-ah)"/>
+            <text class="d-t" x="112" y="86" text-anchor="middle">w₁</text>
+            <text class="d-t" x="122" y="124" text-anchor="middle">w₂</text>
+            <text class="d-t" x="76" y="214" style="fill: var(--accent)">b ≪ 0</text>
+            <circle class="node" cx="210" cy="130" r="24" style="stroke-dasharray: 4 3"/>
+            <text x="210" y="134" text-anchor="middle" style="font-size: 12px">ReLU</text>
+            <text class="d-s" x="210" y="92" text-anchor="middle">a₁ = w₁x₁ + w₂x₂ + b</text>
+            <text class="d-s" x="210" y="174" text-anchor="middle" style="fill: var(--accent)">h₁ = 0 for every input</text>
+            <line class="d-ln" x1="234" y1="130" x2="340" y2="130" marker-end="url(#l07-f4-ah)"/>
+            <text class="d-t" x="292" y="122" text-anchor="middle">w₃</text>
+            <circle class="node" cx="360" cy="130" r="18"/>
+            <text x="360" y="134" text-anchor="middle">y</text>
+            <line class="d-ln-acc d-dash" x1="352" y1="160" x2="244" y2="160" marker-end="url(#l07-f4-aha)"/>
+            <text class="d-s" x="298" y="154" text-anchor="middle" style="fill: var(--accent)">gradient</text>
+            <text class="d-t" x="210" y="204" text-anchor="middle">∂h₁/∂a₁ = 0 stops it here</text>
+            <text class="d-s" x="20" y="232">so ∇w₁ = ∇w₂ = ∇b = 0: nothing changes,</text>
+            <text class="d-s" x="20" y="248">and the unit is dead on the next input too</text>
+            <line class="d-rule" x1="400" y1="12" x2="400" y2="250"/>
+            <text class="d-h" x="420" y="22">ReLU and its derivative</text>
+            <rect class="d-plot" x="468.33" y="76.67" width="40" height="83.33" style="fill: var(--mark); stroke: none; opacity: .55"/>
+            <line class="d-rule" x1="455" y1="143.33" x2="655" y2="143.33"/>
+            <line class="d-rule" x1="588.33" y1="160" x2="588.33" y2="70"/>
+            <text class="d-al" x="455" y="174" text-anchor="middle">−4</text>
+            <text class="d-al" x="521.67" y="174" text-anchor="middle">−2</text>
+            <text class="d-al" x="588.33" y="174" text-anchor="middle">0</text>
+            <text class="d-al" x="655" y="174" text-anchor="middle">2</text>
+            <text class="d-al" x="583.33" y="114" text-anchor="end">1</text>
+            <text class="d-al" x="583.33" y="84.67" text-anchor="end">2</text>
+            <path class="d-ln-acc" d="M455 143.33 L588.33 143.33 L655 76.67" style="stroke-width: 2.4"/>
+            <path class="d-ln d-dash" d="M455 143.33 L588.33 143.33 M588.33 110 L655 110" style="stroke-width: 1.8"/>
+            <text class="d-s" x="420" y="196">highlighted: a₁ for every input</text>
+            <text class="d-al" x="545" y="136.33" text-anchor="middle">both 0 here</text>
+            <text class="d-s" x="420" y="216">solid: max(0, a) · dashed: its derivative</text>
+          </svg>
+        </div>
+        <figcaption><b>A dead ReLU unit.</b> Once a very negative bias puts the pre-activation below 0 for every input, both the output and the local derivative are 0. Every gradient that would reach \(w_1\), \(w_2\) or \(b\) passes through that zero factor, so nothing can move the unit out of the flat region.</figcaption>
+      </figure>
+
+      <p>In practice a large fraction of ReLU units can die if the learning rate is set too high; the lecture mentions more than half. A high learning rate turns one large gradient into a large jump in \(b\). Two remedies are advised:</p>
+      <ul>
+        <li>Initialize the bias to a positive value, such as 0.01.</li>
+        <li>Use a variant of ReLU that lets some gradient through for negative inputs.</li>
+      </ul>
+    </section>
+
+    <section id="relu-variants">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=4eQiXN69FdQ&amp;t=1809s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 30:09</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=4eQiXN69FdQ&amp;t=1876s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 31:16 parametric</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=4eQiXN69FdQ&amp;t=1942s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 32:22 ELU</a>
+        </div>
+        <h2>Leaky ReLU, parametric ReLU and ELU</h2>
+      </div>
+      <h3>Leaky ReLU</h3>
+      <div class="eq">\[ f(x) = \max(0.1x,\, x), \qquad f'(x) = \begin{cases} 1 & x > 0 \\ 0.1 & x \lt 0 \end{cases} \]</div>
+      <p>Leaky ReLU lets a little through on the negative side. It does not saturate, and its units do not die, because the \(0.1x\) term always passes a small gradient. It is as cheap to compute as ReLU, and since its outputs can now be negative, they are close to zero-centred.</p>
+      <h3>Parametric ReLU</h3>
+      <div class="eq">\[ f(x) = \max(\alpha x,\, x) \]</div>
+      <p>Why fix the slope at 0.1? Parametric ReLU makes \(\alpha\) a parameter of the model, learnt along with everything else. Start with, say, \(\alpha = 0.1\), compute \(\partial\mathcal{L}/\partial\alpha\) during backpropagation, and update \(\alpha \leftarrow \alpha - \eta\,\partial\mathcal{L}/\partial\alpha\) (or with any other update rule). For \(\alpha \lt 1\) the local derivative is \(\partial f/\partial\alpha = x\) when \(x \lt 0\) and 0 otherwise. The slope can then adjust as training goes on.</p>
+      <h3>Exponential linear unit (ELU)</h3>
+      <div class="eq">\[ f(x) = \begin{cases} x & x > 0 \\ \alpha\,(e^{x} - 1) & x \le 0 \end{cases}, \qquad f'(x) = \begin{cases} 1 & x > 0 \\ \alpha\,e^{x} & x \le 0 \end{cases} \]</div>
+      <p>ELU keeps the linear positive side and decays exponentially toward \(-\alpha\) on the negative side. It has all the benefits of ReLU, a small gradient \(\alpha e^{x}\) always flows for negative inputs, and its outputs are close to zero-centred. The price is the exponential, which makes it more expensive.</p>
+      <p class="note">The slide writes the negative branch as \(ae^x - 1\). The usual ELU is \(\alpha(e^{x} - 1)\), which is 0 at \(x = 0\) and so joins the positive branch without a jump.</p>
+      <p>Each of these variants was proposed in some setting and found better than ReLU there, some with a theoretical argument. In practice none became very popular. The default ReLU usually works, or one of the newer functions below, GELU and Swish.</p>
+    </section>
+
+    <section id="maxout">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=oW7ZBLss2L0&amp;t=93s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 1:33 from dropout</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=oW7ZBLss2L0&amp;t=463s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 7:43 closing the gap</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=oW7ZBLss2L0&amp;t=801s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 13:21 maxout neuron</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=oW7ZBLss2L0&amp;t=930s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 15:30 generalizes ReLU</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=oW7ZBLss2L0&amp;t=1082s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 18:02 pros and cons</a>
+        </div>
+        <h2>Maxout: let the strongest piece win</h2>
+      </div>
+      <p>Maxout is motivated by comparing dropout with model averaging (<a href="lecture-06.html">Lecture 6</a>). In <b>bagging</b>, \(k\) training sets are built from the original one by sampling with replacement, each of the same size as the original, so each contains duplicates. One model is trained on each set. A model sees its duplicated samples again and again and so overfits to its own bucket of data. At inference the \(k\) predictions are combined, for example by an arithmetic or geometric mean, a max, or a vote.</p>
+      <p><b>Dropout</b> imitates model averaging inside one network whose sub-networks share weights. There are exponentially many sub-networks and each is sampled rarely, so none of them gets the chance a bagged model has to specialize on particular samples. Simply raising the learning rate would make bigger updates whenever a sample is seen, but the parameters are shared, so it would disturb the other sub-networks too. Dropout's averaging at inference, scaling each unit by the probability \(p\) that it was on, also treats every unit as equally responsive to every input.</p>
+      <p>Maxout tries to close this gap. Suppose two ReLU units in a layer are both active on an input, with \(0 \lt a_{21} \lt a_{22}\). The second responds more strongly and is more sensitive to this input, so let it be the one that learns from it. Output the larger of the two:</p>
+      <div class="eq">\[ h_{21} = \max(a_{21}, a_{22}) = a_{22}, \qquad \frac{\partial h_{21}}{\partial a_{21}} = 0, \qquad \frac{\partial h_{21}}{\partial a_{22}} = 1 \]</div>
+      <p>The gradient now flows only to the stronger unit, which specializes on inputs like this one while the weaker unit is left alone. Different pieces come to specialize on different inputs, much as bagged models specialize on their buckets. Under dropout, every unit that survives the mask gets gradient, whether it responded strongly or weakly. Under maxout, only the strongest piece in each maxout unit stays active, and the weaker pieces are effectively dropped as well.</p>
+      <div class="result">
+        <span class="lbl">Maxout neuron</span>
+        \[ h = \max\big(\mathbf{w}_1^\top\mathbf{x} + b_1,\; \mathbf{w}_2^\top\mathbf{x} + b_2,\; \dots,\; \mathbf{w}_k^\top\mathbf{x} + b_k\big) \]
+        <p>The maximum of \(k\) affine functions of the same input. On any given input only the winning piece receives gradient.</p>
+      </div>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 770 272" role="img" aria-label="Left: an input x feeds three affine pieces with illustrative values 0.8, 1.9 and minus 0.4; a max node passes on 1.9, so only the second piece receives gradient. Right: two plots. The maximum of 0.5x and minus 0.5x is a V shape, half the absolute value. The maximum of 0.5x, minus 0.5x, x and minus x minus 0.2 is a convex bowl drawn against a dotted x squared.">
+            <defs><marker id="l07-f5-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker><marker id="l07-f5-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="20" y="22">One maxout unit, three pieces</text>
+            <circle class="node" cx="40" cy="140" r="16"/>
+            <text x="40" y="145" text-anchor="middle">x</text>
+            <line class="d-ln" x1="50" y1="127.51" x2="94" y2="70" marker-end="url(#l07-f5-ah)"/>
+            <rect class="d-box" x="96" y="53" width="150" height="34" rx="7"/>
+            <text x="171" y="74" text-anchor="middle" style="font-size: 12.5px">w₁ᵀx + b₁ = 0.8</text>
+            <line class="d-ln d-dash" x1="246" y1="70" x2="285.34" y2="121" marker-end="url(#l07-f5-ah)"/>
+            <line class="d-ln" x1="56" y1="140" x2="94" y2="140" marker-end="url(#l07-f5-ah)"/>
+            <rect class="d-box-acc" x="96" y="123" width="150" height="34" rx="7"/>
+            <text x="171" y="144" text-anchor="middle" style="font-size: 12.5px">w₂ᵀx + b₂ = 1.9</text>
+            <line class="d-ln-acc" x1="246" y1="140" x2="276" y2="140" marker-end="url(#l07-f5-aha)"/>
+            <line class="d-ln" x1="50" y1="152.49" x2="94" y2="210" marker-end="url(#l07-f5-ah)"/>
+            <rect class="d-box" x="96" y="193" width="150" height="34" rx="7"/>
+            <text x="171" y="214" text-anchor="middle" style="font-size: 12.5px">w₃ᵀx + b₃ = −0.4</text>
+            <line class="d-ln d-dash" x1="246" y1="210" x2="285.34" y2="159" marker-end="url(#l07-f5-ah)"/>
+            <circle class="node-acc" cx="300" cy="140" r="22"/>
+            <text x="300" y="144" text-anchor="middle" style="font-size: 12px">max</text>
+            <line class="d-ln-acc" x1="322" y1="140" x2="344" y2="140" marker-end="url(#l07-f5-aha)"/>
+            <text class="d-t" x="350" y="144">h = 1.9</text>
+            <text class="d-al" x="251" y="62">0</text>
+            <text class="d-t" x="256" y="133" style="fill: var(--accent)">1</text>
+            <text class="d-al" x="251" y="228">0</text>
+            <text class="d-s" x="20" y="246">Backward: ∂h/∂(piece) is 1 for the winner, 0 for the rest,</text>
+            <text class="d-s" x="20" y="262">so the other pieces are dropped for this input.</text>
+            <line class="d-rule" x1="420" y1="12" x2="420" y2="262"/>
+            <text class="d-s" x="510" y="50" text-anchor="middle">max(0.5x, −0.5x)</text>
+            <clipPath id="l07-f5-ca"><rect x="450" y="92" width="120" height="96"/></clipPath>
+            <line class="d-rule" x1="450" y1="158" x2="570" y2="158"/>
+            <line class="d-rule" x1="510" y1="188" x2="510" y2="92"/>
+            <text class="d-al" x="450" y="202" text-anchor="middle">−2</text>
+            <text class="d-al" x="570" y="202" text-anchor="middle">2</text>
+            <text class="d-al" x="505" y="132" text-anchor="end">1</text>
+            <path class="d-ln d-dash" d="M450 188 L570 128" clip-path="url(#l07-f5-ca)" style="stroke: var(--muted); stroke-width: 1"/>
+            <path class="d-ln d-dash" d="M450 128 L570 188" clip-path="url(#l07-f5-ca)" style="stroke: var(--muted); stroke-width: 1"/>
+            <path class="d-ln-acc" d="M450 128 L510 158 L570 128" clip-path="url(#l07-f5-ca)" style="stroke-width: 2.4"/>
+            <text class="d-s" x="510" y="222" text-anchor="middle">0.5|x|: a V shape</text>
+            <text class="d-s" x="670" y="50" text-anchor="middle">max(0.5x, −0.5x, x, −x − 0.2)</text>
+            <clipPath id="l07-f5-cb"><rect x="610" y="92" width="120" height="96"/></clipPath>
+            <line class="d-rule" x1="610" y1="158" x2="730" y2="158"/>
+            <line class="d-rule" x1="670" y1="188" x2="670" y2="92"/>
+            <text class="d-al" x="610" y="202" text-anchor="middle">−2</text>
+            <text class="d-al" x="730" y="202" text-anchor="middle">2</text>
+            <text class="d-al" x="665" y="132" text-anchor="end">1</text>
+            <path class="d-ln" d="M625 90.5 L626.5 94.92 L628 99.2 L629.5 103.32 L631 107.3 L632.5 111.12 L634 114.8 L635.5 118.33 L637 121.7 L638.5 124.92 L640 128 L641.5 130.93 L643 133.7 L644.5 136.32 L646 138.8 L647.5 141.12 L649 143.3 L650.5 145.32 L652 147.2 L653.5 148.93 L655 150.5 L656.5 151.93 L658 153.2 L659.5 154.32 L661 155.3 L662.5 156.12 L664 156.8 L665.5 157.32 L667 157.7 L668.5 157.93 L670 158 L671.5 157.93 L673 157.7 L674.5 157.32 L676 156.8 L677.5 156.12 L679 155.3 L680.5 154.32 L682 153.2 L683.5 151.93 L685 150.5 L686.5 148.93 L688 147.2 L689.5 145.32 L691 143.3 L692.5 141.12 L694 138.8 L695.5 136.32 L697 133.7 L698.5 130.93 L700 128 L701.5 124.92 L703 121.7 L704.5 118.33 L706 114.8 L707.5 111.12 L709 107.3 L710.5 103.32 L712 99.2 L713.5 94.92 L715 90.5" clip-path="url(#l07-f5-cb)" style="stroke: var(--muted); stroke-dasharray: 1 3; stroke-width: 1.4"/>
+            <text class="d-al" x="711.5" y="101">x²</text>
+            <path class="d-ln d-dash" d="M610 188 L730 128" clip-path="url(#l07-f5-cb)" style="stroke: var(--muted); stroke-width: 1"/>
+            <path class="d-ln d-dash" d="M610 128 L730 188" clip-path="url(#l07-f5-cb)" style="stroke: var(--muted); stroke-width: 1"/>
+            <path class="d-ln d-dash" d="M610 218 L730 98" clip-path="url(#l07-f5-cb)" style="stroke: var(--muted); stroke-width: 1"/>
+            <path class="d-ln d-dash" d="M610 104 L730 224" clip-path="url(#l07-f5-cb)" style="stroke: var(--muted); stroke-width: 1"/>
+            <path class="d-ln-acc" d="M610 104 L658 152 L670 158 L730 98" clip-path="url(#l07-f5-cb)" style="stroke-width: 2.4"/>
+            <text class="d-s" x="670" y="222" text-anchor="middle">a convex bowl, roughly x²</text>
+            <text class="d-s" x="446" y="252">dashed: the affine pieces · accent: their maximum</text>
+          </svg>
+        </div>
+        <figcaption><b>Maxout, inside and out.</b> Left: one maxout unit with three affine pieces (illustrative values); the max passes on the largest, and only that piece's weights are updated. Right: the lecture's two examples, drawn to scale on \(-2 \le x \le 2\). Two pieces give a V; four pieces give a convex bowl, a rough piecewise-linear stand-in for \(x^2\) (dotted).</figcaption>
+      </figure>
+
+      <p>Maxout <b>generalizes ReLU and its variants</b>. ReLU is a maxout unit with two pieces, \(\max(0\cdot x + 0,\; 1\cdot x + 0)\). Leaky ReLU is \(\max(0.1x,\, x)\) and parametric ReLU is \(\max(\alpha x,\, x)\). More pieces give more non-linearity: \(\max(0.5x, -0.5x) = 0.5|x|\) is a V shape, and the four pieces \(\max(0.5x,\, -0.5x,\, x,\, -x - 0.2)\) give a bowl that the lecture uses to approximate \(x^2\).</p>
+      <ul>
+        <li><b>No saturation and no death.</b> The gradient always flows through the winning piece.</li>
+        <li><b>Cost.</b> \(k\) affine pieces per neuron mean \(k\) times as many parameters.</li>
+        <li><b>Power.</b> Two maxout neurons with a sufficient number of affine pieces act as a universal approximator.</li>
+      </ul>
+      <p class="note">Standard detail (Goodfellow et al., 2013): the universal-approximation construction takes the <i>difference</i> of the two maxout units. Each unit is a convex piecewise-linear function, and any continuous function can be approximated by a difference of two such functions.</p>
+      <p>Despite all this, maxout never became very popular; its special cases, ReLU and the variants, are used far more. It is still worth knowing for the link to dropout, the way it generalizes ReLU, and the fact that two such units can approximate any function.</p>
+    </section>
+
+    <section id="gelu">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=srcPpAV6Yfs&amp;t=30s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 0:30</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=srcPpAV6Yfs&amp;t=185s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 3:05 Bernoulli gate</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=srcPpAV6Yfs&amp;t=495s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 8:15 expected value</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=srcPpAV6Yfs&amp;t=619s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 10:19 approximations</a>
+        </div>
+        <h2>GELU: ReLU's gate, made random, then averaged</h2>
+      </div>
+      <p>The <dfn>Gaussian error linear unit</dfn> starts from a similarity. The hard threshold and ReLU both decide their output by the sign of the input:</p>
+      <div class="eq">\[ \text{threshold: } f(x) = \begin{cases} 1 & x > 0 \\ 0 & x \le 0 \end{cases} \qquad\qquad \text{ReLU: } f(x) = \begin{cases} 1\cdot x & x > 0 \\ 0\cdot x & x \le 0 \end{cases} \]</div>
+      <p>Written this way, ReLU multiplies its input by 1 or by 0. Dropout (<a href="lecture-06.html">Lecture 6</a>) also multiplies a unit's value by 1 or 0, with one difference: it chooses at random, \(\mu(x) = 1\cdot x\) with probability \(p\) and \(0\cdot x\) with probability \(1 - p\) (a slight abuse of notation). GELU combines the two properties in one activation: a random 0/1 multiplier whose probability depends on the input.</p>
+      <div class="eq">\[ f(x) = m\cdot x, \qquad m \sim \text{Bernoulli}\big(\Phi(x)\big) \]</div>
+      <p>Here \(x\) is the neuron's pre-activation. \(\Phi(x)\) is a probability, so it must satisfy \(0 \le \Phi(x) \le 1\). The logistic function would do, but the more natural choice is the <b>cumulative distribution function of the standard normal distribution</b>, \(\Phi(x) = P(X \le x)\) for \(X \sim \mathcal{N}(0, 1)\). It is also S-shaped, close to 0 for very negative \(x\) and close to 1 for very positive \(x\). A large positive pre-activation is then almost always kept, and a large negative one almost always zeroed.</p>
+      <p>The activation used is the expected value of this random unit:</p>
+      <div class="eq">\[ \mathbb{E}[f(x)] = \mathbb{E}[m\cdot x] = \Phi(x)\cdot 1\cdot x + \big(1 - \Phi(x)\big)\cdot 0\cdot x = x\,\Phi(x) = x\,P(X \le x) \]</div>
+      <div class="result">
+        <span class="lbl">GELU and its approximations</span>
+        \[ \operatorname{GELU}(x) = x\,\Phi(x) \;\approx\; 0.5\,x\left(1 + \tanh\!\Big[\sqrt{2/\pi}\,\big(x + 0.044715\,x^3\big)\Big]\right) \;\approx\; x\,\sigma(1.702\,x) \]
+        <p>\(\Phi\) is usually computed with the error function, \(\Phi(x) = \tfrac12\big[1 + \operatorname{erf}(x/\sqrt2)\big]\); the two approximations avoid it.</p>
+      </div>
+      <p>A quick check, with numbers computed for these notes: \(\Phi(1) \approx 0.841\), so \(\operatorname{GELU}(1) \approx 0.841\) and \(\operatorname{GELU}(-1) = -\Phi(-1) \approx -0.159\). The sigmoid approximation gives 0.846 and \(-0.154\). On its own, \(x\sigma(1.702x)\) looks like an arbitrary formula; the derivation shows it weights the input by the probability that a standard normal value falls below it. GELU is the most common activation in Transformer-based architectures such as BERT and GPT (<a href="lecture-14.html">Lecture 14</a>).</p>
+    </section>
+
+    <section id="selu-swish">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=srcPpAV6Yfs&amp;t=742s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 12:22 SELU</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=srcPpAV6Yfs&amp;t=865s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 14:25 search</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=srcPpAV6Yfs&amp;t=989s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 16:29 Swish</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=srcPpAV6Yfs&amp;t=1049s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 17:29 SiLU</a>
+        </div>
+        <h2>SELU, searched activations, Swish and SiLU</h2>
+      </div>
+      <h3>SELU: self-normalizing</h3>
+      <p>It helps if each layer's output activations have zero mean and unit variance. That can be done explicitly with normalization techniques (batch normalization, <a href="#batchnorm">Module 7.5</a>). The <dfn>scaled exponential linear unit</dfn> instead builds it into the activation function, which is called <b>self-normalizing</b>:</p>
+      <div class="eq">\[ f(x) = \lambda \begin{cases} x & x > 0 \\ \alpha e^{x} - \alpha & x \le 0 \end{cases}, \qquad \lambda \approx 1.0507, \quad \alpha \approx 1.6733 \]</div>
+      <p>ReLU is clearly not zero-centred: it can take large values on the positive side and only 0 on the negative side. ELU has some negative values, so it is somewhat more balanced, and so is GELU. Scaling ELU by a suitable \(\lambda\), with a matching \(\alpha\), balances the two sides and gives near zero-centring.</p>
+      <p class="note">The slide labels both constants \(\lambda\); the second one, 1.673263, is \(\alpha\). On the negative side SELU flattens at \(-\lambda\alpha \approx -1.76\).</p>
+
+      <h3>Searching for activation functions</h3>
+      <p>Rather than keep inventing activation functions by hand, one can search for them automatically. Assume a search space of scalar functions, each composed of two kinds of operation:</p>
+      <ul>
+        <li><b>Unary</b> operations take one input: \(|x|\), \(-x\), \(\exp(-x)\), \(\sqrt{x}\), and so on.</li>
+        <li><b>Binary</b> operations take two: \(\max(x_1, x_2)\), \(x_1\cdot\sigma(x_2)\), and so on.</li>
+      </ul>
+      <p>The sigmoid, tanh, ReLU, leaky ReLU and \(x\sigma(1.702x)\) all live in this space. Restrict the space, try combinations, and keep those that most improve the accuracy of existing models. The search itself uses reinforcement learning, which is beyond this course. Several good functions came out of it, one of them resembling the ELU and GELU family. The best had the form</p>
+      <div class="result">
+        <span class="lbl">Swish</span>
+        \[ f(x) = x\,\sigma(\beta x) \]
+        <p>\(\beta\) can be a constant, as in the GELU approximation with \(\beta = 1.702\), or a learnable parameter.</p>
+      </div>
+
+      <h3>SiLU</h3>
+      <p>The family now has three names. \(x\sigma(1.702x)\) is (approximately) GELU, \(x\sigma(\beta x)\) is Swish, and the case \(\beta = 1\),</p>
+      <div class="eq">\[ \operatorname{SiLU}(x) = x\,\sigma(x) \]</div>
+      <p>is the <dfn>sigmoid-weighted linear unit</dfn>: a linear unit \(x\), weighted by a sigmoid. It was first proposed in reinforcement learning.</p>
+      <p class="note">Not in the lecture: the two extremes of Swish make the family easy to picture. With \(\beta = 0\) it is the straight line \(x/2\). As \(\beta\) grows, \(\sigma(\beta x)\) approaches a step and \(x\sigma(\beta x)\) approaches ReLU. Both are easy to see in the explorer below.</p>
+    </section>
+
+    <section id="which-activation">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=srcPpAV6Yfs&amp;t=1081s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 18:01 which to use</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=srcPpAV6Yfs&amp;t=1143s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 19:03 summary</a>
+        </div>
+        <h2>Comparing them, and which to use</h2>
+      </div>
+      <p>The explorer plots each function the lecture covers together with its derivative. Move the probe to the flat ends of the sigmoid and tanh, to the negative side of ReLU and its variants, and compare GELU with its sigmoid approximation.</p>
+
+      <figure id="act-fig">
+        <div class="controls">
+          <div class="seg" role="group" aria-label="Activation function">
+            <button class="btn sm" type="button" id="act-b-sigmoid" data-fn="sigmoid" aria-pressed="true">Sigmoid</button>
+            <button class="btn sm" type="button" id="act-b-tanh" data-fn="tanh" aria-pressed="false">tanh</button>
+            <button class="btn sm" type="button" id="act-b-relu" data-fn="relu" aria-pressed="false">ReLU</button>
+            <button class="btn sm" type="button" id="act-b-leaky" data-fn="leaky" aria-pressed="false">Leaky / PReLU</button>
+            <button class="btn sm" type="button" id="act-b-elu" data-fn="elu" aria-pressed="false">ELU</button>
+            <button class="btn sm" type="button" id="act-b-selu" data-fn="selu" aria-pressed="false">SELU</button>
+            <button class="btn sm" type="button" id="act-b-maxout" data-fn="maxout" aria-pressed="false">Maxout</button>
+            <button class="btn sm" type="button" id="act-b-gelu" data-fn="gelu" aria-pressed="false">GELU</button>
+            <button class="btn sm" type="button" id="act-b-swish" data-fn="swish" aria-pressed="false">Swish / SiLU</button>
+          </div>
+        </div>
+        <div class="controls">
+          <label for="act-x">Probe x</label>
+          <input type="range" id="act-x" min="-5" max="5" step="0.05" value="2.5">
+          <output id="act-x-out" for="act-x">2.50</output>
+        </div>
+        <div class="controls">
+          <label for="act-param" id="act-param-lbl">Parameter</label>
+          <input type="range" id="act-param" min="0" max="1" step="0.01" value="0" disabled>
+          <output id="act-param-out" for="act-param">–</output>
+          <label class="check"><input type="checkbox" id="act-deriv" checked> Derivative</label>
+          <label class="check"><input type="checkbox" id="act-cmp"> Compare with ReLU</label>
+        </div>
+        <div class="readouts">
+          <div><span class="k">f(x)</span><span class="v mine" id="act-f">–</span></div>
+          <div><span class="k">f′(x)</span><span class="v" id="act-d">–</span></div>
+          <div><span class="k">Output range</span><span class="v" id="act-range">–</span></div>
+        </div>
+        <div class="status" id="act-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="l07-act-svg" viewBox="0 0 560 330" role="img" aria-label="Plot of the selected activation function as a solid curve and its derivative as a dashed curve for x from minus 5 to 5, with a movable vertical probe that marks both values."></svg></div>
+        <figcaption><b>Activation explorer.</b> Solid: \(f(x)\); dashed: \(f'(x)\), on the same axes at equal scale. The parameter slider sets the leak \(\alpha\) (with \(\alpha = 0\) leaky ReLU becomes ReLU), ELU's \(\alpha\), the number of the lecture's maxout pieces \(0.5x, -0.5x, x, -x - 0.2\) (dotted lines), or Swish's \(\beta\) (\(\beta = 1\) is SiLU, \(\beta = 1.702\) the GELU approximation). For GELU, the extra dashed curve is \(x\sigma(1.702x)\). The derivatives of GELU and Swish were worked out for these notes.</figcaption>
+      </figure>
+
+      <div class="tbl-wrap">
+        <table class="mini l07-wide">
+          <thead><tr><th>Activation</th><th>f(x)</th><th>f′(x)</th><th>What the lecture says</th></tr></thead>
+          <tbody>
+            <tr><td>Sigmoid</td><td>\(\frac{1}{1 + e^{-x}}\)</td><td>\(\sigma(x)(1 - \sigma(x)) \le 0.25\)</td><td>Saturates at both ends; not zero-centred; exp is costly</td></tr>
+            <tr><td>tanh</td><td>\(\tanh x\)</td><td>\(1 - \tanh^2 x\)</td><td>Zero-centred; still saturates; still costly</td></tr>
+            <tr><td>ReLU</td><td>\(\max(0, x)\)</td><td>1 for \(x > 0\), 0 for \(x \lt 0\)</td><td>No saturation for \(x > 0\); cheap; converges much faster; units can die</td></tr>
+            <tr><td>Leaky ReLU</td><td>\(\max(0.1x, x)\)</td><td>1, or 0.1</td><td>No saturation; never dies; cheap; close to zero-centred</td></tr>
+            <tr><td>Parametric ReLU</td><td>\(\max(\alpha x, x)\)</td><td>1, or \(\alpha\)</td><td>The slope \(\alpha\) is learnt by backpropagation</td></tr>
+            <tr><td>ELU</td><td>\(x\), or \(\alpha(e^x - 1)\)</td><td>1, or \(\alpha e^x\)</td><td>ReLU's benefits; gradient for \(x \lt 0\); close to zero-centred; exp is costly</td></tr>
+            <tr><td>SELU</td><td>\(\lambda\,\)ELU, \(\alpha \approx 1.6733\)</td><td>\(\lambda\), or \(\lambda\alpha e^x\)</td><td>Self-normalizing; \(\lambda \approx 1.0507\) balances the two sides</td></tr>
+            <tr><td>Maxout</td><td>\(\max_j\big(\mathbf{w}_j^\top\mathbf{x} + b_j\big)\)</td><td>1 for the winning piece, 0 for the rest</td><td>No saturation, no death; generalizes ReLU; \(k\) times the parameters</td></tr>
+            <tr><td>GELU</td><td>\(x\Phi(x) \approx x\sigma(1.702x)\)</td><td>\(\Phi(x) + x\,\varphi(x)\)</td><td>Expected value of a random 0/1 gate; standard in BERT and GPT</td></tr>
+            <tr><td>Swish / SiLU</td><td>\(x\sigma(\beta x)\); SiLU: \(\beta = 1\)</td><td>\(\sigma(\beta x)\big[1 + \beta x\,(1 - \sigma(\beta x))\big]\)</td><td>Found by automatic search; \(\beta\) fixed or learnt</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">\(\varphi\) is the standard normal density. The GELU and Swish derivatives come from the product rule and are not on the slides.</p>
+
+      <p>Which one should you use? A plot from Papers with Code on the slides shows how the use of these functions has changed over time. ReLU has stayed popular for more than a decade. GELU became popular with Transformers, the setting where it is now the usual choice. Sigmoid and tanh, despite their drawbacks, are still used where their ranges are needed: the sigmoid wherever a value must lie between 0 and 1, as in some attention functions, and tanh in LSTMs and RNNs.</p>
+      <p class="rule-of-thumb">Things to remember: sigmoids are bad as hidden activations. ReLU is more or less the standard unit for convolutional networks, and Leaky ReLU, maxout and ELU are worth exploring. tanh and sigmoid are still used in LSTMs and RNNs (<a href="lecture-12.html">Lecture 12</a>). GELU is the most common choice in Transformer models such as BERT and GPT (<a href="lecture-14.html">Lecture 14</a>).</p>
+    </section>
+
+    <!-- ============ MODULE 7.4 ============ -->
+    <section id="zero-init">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-6/fullscreen" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 0.5 H6.5 L8.5 2.5 V9.5 H2 Z"/></svg>Slides</a>
+        </div>
+        <h2>Equal initial weights: the symmetry problem</h2>
+      </div>
+      <p class="note">The module videos end with the activation functions. Modules 7.4 and 7.5 are written from the slides alone.</p>
+      <p>For learning to happen, gradients must flow from the output layer back to the input layer. Saturated neurons block that flow, because a weight's gradient carries the factor \(\sigma(x)(1 - \sigma(x))\):</p>
+      <div class="eq">\[ \nabla w = \big(f(x) - y\big)\,\sigma(x)\,\big(1 - \sigma(x)\big)\cdot \text{input} \]</div>
+      <p>The way to keep neurons out of saturation is to initialize the parameters carefully. The right initialization depends on the number of inputs to a layer, \(\text{fan}_\text{in}\), the number of outputs, \(\text{fan}_\text{out}\), the type of activation function and the type of architecture.</p>
+      <p>Start with the simplest choice, all weights 0. In a network with inputs \(x_1, x_2\), three sigmoid units in layer 1 and one unit in layer 2,</p>
+      <div class="eq">\[ a_{11} = w_{11}x_1 + w_{12}x_2 = 0, \qquad a_{12} = w_{21}x_1 + w_{22}x_2 = 0 \qquad\Rightarrow\qquad h_{11} = h_{12} \]</div>
+      <p>so every unit in layer 1 gets the same activation (here \(\sigma(0) = 0.5\)). Backpropagation then gives</p>
+      <div class="eq">\[ \nabla w_{11} = \frac{\partial \mathcal{L}(w)}{\partial y}\cdot\frac{\partial y}{\partial h_{11}}\cdot\frac{\partial h_{11}}{\partial a_{11}}\cdot x_1, \qquad \nabla w_{21} = \frac{\partial \mathcal{L}(w)}{\partial y}\cdot\frac{\partial y}{\partial h_{12}}\cdot\frac{\partial h_{12}}{\partial a_{12}}\cdot x_1 \]</div>
+      <p>Since \(h_{11} = h_{12}\) and \(a_{11} = a_{12}\), and the two units' outgoing weights are equal as well, every factor matches and \(\nabla w_{11} = \nabla w_{21}\). Both weights get the same update and remain equal. The same is true for \(w_{12}\) and \(w_{22}\), and for all the weights in layer 2 (work through the maths to convince yourself). The symmetry never breaks during training: the units of a layer stay copies of one another and the layer behaves like a single unit. This is the <dfn>symmetry breaking problem</dfn>. It happens whenever all the weights in a network are initialized to the same value, 0 or any other.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 720 256" role="img" aria-label="Left: inputs x1 and x2 connect to three hidden sigmoid units, which connect to one output unit; every connection is dashed to show it starts at 0, and each hidden unit shows the value 0.5. Right: in the forward pass all pre-activations are 0 so all hidden activations are equal; in the backward pass the gradients of w11 and w21 are products of matching factors, so they are equal and the weights stay equal after the update.">
+            <defs><marker id="l07-f6-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="20" y="22">Every weight starts at 0</text>
+            <circle class="node" cx="50" cy="85" r="16"/>
+            <text x="50" y="89" text-anchor="middle">x₁</text>
+            <circle class="node" cx="50" cy="165" r="16"/>
+            <text x="50" y="169" text-anchor="middle">x₂</text>
+            <line class="d-ln d-dash" x1="65.52" y1="81.12" x2="149.63" y2="60.09" style="stroke-width: 1.1"/>
+            <line class="d-ln d-dash" x1="61.79" y1="154.19" x2="154.52" y2="69.19" style="stroke-width: 1.1"/>
+            <line class="d-ln d-dash" x1="187.28" y1="65.08" x2="271.86" y2="114.42" style="stroke-width: 1.1"/>
+            <line class="d-ln d-dash" x1="65.18" y1="90.06" x2="150.08" y2="118.36" style="stroke-width: 1.1"/>
+            <line class="d-ln d-dash" x1="65.18" y1="159.94" x2="150.08" y2="131.64" style="stroke-width: 1.1"/>
+            <line class="d-ln d-dash" x1="190" y1="125" x2="269" y2="125" style="stroke-width: 1.1"/>
+            <line class="d-ln d-dash" x1="61.79" y1="95.81" x2="154.52" y2="180.81" style="stroke-width: 1.1"/>
+            <line class="d-ln d-dash" x1="65.52" y1="168.88" x2="149.63" y2="189.91" style="stroke-width: 1.1"/>
+            <line class="d-ln d-dash" x1="187.28" y1="184.92" x2="271.86" y2="135.58" style="stroke-width: 1.1"/>
+            <circle class="node-acc" cx="170" cy="55" r="20"/>
+            <text x="170" y="59" text-anchor="middle" style="font-size: 12px">0.5</text>
+            <circle class="node-acc" cx="170" cy="125" r="20"/>
+            <text x="170" y="129" text-anchor="middle" style="font-size: 12px">0.5</text>
+            <circle class="node-acc" cx="170" cy="195" r="20"/>
+            <text x="170" y="199" text-anchor="middle" style="font-size: 12px">0.5</text>
+            <text class="d-s" x="196" y="42">h₁₁</text>
+            <text class="d-s" x="170" y="101" text-anchor="middle">h₁₂</text>
+            <text class="d-s" x="196" y="226">h₁₃</text>
+            <circle class="node" cx="290" cy="125" r="20"/>
+            <text x="290" y="130" text-anchor="middle">σ</text>
+            <text class="d-s" x="290" y="97" text-anchor="middle">h₂₁</text>
+            <line class="d-ln" x1="310" y1="125" x2="334" y2="125" marker-end="url(#l07-f6-ah)"/>
+            <text class="d-t" x="340" y="130">y</text>
+            <text class="d-s" x="20" y="246">all weights 0, so every hidden unit outputs σ(0) = 0.5</text>
+            <line class="d-rule" x1="370" y1="12" x2="370" y2="252"/>
+            <text class="d-row" x="390" y="48">Forward</text>
+            <text x="390" y="70">a₁₁ = a₁₂ = a₁₃ = 0  ⇒  h₁₁ = h₁₂ = h₁₃</text>
+            <text class="d-row" x="390" y="104">Backward</text>
+            <text x="390" y="126">∇w₁₁ = ∂ℒ/∂y · ∂y/∂h₁₁ · ∂h₁₁/∂a₁₁ · x₁</text>
+            <text x="390" y="148">∇w₂₁ = ∂ℒ/∂y · ∂y/∂h₁₂ · ∂h₁₂/∂a₁₂ · x₁</text>
+            <text class="d-t" x="390" y="170">every factor matches  ⇒  ∇w₁₁ = ∇w₂₁</text>
+            <text class="d-row" x="390" y="204">After the update</text>
+            <text class="d-t" x="390" y="226">w₁₁ = w₂₁ still: the units stay copies</text>
+          </svg>
+        </div>
+        <figcaption><b>Equal weights stay equal.</b> With every weight at 0, all three hidden units compute the same value for every input, receive the same gradient and make the same update. Nothing in training can ever make them differ, so the initial weights must be different from each other, which in practice means random.</figcaption>
+      </figure>
+    </section>
+
+    <section id="init-scale">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-6/fullscreen" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 0.5 H6.5 L8.5 2.5 V9.5 H2 Z"/></svg>Slides</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=4eQiXN69FdQ&amp;t=612s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 10:12 large weights saturate</a>
+        </div>
+        <h2>Random, but how large? Too small and too large</h2>
+      </div>
+      <p>So the weights must be random. The slides test different scales with a forward pass through a synthetic network:</p>
+      <ul>
+        <li>Input: 1000 points, each in \(\mathbb{R}^{500}\), drawn from a unit Gaussian.</li>
+        <li>The network has 5 layers of 500 neurons each.</li>
+        <li>Run only forward propagation and look at each layer's activations under different weight initializations.</li>
+      </ul>
+      <pre class="codeblock"><code>num_layers = 5
+D = np.random.randn(1000, 500)
+for i in range(num_layers):
+    x = D if i == 0 else h_cache[i-1]
+    W = 0.01*np.random.randn(500, 500)
+    a = np.dot(x, W)
+    h = sigmoid(a)          # the slides also try tanh</code></pre>
+
+      <h3>Small random weights: <code>W = 0.01*np.random.randn(500,500)</code></h3>
+      <p>The slides look at the activations layer by layer, with sigmoid and with tanh. With tanh, they shrink toward 0 as the depth grows. With sigmoid, they bunch ever more tightly around \(\sigma(0) = 0.5\). The explorer at the end of this module reproduces both. Now think about backpropagation. A weight's gradient is proportional to the activation passing through it, so if all the activations of a layer are very close to 0, the gradients of the weights connecting that layer to the next are all close to 0 as well. This is the <b>vanishing gradient problem</b>.</p>
+      <p>The slides then check real data. Data: MNIST, \(\mathbf{x} \in \mathbb{R}^{784}\). Model: a feedforward network with three hidden layers, \(\mathbf{h}_1, \mathbf{h}_2, \mathbf{h}_3 \in \mathbb{R}^{500}\), and tanh activations. Loss: cross-entropy. Optimizer: mini-batch gradient descent with \(\eta = 0.5\) and batch size 256. With <code>W = 0.01*np.random.randn(500,500)</code>, the loss stays almost constant for the first 35 iterations.</p>
+
+      <h3>Large random weights: <code>W = np.random.randn(500,500)</code></h3>
+      <p>Now most activations saturate, at 0 or 1 for the sigmoid and at \(\pm 1\) for tanh. At saturation the local gradients are close to 0, so the gradients vanish again. The video makes the same point from the other direction <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=4eQiXN69FdQ&amp;t=678s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 11:18</a>: with a thousand inputs, even modest weights give sums large enough to saturate a sigmoid. The slides rerun the MNIST experiment with this initialization as well.</p>
+    </section>
+
+    <section id="xavier">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-6/fullscreen" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 0.5 H6.5 L8.5 2.5 V9.5 H2 Z"/></svg>Slides</a>
+        </div>
+        <h2>A principled scale: keep \(n\operatorname{Var}(w) = 1\)</h2>
+      </div>
+      <p>Look at the first pre-activation of layer 1, \(s_{11} = \sum_{i=1}^{n} w_{1i}x_i\), and treat the weights and inputs as independent random variables. For independent \(w\) and \(x\),</p>
+      <div class="eq">\[ \operatorname{Var}(wx) = (\mathbb{E}[w])^2\operatorname{Var}(x) + (\mathbb{E}[x])^2\operatorname{Var}(w) + \operatorname{Var}(x)\operatorname{Var}(w) \]</div>
+      <p>so</p>
+      <div class="eq">\[ \begin{aligned} \operatorname{Var}(s_{11}) &= \operatorname{Var}\Big(\sum_{i=1}^{n} w_{1i}x_i\Big) = \sum_{i=1}^{n}\operatorname{Var}(w_{1i}x_i) \\ &= \sum_{i=1}^{n}\Big[(\mathbb{E}[w_{1i}])^2\operatorname{Var}(x_i) + (\mathbb{E}[x_i])^2\operatorname{Var}(w_{1i}) + \operatorname{Var}(x_i)\operatorname{Var}(w_{1i})\Big] \\ &= \sum_{i=1}^{n}\operatorname{Var}(x_i)\operatorname{Var}(w_{1i}) \qquad \text{[zero-mean inputs and weights]} \\ &= n\operatorname{Var}(w)\operatorname{Var}(x) \qquad \text{[}\operatorname{Var}(x_i) = \operatorname{Var}(x),\ \operatorname{Var}(w_{1i}) = \operatorname{Var}(w)\ \forall i\text{]} \end{aligned} \]</div>
+      <p>The same holds for every unit of the layer: \(\operatorname{Var}(s_{1i}) = n\operatorname{Var}(w)\operatorname{Var}(x)\). If \(n\operatorname{Var}(w) \gg 1\), the pre-activations have a large variance and the units saturate. If \(n\operatorname{Var}(w) \to 0\), the variance is small and the activations collapse.</p>
+      <p>Add one more layer. The same procedure, with the \(s_{1i}\) as the inputs, gives</p>
+      <div class="eq">\[ \operatorname{Var}(s_{21}) = \sum_{i=1}^{n}\operatorname{Var}(s_{1i})\operatorname{Var}(w_{2i}) = n\operatorname{Var}(s_{1i})\operatorname{Var}(w_2) \;\propto\; [n\operatorname{Var}(w_2)]\,[n\operatorname{Var}(w_1)]\operatorname{Var}(x) \;\propto\; [n\operatorname{Var}(w)]^2\operatorname{Var}(x) \]</div>
+      <p>assuming that the weights in all layers have the same variance. (Passing the \(s_{1i}\) straight to the next layer treats the activation as roughly linear, which is how tanh behaves near 0.)</p>
+      <div class="result">
+        <span class="lbl">Variance after k layers</span>
+        \[ \operatorname{Var}(s_{ki}) = [n\operatorname{Var}(w)]^{k}\operatorname{Var}(x) \qquad\Rightarrow\qquad \text{choose } n\operatorname{Var}(w) = 1 \]
+        <p>To make it so, draw \(z\) from a unit Gaussian and scale it by \(1/\sqrt{n}\). Using \(\operatorname{Var}(az) = a^2\operatorname{Var}(z)\): \(n\operatorname{Var}\big(z/\sqrt{n}\big) = n\cdot\tfrac{1}{n}\operatorname{Var}(z) = 1\).</p>
+      </div>
+      <pre class="codeblock"><code>W = np.random.randn(fan_in, fan_out) / np.sqrt(fan_in)</code></pre>
+      <p>The slides rerun the synthetic network with this initialization, for tanh and for sigmoid, and the MNIST experiment with <code>W = np.random.randn(500,500)/sqrt(fan_in)</code>. In the explorer below, the activations now keep a usable spread through all the layers. With \(n = 500\), the three initializations so far compare as follows (numbers worked out for these notes):</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Initialization</th><th class="num">Var(w)</th><th class="num">n·Var(w)</th><th class="num">Variance factor after 5 layers</th></tr></thead>
+          <tbody>
+            <tr><td><code>0.01*randn</code></td><td class="num">10⁻⁴</td><td class="num">0.05</td><td class="num">0.05⁵ ≈ 3.1 × 10⁻⁷</td></tr>
+            <tr><td><code>randn</code></td><td class="num">1</td><td class="num">500</td><td class="num">500⁵ ≈ 3.1 × 10¹³</td></tr>
+            <tr><td><code>randn/sqrt(fan_in)</code></td><td class="num">1/500</td><td class="num">1</td><td class="num">1</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Standard name: scaling by \(1/\sqrt{\text{fan}_\text{in}}\) is often called LeCun or Xavier initialization. The Xavier rule of Glorot and Bengio (2010) balances the forward and backward passes with \(\operatorname{Var}(w) = 2/(\text{fan}_\text{in} + \text{fan}_\text{out})\), which equals \(1/n\) when the two are equal.</p>
+    </section>
+
+    <section id="he-init">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-6/fullscreen" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 0.5 H6.5 L8.5 2.5 V9.5 H2 Z"/></svg>Slides</a>
+        </div>
+        <h2>ReLU needs a factor of 2</h2>
+      </div>
+      <p>The \(1/\sqrt{\text{fan}_\text{in}}\) rule does not work for ReLU neurons. He et al. argue that a factor of 2 is needed. Intuitively, the output of a ReLU is restricted to the positive half of the space: it zeroes roughly half of what passes through it, so the variance reaching the next layer is roughly halved at every layer. The slides show this on a deeper ReLU network, with \(\mathbf{h}_1 \in \mathbb{R}^{100}\) and \(\mathbf{h}_2, \dots, \mathbf{h}_7 \in \mathbb{R}^{50}\), at the layers \(\mathbf{h}_1\), \(\mathbf{h}_4\) and \(\mathbf{h}_7\). Accounting for the factor of 2 gives better performance:</p>
+      <pre class="codeblock"><code>W = np.random.randn(fan_in, fan_out) / np.sqrt(fan_in/2)</code></pre>
+      <p class="note">Not in the lecture, the short reason for the 2: if \(s\) is symmetric about 0, then \(h = \max(0, s)\) has \(\mathbb{E}[h^2] = \tfrac12\operatorname{Var}(s)\). With zero-mean weights, the next pre-activation has variance \(n\operatorname{Var}(w)\,\mathbb{E}[h^2] = \tfrac12\,n\operatorname{Var}(w)\operatorname{Var}(s)\), which stays constant only if \(n\operatorname{Var}(w) = 2\), that is \(\operatorname{Var}(w) = 2/\text{fan}_\text{in}\).</p>
+
+      <figure id="init-fig">
+        <div class="controls">
+          <span class="grp">Activation</span>
+          <div class="seg" role="group" aria-label="Activation">
+            <button class="btn sm" type="button" id="init-a-tanh" data-act="tanh" aria-pressed="true">tanh</button>
+            <button class="btn sm" type="button" id="init-a-sigmoid" data-act="sigmoid" aria-pressed="false">sigmoid</button>
+            <button class="btn sm" type="button" id="init-a-relu" data-act="relu" aria-pressed="false">ReLU</button>
+          </div>
+        </div>
+        <div class="controls">
+          <span class="grp">W =</span>
+          <div class="seg" role="group" aria-label="Weight initialization">
+            <button class="btn sm" type="button" id="init-w-small" data-init="small" aria-pressed="true">0.01·randn</button>
+            <button class="btn sm" type="button" id="init-w-large" data-init="large" aria-pressed="false">randn</button>
+            <button class="btn sm" type="button" id="init-w-xavier" data-init="xavier" aria-pressed="false">randn/√fan_in</button>
+            <button class="btn sm" type="button" id="init-w-he" data-init="he" aria-pressed="false">randn/√(fan_in/2)</button>
+          </div>
+        </div>
+        <div class="controls">
+          <label for="init-layers">Layers</label>
+          <input type="range" id="init-layers" min="2" max="10" step="1" value="5">
+          <output id="init-layers-out" for="init-layers">5</output>
+          <label class="check"><input type="checkbox" id="init-bn"> Batch norm before each activation</label>
+        </div>
+        <div class="readouts">
+          <div><span class="k">n·Var(w)</span><span class="v" id="init-nv">–</span></div>
+          <div><span class="k">Std, layer 1</span><span class="v" id="init-s1">–</span></div>
+          <div><span class="k">Std, last layer</span><span class="v mine" id="init-sl">–</span></div>
+          <div><span class="k">Std change per layer</span><span class="v" id="init-per">–</span></div>
+          <div><span class="k" id="init-sat-k">Saturated, last layer</span><span class="v" id="init-sat">–</span></div>
+        </div>
+        <div class="status" id="init-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="l07-init-svg" viewBox="0 0 720 250" role="img" aria-label="One histogram per layer of the activations of a synthetic network, with each layer's standard deviation above its panel. The shapes change with the activation function, the weight scale and batch normalization."></svg></div>
+        <figcaption><b>Synthetic forward pass</b>, with data generated for these notes from a seeded random generator: 100 inputs in \(\mathbb{R}^{500}\) from a unit Gaussian, pushed through layers of 500 units without biases (the slides use 1000 inputs). Each panel is the histogram of one layer's activations, scaled to its own tallest bar. Every option reuses the same random matrices, so only the weight scale changes. For ReLU, exact zeros (about half the units) are left out of the histogram and a highlighted bar at the right edge collects values of 3 or more. Batch norm standardizes each unit's pre-activation over the 100 inputs before the activation (\(\gamma = 1\), \(\beta = 0\)).</figcaption>
+      </figure>
+    </section>
+
+    <!-- ============ MODULE 7.5 ============ -->
+    <section id="batchnorm">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-6/fullscreen" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 0.5 H6.5 L8.5 2.5 V9.5 H2 Z"/></svg>Slides</a>
+        </div>
+        <h2>Batch normalization: standardize every pre-activation</h2>
+      </div>
+      <p>Batch normalization is a method that allows us to be less careful about initialization.</p>
+      <p>Consider a deep network and focus on learning the weights between two of its layers, say from \(\mathbf{h}_3\) to \(\mathbf{h}_4\). Training uses mini-batches. If the distribution of \(\mathbf{h}_3\) keeps changing from one mini-batch to the next, these weights keep chasing a moving target, and learning them is hard. It would help if the pre-activations at each layer were unit Gaussians. Batch normalization ensures this explicitly by standardizing each pre-activation, for sample \(i\) and unit \(k\):</p>
+      <div class="eq">\[ \hat{s}_{ik} = \frac{s_{ik} - \mathbb{E}[s_{ik}]}{\sqrt{\operatorname{Var}(s_{ik})}} \]</div>
+      <p>The mean and variance are computed from the mini-batch. This explicitly keeps the distribution of the inputs to each layer from changing across batches.</p>
+      <p class="note">Standard name: Ioffe and Szegedy (2015), who introduced batch normalization, called this changing distribution <i>internal covariate shift</i>.</p>
+      <p>The network now has a BN step before each non-linearity: linear, BN, tanh, linear, BN, tanh, and so on. Is that legal? Yes. Like the tanh layer, the batch normalization layer is differentiable, so backpropagation passes through it.</p>
+    </section>
+
+    <section id="batchnorm-scale">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-6/fullscreen" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 0.5 H6.5 L8.5 2.5 V9.5 H2 Z"/></svg>Slides</a>
+        </div>
+        <h2>A learnable scale and shift, and the batch statistics</h2>
+      </div>
+      <p>Is a unit Gaussian necessarily the best input for the tanh layer? Perhaps not, so let the network learn what is best for it. After the standardization, BN adds one more step:</p>
+      <div class="eq">\[ y^{(k)} = \gamma^{(k)}\,\hat{s}_{ik} + \beta^{(k)} \]</div>
+      <p>\(\gamma^{(k)}\) and \(\beta^{(k)}\) are additional parameters of the network, learnt with all the others. If the network learns \(\gamma^{(k)} = \sqrt{\operatorname{Var}(x^{(k)})}\) and \(\beta^{(k)} = \mathbb{E}[x^{(k)}]\), it recovers the original \(s_{ik}\). By adjusting these two parameters, the network can undo the normalization whenever that is more favourable.</p>
+      <p>How are the statistics computed? Three indices are involved: the layer \(l\), the neuron \(i\) within that layer, and the training sample \(j\) within the mini-batch; picture them as the three axes of a cube. Associate with layer \(l\) an accumulator that stores the activations for the batch inputs, and let \(x_i^j\) be the activation of the \(i\)-th neuron for the \(j\)-th of the \(m\) training samples. Each neuron is normalized with its own statistics, taken over the batch:</p>
+      <ol class="algo">
+        <li class="algo-title">Batch normalization of neuron i in layer l, for one mini-batch of m samples</li>
+        <li>Mean over the batch: \(\mu_i = \frac{1}{m}\sum_{j=1}^{m} x_i^j\).</li>
+        <li>Variance over the batch: \(\sigma_i^2 = \frac{1}{m}\sum_{j=1}^{m}\big(x_i^j - \mu_i\big)^2\).</li>
+        <li>Standardize each sample's activation: \(\hat{x}_i = \dfrac{x_i - \mu_i}{\sqrt{\sigma_i^2 + \epsilon}}\), where \(\epsilon\) is a small constant that avoids division by zero.</li>
+        <li>Scale and shift: \(\hat{y}_i = \gamma\,\hat{x}_i + \beta\), with \(\gamma\) and \(\beta\) learnt.</li>
+      </ol>
+      <p>The slides then compare a 7-layer network on MNIST with and without batch normalization, using sigmoid activations and <code>w = 0.1*np.random.randn()</code>, and plot the activation distributions at \(\mathbf{h}_1\), \(\mathbf{h}_4\) and \(\mathbf{h}_7\) (blue without BN, red with). To run a comparison of the same kind, tick <i>Batch norm</i> in the <a href="#init-fig">explorer of Module 7.4</a>. With BN on, every weight scale gives the same spread at every layer, because standardizing the pre-activations cancels the scale of the weights.</p>
+    </section>
+
+    <section id="layernorm">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-6/fullscreen" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 0.5 H6.5 L8.5 2.5 V9.5 H2 Z"/></svg>Slides</a>
+        </div>
+        <h2>The limits of batch norm, and layer normalization</h2>
+      </div>
+      <p>Batch normalization has limitations:</p>
+      <ul>
+        <li>The mean and variance are estimates, and their accuracy depends on the batch size \(m\). For data such as images and videos, memory limits often force small batches, and a small \(m\) gives a large estimation error.</li>
+        <li>A batch size of 1 cannot be used at all. Then \(\mu_i = x_i\) and \(\sigma_i = 0\), so normalization makes no sense: every standardized value is 0.</li>
+        <li>Naive use of BN was also found empirically to degrade performance on NLP tasks. A systematic study confirmed this and proposed a modified BN called PowerNorm.</li>
+      </ul>
+      <p>Alternatives such as group normalization and instance normalization were proposed for particular domains. The simplest one is <dfn>layer normalization</dfn>: take the average across the outputs of the \(H\) hidden units of the layer, one sample at a time.</p>
+      <div class="eq">\[ \mu_l = \frac{1}{H}\sum_{i=1}^{H} x_i, \qquad \sigma_l = \sqrt{\frac{1}{H}\sum_{i=1}^{H}\big(x_i - \mu_l\big)^2}, \qquad \hat{x}_i = \frac{x_i - \mu_l}{\sqrt{\sigma_l^2 + \epsilon}}\;\;\forall i, \qquad \hat{y}_i = \gamma\,\hat{x}_i + \beta \]</div>
+      <p>The statistics no longer involve the other samples in the batch, so layer normalization works even with a batch size of 1, as needed, for example, in RNNs.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 720 296" role="img" aria-label="Two grids of activations for one layer; rows are samples in the mini-batch and columns are neurons. Left, batch norm: one column is highlighted, and its mean and variance are computed over the samples. Right, layer norm: one row is highlighted, and its mean and standard deviation are computed over the units of that one sample.">
+            <defs><marker id="l07-f7-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="20" y="22">Batch norm</text>
+            <text class="d-s" x="20" y="42">one neuron, statistics over the m samples</text>
+            <text class="d-al" x="180" y="62" text-anchor="middle">neuron i →</text>
+            <text class="d-al" x="105" y="78" text-anchor="middle">1</text>
+            <text class="d-al" x="135" y="78" text-anchor="middle">2</text>
+            <text class="d-al" x="165" y="78" text-anchor="middle">3</text>
+            <text class="d-al" x="195" y="78" text-anchor="middle">…</text>
+            <text class="d-al" x="225" y="78" text-anchor="middle">…</text>
+            <text class="d-al" x="255" y="78" text-anchor="middle">H</text>
+            <text class="d-al" x="82" y="100" text-anchor="end">1</text>
+            <rect class="d-box" x="90" y="84" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="120" y="84" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box-acc" x="150" y="84" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="180" y="84" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="210" y="84" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="240" y="84" width="30" height="24" style="stroke-width: 1"/>
+            <text class="d-al" x="82" y="124" text-anchor="end">2</text>
+            <rect class="d-box" x="90" y="108" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="120" y="108" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box-acc" x="150" y="108" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="180" y="108" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="210" y="108" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="240" y="108" width="30" height="24" style="stroke-width: 1"/>
+            <text class="d-al" x="82" y="148" text-anchor="end">3</text>
+            <rect class="d-box" x="90" y="132" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="120" y="132" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box-acc" x="150" y="132" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="180" y="132" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="210" y="132" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="240" y="132" width="30" height="24" style="stroke-width: 1"/>
+            <text class="d-al" x="82" y="172" text-anchor="end">…</text>
+            <rect class="d-box" x="90" y="156" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="120" y="156" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box-acc" x="150" y="156" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="180" y="156" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="210" y="156" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="240" y="156" width="30" height="24" style="stroke-width: 1"/>
+            <text class="d-al" x="82" y="196" text-anchor="end">m</text>
+            <rect class="d-box" x="90" y="180" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="120" y="180" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box-acc" x="150" y="180" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="180" y="180" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="210" y="180" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="240" y="180" width="30" height="24" style="stroke-width: 1"/>
+            <text class="d-al" x="64" y="148" text-anchor="end">sample j</text>
+            <line class="d-ln-acc" x1="165" y1="206" x2="165" y2="226" marker-end="url(#l07-f7-aha)"/>
+            <text class="d-t" x="165" y="244" text-anchor="middle">μᵢ, σᵢ² from this column</text>
+            <text class="d-s" x="20" y="264">needs a batch: with m = 1, σᵢ = 0</text>
+            <line class="d-rule" x1="350" y1="12" x2="350" y2="270"/>
+            <text class="d-h" x="370" y="22">Layer norm</text>
+            <text class="d-s" x="370" y="42">one sample, statistics over the H units</text>
+            <text class="d-al" x="520" y="62" text-anchor="middle">neuron i →</text>
+            <text class="d-al" x="445" y="78" text-anchor="middle">1</text>
+            <text class="d-al" x="475" y="78" text-anchor="middle">2</text>
+            <text class="d-al" x="505" y="78" text-anchor="middle">3</text>
+            <text class="d-al" x="535" y="78" text-anchor="middle">…</text>
+            <text class="d-al" x="565" y="78" text-anchor="middle">…</text>
+            <text class="d-al" x="595" y="78" text-anchor="middle">H</text>
+            <text class="d-al" x="422" y="100" text-anchor="end">1</text>
+            <rect class="d-box" x="430" y="84" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="460" y="84" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="490" y="84" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="520" y="84" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="550" y="84" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="580" y="84" width="30" height="24" style="stroke-width: 1"/>
+            <text class="d-al" x="422" y="124" text-anchor="end">2</text>
+            <rect class="d-box-acc" x="430" y="108" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box-acc" x="460" y="108" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box-acc" x="490" y="108" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box-acc" x="520" y="108" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box-acc" x="550" y="108" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box-acc" x="580" y="108" width="30" height="24" style="stroke-width: 1"/>
+            <text class="d-al" x="422" y="148" text-anchor="end">3</text>
+            <rect class="d-box" x="430" y="132" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="460" y="132" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="490" y="132" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="520" y="132" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="550" y="132" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="580" y="132" width="30" height="24" style="stroke-width: 1"/>
+            <text class="d-al" x="422" y="172" text-anchor="end">…</text>
+            <rect class="d-box" x="430" y="156" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="460" y="156" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="490" y="156" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="520" y="156" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="550" y="156" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="580" y="156" width="30" height="24" style="stroke-width: 1"/>
+            <text class="d-al" x="422" y="196" text-anchor="end">m</text>
+            <rect class="d-box" x="430" y="180" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="460" y="180" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="490" y="180" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="520" y="180" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="550" y="180" width="30" height="24" style="stroke-width: 1"/>
+            <rect class="d-box" x="580" y="180" width="30" height="24" style="stroke-width: 1"/>
+            <text class="d-al" x="404" y="148" text-anchor="end">sample j</text>
+            <line class="d-ln-acc" x1="612" y1="120" x2="632" y2="120" marker-end="url(#l07-f7-aha)"/>
+            <text class="d-t" x="638" y="118">μₗ, σₗ</text>
+            <text class="d-s" x="638" y="134">from this row</text>
+            <text class="d-s" x="370" y="264">works for any batch size, even 1</text>
+            <text class="d-s" x="20" y="288">Rows: samples j of the mini-batch · columns: neurons i of layer l · each cell is one activation xᵢʲ</text>
+          </svg>
+        </div>
+        <figcaption><b>Same activations, different statistics.</b> Batch norm normalizes each neuron with the mean and variance of its column, over the samples in the mini-batch. Layer norm normalizes each sample with the mean and spread of its row, over the units of the layer. Only the second can work with a single sample.</figcaption>
+      </figure>
+      <p class="note">Not in this lecture: layer normalization is the "norm" in the Transformer's add-and-norm steps (<a href="lecture-14.html">Lecture 14</a>).</p>
+    </section>
+
+    <!-- ============ REVISION ============ -->
+    <section id="terms">
+      <div class="sec-head"><h2>Key terms</h2></div>
+      <dl class="terms">
+        <div><dt>Greedy layerwise pre-training</dt><dd>Training one hidden layer at a time, each to reconstruct its own input, before fine-tuning the whole network.</dd></div>
+        <div><dt>Autoencoder objective</dt><dd>Rebuild the input from a hidden layer with small squared error, so that layer keeps the input's important information.</dd></div>
+        <div><dt>Fine-tuning</dt><dd>Training the whole pre-trained network on the supervised loss, starting from the pre-trained weights.</dd></div>
+        <div><dt>Saturated neuron</dt><dd>A sigmoid or tanh unit at an end of its range, where its derivative, and every gradient through it, is about 0.</dd></div>
+        <div><dt>Zero-centred output</dt><dd>Outputs spread around 0. The sigmoid's are all positive, which forces a neuron's weight gradients to share one sign.</dd></div>
+        <div><dt>Dead ReLU</dt><dd>A ReLU unit whose pre-activation is negative for every input: it outputs 0, gets zero gradient, and never recovers.</dd></div>
+        <div><dt>Leaky and parametric ReLU</dt><dd>\(\max(\alpha x, x)\), with \(\alpha = 0.1\) fixed or \(\alpha\) learnt, so a gradient always flows.</dd></div>
+        <div><dt>ELU and SELU</dt><dd>\(x\) for \(x > 0\) and \(\alpha(e^x - 1)\) below; SELU scales this by \(\lambda \approx 1.0507\), with \(\alpha \approx 1.6733\), to self-normalize.</dd></div>
+        <div><dt>Maxout</dt><dd>The maximum of \(k\) affine functions of the input; only the winning piece receives gradient.</dd></div>
+        <div><dt>GELU</dt><dd>\(x\Phi(x)\), the expected value of \(m\cdot x\) with \(m \sim \text{Bernoulli}(\Phi(x))\); about \(x\sigma(1.702x)\).</dd></div>
+        <div><dt>Swish and SiLU</dt><dd>\(x\sigma(\beta x)\), found by automatic search; SiLU is the case \(\beta = 1\).</dd></div>
+        <div><dt>Symmetry breaking problem</dt><dd>Equal initial weights give equal activations and equal gradients, so the units of a layer stay identical forever.</dd></div>
+        <div><dt>Fan-in scaling</dt><dd>\(\operatorname{Var}(w) = 1/\text{fan}_\text{in}\) keeps \(n\operatorname{Var}(w) = 1\) and the variance steady across layers; ReLU needs \(2/\text{fan}_\text{in}\).</dd></div>
+        <div><dt>Batch and layer normalization</dt><dd>Standardize pre-activations, then apply a learnt \(\gamma\) and \(\beta\). BN takes statistics per unit over the batch; LN per sample over the layer's units.</dd></div>
+      </dl>
+    </section>
+
+    <section id="test">
+      <div class="sec-head"><h2>Test yourself</h2></div>
+      <div class="quiz">
+        <details><summary><span class="q">Q1</span><span>A deep network uses the identity as its activation: \(y = w_4(w_3(w_2(w_1x)))\). Why can it learn nothing that a single linear layer cannot?</span><span class="tog"></span></summary>
+          <p>The composition is \((w_4w_3w_2w_1)\,x\), one linear map with weight \(w_4w_3w_2w_1\); with matrices, \(W_4W_3W_2W_1\) is still one matrix. Its decision boundaries stay linear, so for example one class surrounding another can never be separated. Non-linear activations are what stop the layers from collapsing into one.</p></details>
+        <details><summary><span class="q">Q2</span><span>Compute \(\sigma'(0)\) and \(\sigma'(4)\). If a gradient passes through five sigmoid units in a chain, how large can the product of their local derivatives be?</span><span class="tog"></span></summary>
+          <p>\(\sigma(0) = 0.5\), so \(\sigma'(0) = 0.5 \times 0.5 = 0.25\), the largest value it can take. \(\sigma(4) \approx 0.982\), so \(\sigma'(4) \approx 0.982 \times 0.018 \approx 0.018\), about 7% of the peak. Through five units the product is at most \(0.25^5 \approx 0.001\), and far less if any unit is near saturation (the weights in the chain multiply in as well).</p></details>
+        <details><summary><span class="q">Q3</span><span>A sigmoid unit receives \(h_{21} = 0.3\) and \(h_{22} = 0.8\) from sigmoid units, and the common factor \(\frac{\partial\mathcal{L}}{\partial y}\frac{\partial y}{\partial h_3}\frac{\partial h_3}{\partial a_3}\) is \(-0.5\). Find \(\nabla w_1\) and \(\nabla w_2\). Can this step increase \(w_1\) and decrease \(w_2\)?</span><span class="tog"></span></summary>
+          <p>\(\nabla w_1 = -0.5 \times 0.3 = -0.15\) and \(\nabla w_2 = -0.5 \times 0.8 = -0.40\). Both are negative, so the update \(-\eta\nabla w\) increases both weights. No step can move them in opposite directions, because the inputs are positive and the common factor fixes the sign of both gradients.</p></details>
+        <details><summary><span class="q">Q4</span><span>A ReLU unit has \(a = w_1x_1 + w_2x_2 + b\) with inputs in \([0, 1]\), \(w_1 = 0.5\), \(w_2 = -0.3\) and \(b = -2\). Is it alive? What changes with leaky ReLU?</span><span class="tog"></span></summary>
+          <p>The largest possible pre-activation is \(0.5 \times 1 - 0.3 \times 0 - 2 = -1.5 \lt 0\), so \(a \lt 0\) for every input and the unit is dead. Its local derivative is 0, so \(\nabla w_1 = \nabla w_2 = \nabla b = 0\) and it never recovers. With leaky ReLU (slope 0.1), \(\partial h/\partial a = 0.1\) for \(a \lt 0\), so \(\nabla b = 0.1\,\delta\) and \(\nabla w_1 = 0.1\,\delta\,x_1\), where \(\delta\) is the gradient arriving at \(h\). The bias can still move back up.</p></details>
+        <details><summary><span class="q">Q5</span><span>Write ReLU and leaky ReLU as maxout units. What does \(\max(0.5x, -0.5x)\) compute, and how many parameters does a maxout unit with \(k\) pieces over \(d\) inputs have?</span><span class="tog"></span></summary>
+          <p>ReLU is \(\max(0\cdot x + 0,\ 1\cdot x + 0)\) and leaky ReLU is \(\max(0.1x,\ x)\). \(\max(0.5x, -0.5x) = 0.5|x|\), a V shape. Each piece has a weight vector of length \(d\) and a bias, so the unit has \(k(d + 1)\) parameters, \(k\) times those of an ordinary unit.</p></details>
+        <details><summary><span class="q">Q6</span><span>Derive GELU from \(f(x) = m\cdot x\) with \(m \sim \text{Bernoulli}(\Phi(x))\), then evaluate it at \(x = 1\) and \(x = -1\) using \(\Phi(1) \approx 0.841\).</span><span class="tog"></span></summary>
+          <p>The expected value is \(\Phi(x)\cdot x + (1 - \Phi(x))\cdot 0\), which is \(x\Phi(x)\). So \(\operatorname{GELU}(1) \approx 0.841\), and since \(\Phi(-1) = 1 - \Phi(1) \approx 0.159\), \(\operatorname{GELU}(-1) \approx -0.159\). Unlike ReLU, a small negative input gives a small negative output instead of exactly 0.</p></details>
+        <details><summary><span class="q">Q7</span><span>A layer has \(\text{fan}_\text{in} = 250\). What weight standard deviation do the \(1/\sqrt{\text{fan}_\text{in}}\) rule and the ReLU rule give? With <code>0.01*randn</code> instead, by what factor does the variance shrink over 4 such layers?</span><span class="tog"></span></summary>
+          <p>\(1/\sqrt{\text{fan}_\text{in}}\): \(\operatorname{Var}(w) = 1/250 = 0.004\), standard deviation \(\approx 0.063\). ReLU rule: \(\operatorname{Var}(w) = 2/250 = 0.008\), standard deviation \(\approx 0.089\). With <code>0.01*randn</code>, \(n\operatorname{Var}(w) = 250 \times 10^{-4} = 0.025\) per layer, so over 4 layers the variance is multiplied by \(0.025^4 \approx 3.9 \times 10^{-7}\).</p></details>
+        <details><summary><span class="q">Q8</span><span>Why can batch normalization not be used with a batch size of 1, and what does layer normalization compute instead?</span><span class="tog"></span></summary>
+          <p>With \(m = 1\), \(\mu_i = x_i\) and \(\sigma_i = 0\), so \(\hat{x}_i = 0/\sqrt{\epsilon} = 0\) for every unit and the layer passes on only \(\beta\). Layer normalization takes the mean and variance across the \(H\) units of the same sample, so it needs no batch at all.</p></details>
+      </div>
+    </section>
+
+    <!-- PAGER:START --><nav class="pager" aria-label="Previous and next lecture"><a href="lecture-05.html"><span class="dir">← Lecture 5</span><span class="nm">Optimization: from gradient descent to Adam</span></a><a class="next" href="lecture-08.html"><span class="dir">Lecture 8 →</span><span class="nm">Convolutional neural networks</span></a></nav><!-- PAGER:END -->
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the official lecture slides and the module videos' YouTube auto-generated captions; Modules 7.4 and 7.5 have no module video and follow the slides alone. Timestamp links open the video at that moment. Charts marked synthetic use data generated for these notes. Not an official IIT Madras resource.</div>
+</footer>
+
+<script src="notes.js"></script>
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const clear = el => { while (el.firstChild) el.removeChild(el.firstChild); };
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const mkRand = s0 => { let seed = s0; return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
+  const minus = s => s.replace(/-/g, '−');
+  const fmt = (v, d = 3) => { if (!isFinite(v)) return '–'; if (v !== 0 && Math.abs(v) < 5e-4) return minus(v.toExponential(1)); const s = v.toFixed(d); return minus(/^-0\.0+$/.test(s) ? s.slice(1) : s); };
+  const sig = z => 1 / (1 + Math.exp(-z));
+  const press = (group, on) => group.forEach(b => b.setAttribute('aria-pressed', String(b === on)));
+
+  /* ---------- Activation explorer ---------- */
+  (() => {
+    const svg = document.getElementById('l07-act-svg'); if (!svg) return;
+    const PL = 34, PR = 12, PT = 52, xlo = -5, xhi = 5, ylo = -2, yhi = 3;
+    const S = (560 - PL - PR) / (xhi - xlo), PB = PT + (yhi - ylo) * S;
+    const sx = x => PL + (x - xlo) * S, sy = y => PT + (yhi - Math.max(-12, Math.min(12, y))) * S;
+    const defs = mk('defs', {}, svg), cp = mk('clipPath', { id: 'l07-act-clip' }, defs);
+    mk('rect', { x: PL, y: PT, width: (xhi - xlo) * S, height: (yhi - ylo) * S }, cp);
+    const grid = mk('g', { class: 'c-grid' }, svg);
+    for (let v = xlo; v <= xhi; v++) mk('line', { x1: sx(v), x2: sx(v), y1: PT, y2: PB }, grid);
+    for (let v = ylo; v <= yhi; v++) mk('line', { x1: PL, x2: sx(xhi), y1: sy(v), y2: sy(v) }, grid);
+    mk('line', { x1: PL, x2: sx(xhi), y1: sy(0), y2: sy(0), class: 'c-axis' }, svg);
+    mk('line', { x1: sx(0), x2: sx(0), y1: PT, y2: PB, class: 'c-axis' }, svg);
+    for (let v = -4; v <= 4; v += 2) mk('text', { x: sx(v), y: PB + 15, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = minus(String(v));
+    for (let v = ylo; v <= yhi; v++) mk('text', { x: PL - 6, y: sy(v) + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = minus(String(v));
+    mk('text', { x: sx(xhi), y: PB + 15, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = 'x';
+    const formula = mk('text', { x: PL, y: 18, class: 'c-lbl' }, svg);
+    const legend = mk('g', {}, svg);
+    const extra = mk('g', { 'clip-path': 'url(#l07-act-clip)' }, svg);
+    const pD = mk('path', { class: 'l07-df', 'clip-path': 'url(#l07-act-clip)' }, svg);
+    const pF = mk('path', { class: 'l07-f', 'clip-path': 'url(#l07-act-clip)' }, svg);
+    const probe = mk('line', { class: 'l07-probe', y1: PT, y2: PB }, svg);
+    const dotD = mk('circle', { r: 4.5, class: 'l07-dot-d' }, svg);
+    const dotF = mk('circle', { r: 5.5, class: 'c-pt-hi' }, svg);
+
+    const erf = x => { const t = 1 / (1 + 0.3275911 * Math.abs(x)); const y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return x >= 0 ? y : -y; };
+    const Phi = x => 0.5 * (1 + erf(x / Math.SQRT2)), phi = x => Math.exp(-x * x / 2) / Math.sqrt(2 * Math.PI);
+    const LAM = 1.0507009873554805, ALP = 1.6732632423543772;
+    const PIECES = [[0.5, 0, '0.5x'], [-0.5, 0, '−0.5x'], [1, 0, 'x'], [-1, -0.2, '−x − 0.2']];
+    const win = (x, k) => { let j = 0; for (let i = 1; i < k; i++) if (PIECES[i][0] * x + PIECES[i][1] > PIECES[j][0] * x + PIECES[j][1] + 1e-12) j = i; return j; };
+    const p2 = v => minus(v.toFixed(2));
+    const FN = {
+      sigmoid: { f: x => sig(x), d: x => sig(x) * (1 - sig(x)), range: () => '(0, 1)', formula: () => 'σ(x) = 1 / (1 + e⁻ˣ)' },
+      tanh: { f: Math.tanh, d: x => 1 - Math.tanh(x) ** 2, range: () => '(−1, 1)', formula: () => 'tanh(x)' },
+      relu: { f: x => Math.max(0, x), d: x => x > 0 ? 1 : 0, range: () => '[0, ∞)', formula: () => 'ReLU(x) = max(0, x)' },
+      leaky: { par: { lbl: 'Leak α', min: 0, max: 0.5, step: 0.01, v: 0.1 }, f: (x, a) => x > 0 ? x : a * x, d: (x, a) => x > 0 ? 1 : a, range: a => a > 0 ? '(−∞, ∞)' : '[0, ∞)', formula: a => `max(${p2(a)}x, x)` },
+      elu: { par: { lbl: 'ELU α', min: 0.1, max: 2, step: 0.05, v: 1 }, f: (x, a) => x > 0 ? x : a * (Math.exp(x) - 1), d: (x, a) => x > 0 ? 1 : a * Math.exp(x), range: a => `(−${p2(a)}, ∞)`, formula: a => `ELU: x if x > 0, else ${p2(a)}(eˣ − 1)` },
+      selu: { f: x => LAM * (x > 0 ? x : ALP * (Math.exp(x) - 1)), d: x => LAM * (x > 0 ? 1 : ALP * Math.exp(x)), range: () => '(−1.76, ∞)', formula: () => 'SELU: λ·(x if x > 0, else αeˣ − α), λ ≈ 1.0507, α ≈ 1.6733' },
+      maxout: { par: { lbl: 'Affine pieces k', min: 1, max: 4, step: 1, v: 4 }, f: (x, k) => { const j = win(x, k); return PIECES[j][0] * x + PIECES[j][1]; }, d: (x, k) => PIECES[win(x, k)][0], range: k => k === 1 ? '(−∞, ∞)' : '[0, ∞)', formula: k => 'max(' + PIECES.slice(0, k).map(q => q[2]).join(', ') + ')' },
+      gelu: { f: x => x * Phi(x), d: x => Phi(x) + x * phi(x), range: () => '≈ [−0.17, ∞)', formula: () => 'GELU(x) = x Φ(x)' },
+      swish: { par: { lbl: 'Swish β', min: 0, max: 4, step: 0.01, v: 1 }, f: (x, b) => x * sig(b * x), d: (x, b) => { const s = sig(b * x); return s + b * x * s * (1 - s); }, range: b => b > 0 ? `≈ [−${(0.2785 / b).toFixed(2)}, ∞)` : '(−∞, ∞)', formula: b => Math.abs(b - 1) < 0.005 ? 'SiLU(x) = x σ(x)' : `Swish(x) = x σ(${p2(b)}x)` },
+    };
+    const pv = {}; for (const k in FN) if (FN[k].par) pv[k] = FN[k].par.v;
+    const btns = [...document.querySelectorAll('#act-fig [data-fn]')];
+    const xs = document.getElementById('act-x'), xOut = document.getElementById('act-x-out');
+    const pS = document.getElementById('act-param'), pO = document.getElementById('act-param-out'), pL = document.getElementById('act-param-lbl');
+    const derivBox = document.getElementById('act-deriv'), cmpBox = document.getElementById('act-cmp');
+    const fOut = document.getElementById('act-f'), dOut = document.getElementById('act-d'), rOut = document.getElementById('act-range'), status = document.getElementById('act-status');
+    let key = 'sigmoid';
+
+    const pathFor = (fn, breakJumps) => {
+      let d = '', prev = null;
+      for (let i = 0; i <= 500; i++) {
+        const x = xlo + (xhi - xlo) * i / 500, y = fn(x), X = sx(x).toFixed(1), Y = sy(y).toFixed(1);
+        d += (prev === null || (breakJumps && Math.abs(y - prev) > 0.3)) ? `M${X} ${Y}` : ` L${X} ${Y}`;
+        prev = y;
+      }
+      return d;
+    };
+    const drawLegend = items => {
+      clear(legend);
+      let x = PL;
+      items.forEach(([cls, txt]) => {
+        mk('line', { x1: x, x2: x + 22, y1: 37, y2: 37, class: cls }, legend);
+        mk('text', { x: x + 28, y: 41, class: 'c-note' }, legend).textContent = txt;
+        x += 28 + txt.length * 6.6 + 20;
+      });
+    };
+    const note = (k, x, fx, dx, p) => {
+      const xt = fmt(x, 2);
+      switch (k) {
+        case 'sigmoid': case 'tanh': {
+          const peak = k === 'sigmoid' ? 0.25 : 1, r = dx / peak, nm = k === 'sigmoid' ? 'σ′' : 'tanh′';
+          if (r < 0.3) return `Saturating: ${nm}(${xt}) = ${fmt(dx)}, only ${Math.round(r * 100)}% of its peak ${peak}. Little gradient gets through.`;
+          if (Math.abs(x) < 0.3) return `Near 0 the curve is steepest: ${nm} peaks at ${peak} here.`;
+          return '';
+        }
+        case 'relu': return x < 0 ? 'Dead side: the derivative is exactly 0, so no gradient passes back.' : x > 0 ? 'Positive side: derivative 1, with no saturation however large x gets.' : '';
+        case 'leaky': return x < 0 ? (p > 0 ? `Leaky side: a gradient of ${p2(p)} still flows.` : 'With α = 0 this is plain ReLU: no gradient for x < 0.') : '';
+        case 'elu': return x < 0 ? `Negative side: the gradient αeˣ = ${fmt(dx)} still flows, fading as x falls.` : '';
+        case 'selu': return x < 0 ? `Negative side: λαeˣ = ${fmt(dx)}; the output flattens at −λα ≈ −1.76.` : 'Positive side: slope λ ≈ 1.05.';
+        case 'maxout': { const j = win(x, p); return `Piece ${PIECES[j][2]} is the largest here, so only its weights get gradient (slope ${fmt(PIECES[j][0], 1)}).`; }
+        case 'gelu': { const ap = x * sig(1.702 * x); return `xΦ(x) = ${fmt(fx)} and xσ(1.702x) = ${fmt(ap)}: they differ by ${fmt(Math.abs(fx - ap))}.`; }
+        case 'swish':
+          if (Math.abs(p - 1) < 0.005) return 'β = 1: this is SiLU, x σ(x).';
+          if (Math.abs(p - 1.702) < 0.02) return 'β ≈ 1.702: the sigmoid approximation of GELU.';
+          if (p < 0.005) return 'β = 0: σ(0) = 0.5, so the curve is the straight line x/2.';
+          if (p > 3.5) return 'Large β: σ(βx) is nearly a step, so the curve is close to ReLU.';
+          return '';
+      }
+      return '';
+    };
+    const setParamUI = () => {
+      const F = FN[key];
+      if (F.par) {
+        pS.disabled = false; pS.min = F.par.min; pS.max = F.par.max; pS.step = F.par.step; pS.value = pv[key];
+        pL.textContent = F.par.lbl; pO.textContent = key === 'maxout' ? String(pv[key]) : p2(pv[key]);
+      } else {
+        pS.disabled = true; pL.textContent = 'Parameter (none here)'; pO.textContent = '–';
+      }
+    };
+    const draw = () => {
+      const F = FN[key], p = F.par ? pv[key] : undefined;
+      const f = x => F.f(x, p), d = x => F.d(x, p);
+      clear(extra);
+      const items = [['l07-f', 'f(x)']];
+      if (derivBox.checked) items.push(['l07-df', 'f′(x)']);
+      if (key === 'maxout') { PIECES.slice(0, p).forEach(q => mk('line', { x1: sx(xlo), y1: sy(q[0] * xlo + q[1]), x2: sx(xhi), y2: sy(q[0] * xhi + q[1]), class: 'l07-piece' }, extra)); items.push(['l07-piece', 'affine pieces']); }
+      if (key === 'gelu') { mk('path', { d: pathFor(x => x * sig(1.702 * x)), class: 'l07-approx' }, extra); items.push(['l07-approx', 'xσ(1.702x)']); }
+      if (cmpBox.checked && key !== 'relu') { mk('path', { d: pathFor(x => Math.max(0, x)), class: 'l07-ghost' }, extra); items.push(['l07-ghost', 'ReLU']); }
+      drawLegend(items);
+      pF.setAttribute('d', pathFor(f));
+      pD.setAttribute('d', derivBox.checked ? pathFor(d, true) : '');
+      formula.textContent = F.formula(p);
+      const x = parseFloat(xs.value), fx = f(x), dx = d(x);
+      probe.setAttribute('x1', sx(x)); probe.setAttribute('x2', sx(x));
+      const inY = v => v >= ylo && v <= yhi;
+      dotF.setAttribute('cx', sx(x)); dotF.setAttribute('cy', sy(fx)); dotF.style.display = inY(fx) ? '' : 'none';
+      dotD.setAttribute('cx', sx(x)); dotD.setAttribute('cy', sy(dx)); dotD.style.display = derivBox.checked && inY(dx) ? '' : 'none';
+      xOut.textContent = fmt(x, 2);
+      fOut.textContent = fmt(fx); dOut.textContent = fmt(dx); rOut.textContent = F.range(p);
+      status.textContent = note(key, x, fx, dx, p);
+    };
+    btns.forEach(b => b.addEventListener('click', () => { key = b.dataset.fn; press(btns, b); setParamUI(); draw(); }));
+    xs.addEventListener('input', draw);
+    pS.addEventListener('input', () => { if (!FN[key].par) return; pv[key] = parseFloat(pS.value); pO.textContent = key === 'maxout' ? String(pv[key]) : p2(pv[key]); draw(); });
+    derivBox.addEventListener('change', draw);
+    cmpBox.addEventListener('change', draw);
+    setParamUI();
+    draw();
+  })();
+
+  /* ---------- Activations through the layers under different initializations ---------- */
+  (() => {
+    const svg = document.getElementById('l07-init-svg'); if (!svg) return;
+    const N = 100, D = 500, BINS = 30;
+    const rand = mkRand(707);
+    const normal = () => { let u = 0; while (u === 0) u = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rand()); };
+    let X = null; const Z = [];
+    const ensure = L => {
+      if (!X) { X = new Float32Array(N * D); for (let i = 0; i < X.length; i++) X[i] = normal(); }
+      while (Z.length < L) { const z = new Float32Array(D * D); for (let i = 0; i < z.length; i++) z[i] = normal(); Z.push(z); }
+    };
+    const INIT = { small: { s: 0.01, nv: D * 1e-4 }, large: { s: 1, nv: D }, xavier: { s: 1 / Math.sqrt(D), nv: 1 }, he: { s: Math.sqrt(2 / D), nv: 2 } };
+    const ACT = {
+      tanh: { f: Math.tanh, lo: -1, hi: 1, ticks: ['−1', '0', '1'] },
+      sigmoid: { f: sig, lo: 0, hi: 1, ticks: ['0', '0.5', '1'] },
+      relu: { f: z => z > 0 ? z : 0, lo: 0, hi: 3, ticks: ['0', '1.5', '3+'] },
+    };
+    const st = { act: 'tanh', init: 'small', L: 5, bn: false };
+    const run = () => {
+      ensure(st.L);
+      const A = ACT[st.act], sc = INIT[st.init].s, relu = st.act === 'relu';
+      const a = new Float32Array(N * D), out = [];
+      let x = X;
+      for (let l = 0; l < st.L; l++) {
+        a.fill(0);
+        const z = Z[l];
+        for (let n = 0; n < N; n++) {
+          const o = n * D;
+          for (let k = 0; k < D; k++) { const xv = x[o + k]; if (xv === 0) continue; const zo = k * D; for (let j = 0; j < D; j++) a[o + j] += xv * z[zo + j]; }
+        }
+        for (let i = 0; i < a.length; i++) a[i] *= sc;
+        if (st.bn) {
+          for (let j = 0; j < D; j++) {
+            let m = 0; for (let n = 0; n < N; n++) m += a[n * D + j]; m /= N;
+            let v = 0; for (let n = 0; n < N; n++) { const dd = a[n * D + j] - m; v += dd * dd; }
+            const s = Math.sqrt(v / N + 1e-5); for (let n = 0; n < N; n++) a[n * D + j] = (a[n * D + j] - m) / s;
+          }
+        }
+        const h = new Float32Array(N * D), hist = new Array(BINS).fill(0);
+        let sum = 0, sum2 = 0, sat = 0, zero = 0, over = 0;
+        for (let i = 0; i < h.length; i++) {
+          const v = A.f(a[i]); h[i] = v; sum += v; sum2 += v * v;
+          if (relu) { if (v === 0) { zero++; continue; } if (v >= A.hi) { over++; continue; } }
+          else if (st.act === 'tanh' ? Math.abs(v) > 0.99 : (v < 0.01 || v > 0.99)) sat++;
+          let b = Math.floor((v - A.lo) / (A.hi - A.lo) * BINS); if (b < 0) b = 0; if (b >= BINS) b = BINS - 1; hist[b]++;
+        }
+        const cnt = h.length, mean = sum / cnt;
+        out.push({ hist, over, std: Math.sqrt(Math.max(0, sum2 / cnt - mean * mean)), sat: sat / cnt, zero: zero / cnt });
+        x = h;
+      }
+      return out;
+    };
+    const fs = v => { if (!isFinite(v)) return '–'; if (v === 0) return '0'; if (v >= 1000 || v < 0.01) return minus(v.toExponential(1)).replace('e+', 'e'); return v.toFixed(v >= 10 ? 1 : 3); };
+    const VW = 720, PX = 14, GAP = 18, TOP = 48, BASE = 208;
+    const draw = layers => {
+      clear(svg);
+      const Lc = layers.length, pw = (VW - 2 * PX - GAP * (Lc - 1)) / Lc, A = ACT[st.act], bw = pw / BINS;
+      layers.forEach((ly, l) => {
+        const x0 = PX + l * (pw + GAP);
+        mk('rect', { x: x0, y: TOP, width: pw, height: BASE - TOP, class: 'l07-panel' }, svg);
+        mk('text', { x: x0 + pw / 2, y: 16, 'text-anchor': 'middle', class: 'c-title' }, svg).textContent = (Lc > 7 ? 'L' : 'Layer ') + (l + 1);
+        mk('text', { x: x0 + pw / 2, y: 34, 'text-anchor': 'middle', class: 'c-note' }, svg).textContent = (Lc > 7 ? '' : 'std ') + fs(ly.std);
+        const mx = Math.max(1, ...ly.hist, ly.over);
+        ly.hist.forEach((c, b) => { if (!c) return; const hh = (BASE - TOP - 6) * c / mx; mk('rect', { x: x0 + b * bw + 0.3, y: BASE - hh, width: Math.max(0.6, bw - 0.6), height: hh, class: 'l07-bar' }, svg); });
+        if (ly.over) { const hh = (BASE - TOP - 6) * ly.over / mx; mk('rect', { x: x0 + pw - bw, y: BASE - hh, width: bw, height: hh, class: 'l07-over' }, svg); }
+        mk('line', { x1: x0, x2: x0 + pw, y1: BASE, y2: BASE, class: 'c-axis' }, svg);
+        mk('text', { x: x0, y: BASE + 14, 'text-anchor': 'start', class: 'c-tick' }, svg).textContent = A.ticks[0];
+        if (pw > 70) mk('text', { x: x0 + pw / 2, y: BASE + 14, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = A.ticks[1];
+        mk('text', { x: x0 + pw, y: BASE + 14, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = A.ticks[2];
+        if (st.act === 'relu') mk('text', { x: x0 + pw / 2, y: BASE + 32, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = Math.round(ly.zero * 100) + '% at 0';
+      });
+    };
+    const ids = n => document.getElementById(n);
+    const aBtns = [...document.querySelectorAll('#init-fig [data-act]')], wBtns = [...document.querySelectorAll('#init-fig [data-init]')];
+    const lS = ids('init-layers'), lO = ids('init-layers-out'), bnBox = ids('init-bn'), status = ids('init-status');
+    const update = () => {
+      const layers = run();
+      draw(layers);
+      const first = layers[0], last = layers[layers.length - 1], relu = st.act === 'relu';
+      const per = layers.length > 1 && first.std > 0 ? Math.pow(last.std / first.std, 1 / (layers.length - 1)) : 1;
+      const nv = INIT[st.init].nv;
+      ids('init-nv').textContent = nv < 1 ? nv.toFixed(2) : String(nv);
+      ids('init-s1').textContent = fs(first.std);
+      ids('init-sl').textContent = fs(last.std);
+      ids('init-per').textContent = '×' + (per >= 100 ? per.toFixed(0) : per.toFixed(2));
+      ids('init-sat-k').textContent = relu ? 'At 0, last layer' : 'Saturated, last layer';
+      ids('init-sat').textContent = Math.round((relu ? last.zero : last.sat) * 100) + '%';
+      let msg;
+      if (st.bn) msg = 'Batch norm on: every pre-activation is standardized over the 100 inputs, so the weight scale no longer matters.';
+      else if (!relu && last.sat > 0.5) msg = 'Most units in the last layer are saturated, so their local gradients are close to 0.';
+      else if (st.act === 'tanh' && last.std < 0.02) msg = 'The activations shrink toward 0 layer by layer, and weight gradients, proportional to them, vanish.';
+      else if (st.act === 'sigmoid' && last.std < 0.05) msg = 'Every unit sits near σ(0) = 0.5 with almost no spread: the deeper layers barely respond to the input.';
+      else if (relu && per < 0.9) msg = `The spread shrinks by ×${per.toFixed(2)} per layer and fades out with depth.`;
+      else if (relu && per > 1.1) msg = `The spread grows by ×${per.toFixed(1)} per layer and blows up with depth.`;
+      else msg = `The spread survives all ${layers.length} layers.`;
+      status.textContent = msg;
+    };
+    let timer = 0;
+    const schedule = () => { clearTimeout(timer); timer = setTimeout(update, 40); };
+    aBtns.forEach(b => b.addEventListener('click', () => { st.act = b.dataset.act; press(aBtns, b); schedule(); }));
+    wBtns.forEach(b => b.addEventListener('click', () => { st.init = b.dataset.init; press(wBtns, b); schedule(); }));
+    lS.addEventListener('input', () => { st.L = parseInt(lS.value, 10); lO.textContent = String(st.L); schedule(); });
+    bnBox.addEventListener('change', () => { st.bn = bnBox.checked; schedule(); });
+    requestAnimationFrame(update);
+  })();
+})();
+</script>
+</body>
+</html>
