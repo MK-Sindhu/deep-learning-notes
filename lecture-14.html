@@ -1,0 +1,1285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lecture 14 · Transformers · DL Notes</title>
+<meta name="description" content="CS6910 Deep Learning (IIT Madras) notes, Lecture 14: transformers, from the limits of RNN encoder–decoders to self-attention, multi-head, masked and cross attention, positional encoding, layer norm and learning-rate warm-up.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<style>
+.controls select { font: 500 14px/1.3 var(--font-head); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 8px; }
+.att-cell { fill: var(--surface); stroke: var(--rule); stroke-width: 1; }
+.att-off { fill: var(--paper); stroke: var(--rule); stroke-width: 1; }
+.att-heat { fill: var(--accent); }
+.att-row-hl { fill: var(--accent-soft); }
+.att-brk { fill: none; stroke: var(--ink-2); stroke-width: 1.2; }
+.att-row { cursor: pointer; }
+.att-num { font: 500 12px var(--font-mono); fill: var(--ink); }
+.att-num.inv { fill: var(--surface); }
+.att-num.dim { fill: var(--muted); }
+.pe-cell { fill: var(--accent); }
+.pe-frame { fill: none; stroke: var(--rule); stroke-width: 1; }
+.pe-line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
+.pe-onehot { fill: none; stroke: var(--muted); stroke-width: 2; stroke-dasharray: 5 4; }
+.pe-mark { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 3 3; }
+.halo { fill: none; stroke: var(--surface); stroke-width: 7; }
+.mini td.c, .mini th.c { text-align: center; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.mini td.hi { font-weight: 700; color: var(--accent); }
+</style>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <!-- PARTNAV:START --><nav class="partnav" aria-label="Lectures"><a href="index.html">DL Notes</a><span class="sep">/</span><span>Lecture 14</span><span class="sep">·</span><a href="lecture-13.html">← Lecture 13</a></nav><!-- PARTNAV:END -->
+    <div class="eyebrow">CS6910 · Deep Learning · IIT Madras</div>
+    <h1>Transformers: self-attention, multi-head and cross attention</h1>
+    <p class="lede">Recurrent encoder–decoders read a sentence one word at a time, even though the whole sentence is available at once. The transformer keeps attention, drops recurrence, and computes a contextual representation for every word in parallel with a few matrix products.</p>
+    <div class="meta">
+      <span><b>Lecture 14</b></span>
+      <span>Instructor <b>Prof. Mitesh M. Khapra</b></span>
+      <span>About <b>103 min</b> of video</span>
+      <span><b>5</b> modules</span>
+    </div>
+    <div class="watch">
+      <a class="btn solid" href="https://iitm-pod.slides.com/arunprakash_ai/lecture-17-transformers-ce11cb/fullscreen" target="_blank" rel="noopener">Slides</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=cVbGNL0N2RI" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 20:39</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=MVeOwsggkt4" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 21:01</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=MLdUzA6ltEQ" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 21:31</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=VN2Bfi0_pbw" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 21:16</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=cVuyWE4yMBU" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 18:27</a>
+    </div>
+  </div>
+</header>
+
+<div class="page gutter">
+  <nav class="toc" aria-label="Contents">
+    <div>
+      <h4>Module 16.1 · Limits of RNNs</h4>
+      <ul>
+        <li><a href="#rnn-limits">One word at a time</a></li>
+        <li><a href="#attention-parallel">What attention parallelizes</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 16.2 · Self-attention</h4>
+      <ul>
+        <li><a href="#transformer-overview">Attention is all you need</a></li>
+        <li><a href="#self-attention">Attention within a sentence</a></li>
+        <li><a href="#qkv">Queries, keys, values</a></li>
+        <li><a href="#matrix-form">Scaled dot product</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 16.2 · Encoder</h4>
+      <ul>
+        <li><a href="#multi-head">Multi-head attention</a></li>
+        <li><a href="#ffn">Feed-forward network</a></li>
+        <li><a href="#encoder-stack">The encoder stack</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 16.2 · Decoder</h4>
+      <ul>
+        <li><a href="#decoder">Three sublayers</a></li>
+        <li><a href="#masked-attention">Masked self-attention</a></li>
+        <li><a href="#cross-attention">Cross attention</a></li>
+        <li><a href="#decoder-output">Output layer</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 16.3 · Position</h4>
+      <ul>
+        <li><a href="#position-problem">Word order is lost</a></li>
+        <li><a href="#sinusoidal">Sinusoidal encoding</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Modules 16.4–16.5 · Training</h4>
+      <ul>
+        <li><a href="#residual-norm">Residuals, normalization</a></li>
+        <li><a href="#layer-norm">Batch vs layer norm</a></li>
+        <li><a href="#architecture">Complete architecture</a></li>
+        <li><a href="#warmup">Warm-up schedule</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Revision</h4>
+      <ul>
+        <li><a href="#terms">Key terms</a></li>
+        <li><a href="#test">Test yourself</a></li>
+        <li><a href="index.html">All lectures</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="glance" id="glance">
+      <h2>At a glance</h2>
+      <ul>
+        <li>An RNN encoder reads a sentence one word at a time even though the whole sentence is given at once. With attention, the weights \(\alpha_{t1}, \dots, \alpha_{tn}\) of one decoder step can be computed in parallel, but step \(t\) still waits for \(\mathbf{s}_{t-1}\).</li>
+        <li><dfn>Self-attention</dfn> lets every word attend to every word of its own sentence. Each embedding \(\mathbf{h}_j\) gives a query, a key and a value through \(W_Q, W_K, W_V\), and all outputs come from one formula, \(Z = \operatorname{softmax}\big(Q^\top K/\sqrt{d_k}\big)V^\top\).</li>
+        <li><dfn>Multi-head attention</dfn> runs 8 heads of size 64 side by side, concatenates them back to 512 dimensions and mixes them with \(W_O\). An encoder layer is multi-head attention plus a position-wise feed-forward network (512 → 2048 → 512), about 3 million parameters, and the encoder stacks 6 of them.</li>
+        <li>A decoder layer has <dfn>masked</dfn> self-attention (scores above the diagonal set to \(-\infty\), so position \(t\) sees only positions up to \(t\)), <dfn>cross attention</dfn> (queries from the decoder, keys and values from the encoder output) and a feed-forward network. A linear layer and a softmax give a distribution over the vocabulary.</li>
+        <li>Self-attention ignores word order, so sinusoidal <dfn>positional encodings</dfn> are added to the embeddings. Training the 42-layer-deep stack relies on residual connections, layer normalization and a learning rate that warms up for 4000 steps.</li>
+      </ul>
+      <p class="note">The slide deck numbers this lecture 16, with Modules 16.1 to 16.5; this site follows the course schedule and calls it Lecture 14. The five videos cover Modules 16.1 and 16.2. Positional encoding, training and warm-up (Modules 16.3 to 16.5) are in the slides only.</p>
+    </div>
+
+    <!-- ============ MODULE 16.1 ============ -->
+    <section id="rnn-limits">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=cVbGNL0N2RI&amp;t=155s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 2:35</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=cVbGNL0N2RI&amp;t=307s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 5:07 why sequential</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=cVbGNL0N2RI&amp;t=430s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 7:10 the cost</a>
+        </div>
+        <h2>Recurrent encoders read one word at a time</h2>
+      </div>
+      <p>The course has built each architecture from one building block <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=cVbGNL0N2RI&amp;t=61s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 1:01</a>: the sigmoid (or other non-linear) neuron for feed-forward networks, convolution and pooling for CNNs, the recurrence \(\mathbf{h}_t = f(\mathbf{h}_{t-1}, \mathbf{x}_t)\) for RNNs, and the attention function for attention-based RNNs. The building blocks of the transformer are <b>self-attention</b> and <b>cross attention</b>. Once they are clear, the full network is easy to assemble.</p>
+      <p>Take translation, with the input "I enjoyed the movie transformers" and the Tamil target "Naan transfarmar padaththai rasiththen". The whole input sentence is available at once. The RNN encoder still processes it in order: \(\mathbf{h}_1 = f(\mathbf{h}_0, \mathbf{x}_1)\), then \(\mathbf{h}_2 = f(\mathbf{h}_1, \mathbf{x}_2)\), and so on, where \(\mathbf{x}_i\) is the embedding of word \(i\).</p>
+      <p>The order has a purpose. The embedding \(\mathbf{x}_i\) (from word2vec, GloVe or fastText as in <a href="lecture-10.html">Lecture 10</a>, or simply a learned parameter that starts random) describes the word in general. The state \(\mathbf{h}_i\) describes the word <i>in this sentence</i>, because it carries information from the words before it. A bidirectional RNN also runs from right to left and concatenates the two states, so each word sees context from both sides. These <dfn>contextual representations</dfn> are worth keeping.</p>
+      <p>The price is speed. Each \(\mathbf{h}_t\) waits for \(\mathbf{h}_{t-1}\), so the encoder cannot process the words of a sentence in parallel. The decoder is sequential by nature, since each predicted word is the next step's input <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=cVbGNL0N2RI&amp;t=491s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 8:11</a>. The question is whether the encoder can do better.</p>
+      <p>A plain encoder–decoder (<a href="lecture-13.html">Lecture 13</a>) hands only the final state \(\mathbf{h}_5\) to the decoder. The slides list its names: concept vector, thought vector, context vector or annotation. This model has no notion of <b>alignment</b> between source and target words. Nothing tells the decoder to focus on "I" while it produces "Naan", or on "transformers" while it produces "transfarmar". Attention adds that.</p>
+    </section>
+
+    <section id="attention-parallel">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=cVbGNL0N2RI&amp;t=613s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 10:13</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=cVbGNL0N2RI&amp;t=770s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 12:50 heat map</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=cVbGNL0N2RI&amp;t=895s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 14:55 what runs in parallel</a>
+        </div>
+        <h2>Attention, and what it can parallelize</h2>
+      </div>
+      <p>Attention keeps a copy of all the encoder states \(\mathbf{h}_1, \dots, \mathbf{h}_5\) and makes them available to the decoder. Once they are computed, the encoder block can be set aside until decoding finishes. At decoder step \(t\) the decoder receives a context vector, an attention-weighted sum of the encoder states:</p>
+      <div class="eq">\[ \mathbf{c}_t = \sum_{i=1}^{n} \alpha_{ti}\,\mathbf{h}_i = \begin{bmatrix} | & & | \\ \mathbf{h}_1 & \cdots & \mathbf{h}_5 \\ | & & | \end{bmatrix} \begin{bmatrix} \alpha_{t1} \\ \vdots \\ \alpha_{t5} \end{bmatrix}, \qquad \alpha_{ti} = \frac{\exp\big(\text{score}(\mathbf{s}_{t-1}, \mathbf{h}_i)\big)}{\sum_{i'=1}^{n} \exp\big(\text{score}(\mathbf{s}_{t-1}, \mathbf{h}_{i'})\big)} \]</div>
+      <p class="note">\(n\) is the number of input words, \(t\) the decoder time step and \(\mathbf{s}_{t-1}\) the decoder's previous state. The matrix–vector form says that \(\mathbf{c}_t\) is a linear combination of the columns \(\mathbf{h}_i\), and the softmax makes the weights of each step sum to 1.</p>
+      <p>The slides write the weights as \(\alpha_{ti} = \text{align}(y_t, \mathbf{h}_i)\): for each output word, a distribution over input words. Plotted as a heat map, they show the alignment. In the slides' example the largest weights are \(\alpha_{11}\) (Naan, I), \(\alpha_{25}\) (transfarmar, transformers), \(\alpha_{34}\) (padaththai, film) and \(\alpha_{42}\) (rasiththen, enjoyed).</p>
+      <p>Three questions decide how parallel this model is.</p>
+      <ul>
+        <li><b>Can all \(\mathbf{h}_i\) be computed in parallel?</b> No. The encoder is recurrent.</li>
+        <li><b>At a fixed step \(t\), can all \(\alpha_{ti}\) be computed in parallel?</b> Yes. Each score needs only \(\mathbf{s}_{t-1}\) and \(\mathbf{h}_i\), and both are available at step \(t\). All scores can be computed at once, and then the normalization.</li>
+        <li><b>Can the weights of different steps be computed in parallel?</b> No <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=cVbGNL0N2RI&amp;t=987s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 16:27</a>. \(\alpha_{4i}\) needs \(\mathbf{s}_3\), which needs \(\mathbf{c}_3\), which needs every \(\alpha_{3i}\). The rows of the attention matrix come out one at a time.</li>
+      </ul>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 720 262" role="img" aria-label="Encoder states h1 to h5 in a row at the top feed, through one shared line, the attention weights of every decoder step. Below, a chain: s0, the weights alpha 1, context c1, state s1, weights alpha 2, c2, s2, weights alpha 3, c3, s3. Curved arrows under the chain show the decoder recurrence from each state to the next.">
+            <defs>
+              <marker id="l14-f1-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="l14-f1-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <text class="d-row" x="210" y="18">encoder states: computed once, then kept</text>
+            <rect class="d-box" x="210" y="26" width="56" height="28" rx="5"/><text class="d-t" x="238" y="45" text-anchor="middle">h₁</text>
+            <rect class="d-box" x="276" y="26" width="56" height="28" rx="5"/><text class="d-t" x="304" y="45" text-anchor="middle">h₂</text>
+            <rect class="d-box" x="342" y="26" width="56" height="28" rx="5"/><text class="d-t" x="370" y="45" text-anchor="middle">h₃</text>
+            <rect class="d-box" x="408" y="26" width="56" height="28" rx="5"/><text class="d-t" x="436" y="45" text-anchor="middle">h₄</text>
+            <rect class="d-box" x="474" y="26" width="56" height="28" rx="5"/><text class="d-t" x="502" y="45" text-anchor="middle">h₅</text>
+            <path class="d-ln" d="M238 54 V68 M304 54 V68 M370 54 V68 M436 54 V68 M502 54 V68 M238 68 H502 M370 68 V98"/>
+            <path class="d-ln-acc" d="M130 98 H550"/>
+            <line class="d-ln-acc" x1="130" y1="98" x2="130" y2="146" marker-end="url(#l14-f1-aha)"/>
+            <line class="d-ln-acc" x1="340" y1="98" x2="340" y2="146" marker-end="url(#l14-f1-aha)"/>
+            <line class="d-ln-acc" x1="550" y1="98" x2="550" y2="146" marker-end="url(#l14-f1-aha)"/>
+            <text class="d-s" x="562" y="96" style="fill: var(--accent)">the same h₁ … h₅</text>
+            <text class="d-s" x="562" y="110" style="fill: var(--accent)">reach every step</text>
+
+            <rect class="d-box" x="30" y="150" width="44" height="28" rx="5"/><text class="d-t" x="52" y="169" text-anchor="middle">s₀</text>
+            <line class="d-ln" x1="74" y1="164" x2="87" y2="164" marker-end="url(#l14-f1-ah)"/>
+            <rect class="pill" x="88" y="150" width="84" height="28" rx="14"/><text x="130" y="169" text-anchor="middle" style="font-size:12px">α₁₁ … α₁₅</text>
+            <line class="d-ln" x1="172" y1="164" x2="185" y2="164" marker-end="url(#l14-f1-ah)"/>
+            <rect class="d-box" x="186" y="150" width="40" height="28" rx="5"/><text class="d-t" x="206" y="169" text-anchor="middle">c₁</text>
+            <line class="d-ln" x1="226" y1="164" x2="239" y2="164" marker-end="url(#l14-f1-ah)"/>
+            <rect class="d-box" x="240" y="150" width="44" height="28" rx="5"/><text class="d-t" x="262" y="169" text-anchor="middle">s₁</text>
+            <line class="d-ln" x1="284" y1="164" x2="297" y2="164" marker-end="url(#l14-f1-ah)"/>
+            <rect class="pill" x="298" y="150" width="84" height="28" rx="14"/><text x="340" y="169" text-anchor="middle" style="font-size:12px">α₂₁ … α₂₅</text>
+            <line class="d-ln" x1="382" y1="164" x2="395" y2="164" marker-end="url(#l14-f1-ah)"/>
+            <rect class="d-box" x="396" y="150" width="40" height="28" rx="5"/><text class="d-t" x="416" y="169" text-anchor="middle">c₂</text>
+            <line class="d-ln" x1="436" y1="164" x2="449" y2="164" marker-end="url(#l14-f1-ah)"/>
+            <rect class="d-box" x="450" y="150" width="44" height="28" rx="5"/><text class="d-t" x="472" y="169" text-anchor="middle">s₂</text>
+            <line class="d-ln" x1="494" y1="164" x2="507" y2="164" marker-end="url(#l14-f1-ah)"/>
+            <rect class="pill" x="508" y="150" width="84" height="28" rx="14"/><text x="550" y="169" text-anchor="middle" style="font-size:12px">α₃₁ … α₃₅</text>
+            <line class="d-ln" x1="592" y1="164" x2="605" y2="164" marker-end="url(#l14-f1-ah)"/>
+            <rect class="d-box" x="606" y="150" width="40" height="28" rx="5"/><text class="d-t" x="626" y="169" text-anchor="middle">c₃</text>
+            <line class="d-ln" x1="646" y1="164" x2="659" y2="164" marker-end="url(#l14-f1-ah)"/>
+            <rect class="d-box" x="660" y="150" width="44" height="28" rx="5"/><text class="d-t" x="682" y="169" text-anchor="middle">s₃</text>
+
+            <path class="d-ln" d="M52 178 C52 204, 256 204, 256 180" marker-end="url(#l14-f1-ah)"/>
+            <path class="d-ln" d="M268 178 C268 204, 466 204, 466 180" marker-end="url(#l14-f1-ah)"/>
+            <path class="d-ln" d="M478 178 C478 204, 682 204, 682 180" marker-end="url(#l14-f1-ah)"/>
+            <text class="d-s" x="154" y="214" text-anchor="middle">decoder recurrence</text>
+            <text class="d-s" x="30" y="238"><tspan style="font-weight:600">Within a step:</tspan> αₜ₁ … αₜ₅ need only sₜ₋₁ and the h’s, so they can be computed together.</text>
+            <text class="d-s" x="30" y="255"><tspan style="font-weight:600">Across steps:</tspan> the weights of step t + 1 need sₜ, which needs cₜ, which needs every αₜᵢ.</text>
+          </svg>
+        </div>
+        <figcaption><b>Attention in an RNN decoder.</b> The encoder states are computed once and reused at every step. Within step \(t\) the weights depend only on \(\mathbf{s}_{t-1}\) and the \(\mathbf{h}_i\), so they can be computed in parallel. The next step's weights need \(\mathbf{s}_t\), so the steps form a chain.</figcaption>
+      </figure>
+
+      <p>The slides' takeaway is that <b>attention can be parallelized</b>. The recurrence is what forces the waiting.</p>
+
+      <h3>The major limitation <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=cVbGNL0N2RI&amp;t=1139s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 18:59</a></h3>
+      <p>RNN sequence-to-sequence models with attention perform well on translation, summarization and image or video captioning. Their weakness is training: for a given training example, the computations cannot be parallelized across time steps. The lecture has no complaint about context itself. Recurrence is how an RNN makes its representations contextual, and that part is welcome. The cost is the sequential computation that comes with it.</p>
+      <p class="rule-of-thumb">Wish list: an architecture that keeps the attention mechanism, allows parallel computation, and gets rid of the vanishing and exploding gradients of long recurrences (<a href="lecture-11.html">Lecture 11</a>).</p>
+    </section>
+
+    <!-- ============ MODULE 16.2: SELF-ATTENTION ============ -->
+    <section id="transformer-overview">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=MVeOwsggkt4&amp;t=32s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 0:32</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=MVeOwsggkt4&amp;t=93s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 1:33 the blocks</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=MVeOwsggkt4&amp;t=155s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 2:35 what carries over</a>
+        </div>
+        <h2>Attention is all you need</h2>
+      </div>
+      <p>The transformer was introduced in 2017 in the paper <i>Attention Is All You Need</i>. It is still an encoder–decoder, but its blocks are new. The encoder passes word embeddings through a <b>self-attention</b> layer and a <b>feed-forward network</b>. The decoder has a self-attention layer, an <b>encoder–decoder attention</b> layer and a feed-forward network. The lecture studies these components, and a few more, one at a time, and then assembles the full architecture.</p>
+      <p>Several things carry over from RNN encoder–decoders.</p>
+      <ul>
+        <li>The input sentence is given in full, and the output is produced one word at a time.</li>
+        <li>The inputs are word embeddings. In practice they are randomly initialized and learned with the rest of the network.</li>
+        <li>The encoder maps the inputs \(\mathbf{x}_1, \dots, \mathbf{x}_5\) to outputs \(\mathbf{z}_1, \dots, \mathbf{z}_5\), one per word, just as an RNN maps them to \(\mathbf{h}_1, \dots, \mathbf{h}_5\). Each \(\mathbf{z}_i\) is a contextual representation: it knows about word \(i\) and about the other words of the sentence.</li>
+      </ul>
+      <p>What changes is how the context gets in. The transformer does it without recurrent connections, so all \(T\) outputs of a layer can be computed in parallel.</p>
+      <p class="note">Notation from here on: \(\mathbf{h}_j\) is the input embedding of word \(j\) (in the RNN lectures it was the encoder output), and \(\mathbf{z}_j\) is the output of a block. More intermediate outputs need more letters, so the names shift.</p>
+    </section>
+
+    <section id="self-attention">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=MVeOwsggkt4&amp;t=409s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 6:49</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=MVeOwsggkt4&amp;t=717s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 11:57 what “it” refers to</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=MVeOwsggkt4&amp;t=807s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 13:27 the T × T table</a>
+        </div>
+        <h2>Self-attention: attention within the sentence</h2>
+      </div>
+      <p>Attention needs a pair of vectors. In RNN attention the pair was a decoder state and an encoder state, \((\mathbf{s}_{t-1}, \mathbf{h}_i)\). Inside the encoder there is no decoder, so the pair is two words of the same sentence. To build a new representation of word \(i\) (say "movie", word 4), take an attention-weighted sum over all the words of the sentence:</p>
+      <div class="eq">\[ \mathbf{s}_i = \sum_{j=1}^{T} \alpha_{ij}\,\mathbf{h}_j, \qquad \alpha_{ij} \text{ computed from the pair } (\mathbf{h}_i, \mathbf{h}_j) \]</div>
+      <p>This is <dfn>self-attention</dfn>: attention among the words of the input itself. It is different from <dfn>cross attention</dfn>, between the decoder and the encoder, which comes later. All the \(\mathbf{h}_j\) are known as soon as the sentence is looked up, and no \(\alpha_{ij}\) depends on an earlier output. So the weights for "enjoyed" can be computed at the same time as those for "I" and for "movie".</p>
+      <h3>Why a word needs its context</h3>
+      <p>Compare two sentences.</p>
+      <ul>
+        <li>"The animal didn't cross the street because it was too tired." Here "it" refers to the animal.</li>
+        <li>"The animal didn't cross the street because it was congested." Now "it" refers to the street.</li>
+      </ul>
+      <p>The word "it" and its static embedding are the same in both. Its representation should still lean on "animal" in the first sentence and on "street" in the second, and learned attention weights can do exactly that. The goal is a \(T \times T\) table: for each word, a score against every word of the sentence (itself included) that is higher when the two are related in context. The slides illustrate it with made-up numbers.</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th></th><th class="c">The</th><th class="c">animal</th><th class="c">didn't</th><th class="c">cross</th><th class="c">the</th><th class="c">street</th><th class="c">because</th><th class="c">it</th></tr></thead>
+          <tbody>
+            <tr><td>The</td><td class="c hi">0.6</td><td class="c">0.1</td><td class="c">0.05</td><td class="c">0.05</td><td class="c">0.02</td><td class="c">0.02</td><td class="c">0.02</td><td class="c">0.1</td></tr>
+            <tr><td>animal</td><td class="c">0.02</td><td class="c hi">0.5</td><td class="c">0.06</td><td class="c">0.15</td><td class="c">0.02</td><td class="c">0.05</td><td class="c">0.01</td><td class="c">0.12</td></tr>
+            <tr><td>didn't</td><td class="c">0.01</td><td class="c">0.35</td><td class="c hi">0.45</td><td class="c">0.1</td><td class="c">0.01</td><td class="c">0.02</td><td class="c">0.01</td><td class="c">0.03</td></tr>
+            <tr><td>⋮</td><td class="c">⋮</td><td class="c">⋮</td><td class="c">⋮</td><td class="c">⋮</td><td class="c">⋮</td><td class="c">⋮</td><td class="c">⋮</td><td class="c">⋮</td></tr>
+            <tr><td>it</td><td class="c">0.01</td><td class="c hi">0.6</td><td class="c">0.02</td><td class="c">0.1</td><td class="c">0.01</td><td class="c">0.2</td><td class="c">0.01</td><td class="c">0.01</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Illustrative numbers from the slides, which leave out the middle rows. The row for "it" puts its largest weight, 0.6, on "animal".</p>
+      <p>For convenience, call the row headers \(\mathbf{s}_i\) and the column headers \(\mathbf{h}_j\), as in RNN attention <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=MVeOwsggkt4&amp;t=964s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 16:04</a>. Here both are the same embeddings. The difference from the seq2seq model is that every \(\mathbf{s}_i\) and every \(\mathbf{h}_j\) is available all the time, where the decoder states \(\mathbf{s}_i\) used to arrive one per step. So all rows of the table can be computed at once.</p>
+    </section>
+
+    <section id="qkv">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=MVeOwsggkt4&amp;t=1024s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 17:04</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=MVeOwsggkt4&amp;t=1208s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 20:08 three matrices</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=MLdUzA6ltEQ&amp;t=31s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 0:31</a>
+        </div>
+        <h2>Queries, keys and values</h2>
+      </div>
+      <p>Which attention function should self-attention use? Recall the score from RNN attention (<a href="lecture-13.html">Lecture 13</a>):</p>
+      <div class="eq">\[ \text{score}(\mathbf{s}_{t-1}, \mathbf{h}_j) = \mathbf{v}_a^\top \tanh\big(U_{att}\,\mathbf{s}_{t-1} + W_{att}\,\mathbf{h}_j\big) \]</div>
+      <p>It involves three vectors (\(\mathbf{s}\), \(\mathbf{h}\) and \(\mathbf{v}_a\)), two linear transformations (\(U_{att}\) and \(W_{att}\)), one non-linearity (\(\tanh\)) and, at the end, a dot product with \(\mathbf{v}_a\).</p>
+      <p>Self-attention starts from the embeddings \(\mathbf{h}_j\) alone, so three vectors have to be made from each embedding. The transformer does it with three matrices, one per role, whose entries are learned:</p>
+      <div class="eq">\[ \mathbf{q}_j = W_Q\,\mathbf{h}_j, \qquad \mathbf{k}_j = W_K\,\mathbf{h}_j, \qquad \mathbf{v}_j = W_V\,\mathbf{h}_j \]</div>
+      <p>\(\mathbf{q}_j\) is the <dfn>query</dfn> vector of word \(j\), \(\mathbf{k}_j\) its <dfn>key</dfn> and \(\mathbf{v}_j\) its <dfn>value</dfn>. \(W_Q\), \(W_K\) and \(W_V\) are the corresponding linear transformation (parameter) matrices. For \(T\) words this makes \(3T\) vectors, each computed independently of the others.</p>
+
+      <h3>The output for one word <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=MLdUzA6ltEQ&amp;t=123s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 2:03</a></h3>
+      <p>To compute \(\mathbf{z}_1\), the output for "I", hold its query \(\mathbf{q}_1\) fixed and score it against every key, its own included. The score function is a plain dot product <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=MLdUzA6ltEQ&amp;t=371s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 6:11</a>. A softmax turns the scores into weights, and the weights combine the values <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=MLdUzA6ltEQ&amp;t=434s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 7:14</a>:</p>
+      <div class="eq">\[ \begin{gathered} \mathbf{e}_1 = \big[\,\mathbf{q}_1\cdot\mathbf{k}_1,\ \mathbf{q}_1\cdot\mathbf{k}_2,\ \dots,\ \mathbf{q}_1\cdot\mathbf{k}_5\,\big], \qquad \alpha_{1j} = \operatorname{softmax}(\mathbf{e}_1)_j = \frac{\exp(e_{1j})}{\sum_{j'=1}^{5}\exp(e_{1j'})}, \\ \mathbf{z}_1 = \sum_{j=1}^{5}\alpha_{1j}\,\mathbf{v}_j \end{gathered} \]</div>
+      <p>The roles match the old score function. The query plays the part of \(\mathbf{s}_{t-1}\): it stays fixed while the keys vary. Queries and keys together produce the weights. The output is a weighted sum of the values, much as \(\mathbf{v}_a\) sat outside the rest of the old expression. For \(\mathbf{z}_2\) the same steps run with \(\mathbf{q}_2\) as the query, and so on for every word.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 720 442" role="img" aria-label="Five columns, one per word of I enjoyed the movie transformers. Each embedding h j splits into a query, a key and a value. The query of I, highlighted, runs along a line to all five score cells, where it is dotted with each key. Each score becomes a softmax weight alpha 1 j, which multiplies the value v j. The five products are summed into z 1.">
+            <defs>
+              <marker id="l14-f2-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="l14-f2-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <text class="d-row" x="140" y="26" text-anchor="end">word</text>
+            <text class="d-row" x="140" y="53" text-anchor="end">embedding</text>
+            <text class="d-row" x="140" y="82" text-anchor="end">× W<tspan dy="3" style="font-size:0.78em">Q</tspan><tspan dy="-3">, W</tspan><tspan dy="3" style="font-size:0.78em">K</tspan><tspan dy="-3">, W</tspan><tspan dy="3" style="font-size:0.78em">V</tspan></text>
+            <text class="d-row" x="140" y="109" text-anchor="end">query, key, value</text>
+            <text class="d-row" x="140" y="185" text-anchor="end">score e<tspan dy="3" style="font-size:0.78em">1j</tspan></text>
+            <text class="d-row" x="140" y="237" text-anchor="end">softmax over j</text>
+            <text class="d-row" x="140" y="297" text-anchor="end">weight × value</text>
+            <text class="d-row" x="140" y="354" text-anchor="end">sum over j</text>
+
+            <text class="d-t" x="200" y="24" text-anchor="middle">I</text>
+            <text class="d-t" x="300" y="24" text-anchor="middle">enjoyed</text>
+            <text class="d-t" x="400" y="24" text-anchor="middle">the</text>
+            <text class="d-t" x="500" y="24" text-anchor="middle">movie</text>
+            <text class="d-t" x="600" y="24" text-anchor="middle">transformers</text>
+
+            <g>
+              <rect class="d-box" x="168" y="34" width="64" height="26" rx="5"/><text x="200" y="52" text-anchor="middle">h₁</text>
+              <rect class="d-box" x="268" y="34" width="64" height="26" rx="5"/><text x="300" y="52" text-anchor="middle">h₂</text>
+              <rect class="d-box" x="368" y="34" width="64" height="26" rx="5"/><text x="400" y="52" text-anchor="middle">h₃</text>
+              <rect class="d-box" x="468" y="34" width="64" height="26" rx="5"/><text x="500" y="52" text-anchor="middle">h₄</text>
+              <rect class="d-box" x="568" y="34" width="64" height="26" rx="5"/><text x="600" y="52" text-anchor="middle">h₅</text>
+            </g>
+            <path class="d-ln" d="M200 60 L168 94 M200 60 V94 M200 60 L232 94 M300 60 L268 94 M300 60 V94 M300 60 L332 94 M400 60 L368 94 M400 60 V94 M400 60 L432 94 M500 60 L468 94 M500 60 V94 M500 60 L532 94 M600 60 L568 94 M600 60 V94 M600 60 L632 94"/>
+            <rect class="d-box-acc" x="155" y="94" width="26" height="22" rx="4"/><text class="d-s" x="168" y="109" text-anchor="middle" style="fill: var(--accent); font-weight:600">q₁</text>
+            <rect class="d-off" x="255" y="94" width="26" height="22" rx="4"/><text class="d-s t-off" x="268" y="109" text-anchor="middle">q₂</text>
+            <rect class="d-off" x="355" y="94" width="26" height="22" rx="4"/><text class="d-s t-off" x="368" y="109" text-anchor="middle">q₃</text>
+            <rect class="d-off" x="455" y="94" width="26" height="22" rx="4"/><text class="d-s t-off" x="468" y="109" text-anchor="middle">q₄</text>
+            <rect class="d-off" x="555" y="94" width="26" height="22" rx="4"/><text class="d-s t-off" x="568" y="109" text-anchor="middle">q₅</text>
+            <rect class="d-box" x="187" y="94" width="26" height="22" rx="4"/><text class="d-s" x="200" y="109" text-anchor="middle">k₁</text>
+            <rect class="d-box" x="287" y="94" width="26" height="22" rx="4"/><text class="d-s" x="300" y="109" text-anchor="middle">k₂</text>
+            <rect class="d-box" x="387" y="94" width="26" height="22" rx="4"/><text class="d-s" x="400" y="109" text-anchor="middle">k₃</text>
+            <rect class="d-box" x="487" y="94" width="26" height="22" rx="4"/><text class="d-s" x="500" y="109" text-anchor="middle">k₄</text>
+            <rect class="d-box" x="587" y="94" width="26" height="22" rx="4"/><text class="d-s" x="600" y="109" text-anchor="middle">k₅</text>
+            <rect class="d-box" x="219" y="94" width="26" height="22" rx="4"/><text class="d-s" x="232" y="109" text-anchor="middle">v₁</text>
+            <rect class="d-box" x="319" y="94" width="26" height="22" rx="4"/><text class="d-s" x="332" y="109" text-anchor="middle">v₂</text>
+            <rect class="d-box" x="419" y="94" width="26" height="22" rx="4"/><text class="d-s" x="432" y="109" text-anchor="middle">v₃</text>
+            <rect class="d-box" x="519" y="94" width="26" height="22" rx="4"/><text class="d-s" x="532" y="109" text-anchor="middle">v₄</text>
+            <rect class="d-box" x="619" y="94" width="26" height="22" rx="4"/><text class="d-s" x="632" y="109" text-anchor="middle">v₅</text>
+
+            <path class="d-ln" d="M200 116 V166" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M300 116 V166" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M400 116 V166" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M500 116 V166" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M600 116 V166" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M232 116 V293 H228" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M332 116 V293 H328" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M432 116 V293 H428" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M532 116 V293 H528" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M632 116 V293 H628" marker-end="url(#l14-f2-ah)"/>
+            <path class="halo" d="M168 116 V142 H584"/>
+            <path class="d-ln-acc" d="M168 116 V142 H584"/>
+            <path class="d-ln-acc" d="M184 142 V166" marker-end="url(#l14-f2-aha)"/>
+            <path class="d-ln-acc" d="M284 142 V166" marker-end="url(#l14-f2-aha)"/>
+            <path class="d-ln-acc" d="M384 142 V166" marker-end="url(#l14-f2-aha)"/>
+            <path class="d-ln-acc" d="M484 142 V166" marker-end="url(#l14-f2-aha)"/>
+            <path class="d-ln-acc" d="M584 142 V166" marker-end="url(#l14-f2-aha)"/>
+            <text class="d-s" x="640" y="140" style="fill: var(--accent)">q₁ is fixed,</text>
+            <text class="d-s" x="640" y="154" style="fill: var(--accent)">the key varies</text>
+
+            <rect class="d-box" x="174" y="168" width="52" height="26" rx="4"/><text class="d-s" x="200" y="185" text-anchor="middle">q₁·k₁</text>
+            <rect class="d-box" x="274" y="168" width="52" height="26" rx="4"/><text class="d-s" x="300" y="185" text-anchor="middle">q₁·k₂</text>
+            <rect class="d-box" x="374" y="168" width="52" height="26" rx="4"/><text class="d-s" x="400" y="185" text-anchor="middle">q₁·k₃</text>
+            <rect class="d-box" x="474" y="168" width="52" height="26" rx="4"/><text class="d-s" x="500" y="185" text-anchor="middle">q₁·k₄</text>
+            <rect class="d-box" x="574" y="168" width="52" height="26" rx="4"/><text class="d-s" x="600" y="185" text-anchor="middle">q₁·k₅</text>
+            <path class="d-ln" d="M200 194 V218" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M300 194 V218" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M400 194 V218" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M500 194 V218" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M600 194 V218" marker-end="url(#l14-f2-ah)"/>
+            <rect class="pill" x="174" y="220" width="52" height="26" rx="13"/><text class="d-s" x="200" y="237" text-anchor="middle">α₁₁</text>
+            <rect class="pill" x="274" y="220" width="52" height="26" rx="13"/><text class="d-s" x="300" y="237" text-anchor="middle">α₁₂</text>
+            <rect class="pill" x="374" y="220" width="52" height="26" rx="13"/><text class="d-s" x="400" y="237" text-anchor="middle">α₁₃</text>
+            <rect class="pill" x="474" y="220" width="52" height="26" rx="13"/><text class="d-s" x="500" y="237" text-anchor="middle">α₁₄</text>
+            <rect class="pill" x="574" y="220" width="52" height="26" rx="13"/><text class="d-s" x="600" y="237" text-anchor="middle">α₁₅</text>
+            <text class="d-s" x="646" y="237">Σ<tspan dy="3" style="font-size:0.78em">j</tspan><tspan dy="-3"> α</tspan><tspan dy="3" style="font-size:0.78em">1j</tspan><tspan dy="-3"> = 1</tspan></text>
+            <path class="d-ln" d="M200 246 V278" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M300 246 V278" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M400 246 V278" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M500 246 V278" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M600 246 V278" marker-end="url(#l14-f2-ah)"/>
+            <rect class="d-box" x="174" y="280" width="52" height="26" rx="4"/><text class="d-s" x="200" y="297" text-anchor="middle">α₁₁v₁</text>
+            <rect class="d-box" x="274" y="280" width="52" height="26" rx="4"/><text class="d-s" x="300" y="297" text-anchor="middle">α₁₂v₂</text>
+            <rect class="d-box" x="374" y="280" width="52" height="26" rx="4"/><text class="d-s" x="400" y="297" text-anchor="middle">α₁₃v₃</text>
+            <rect class="d-box" x="474" y="280" width="52" height="26" rx="4"/><text class="d-s" x="500" y="297" text-anchor="middle">α₁₄v₄</text>
+            <rect class="d-box" x="574" y="280" width="52" height="26" rx="4"/><text class="d-s" x="600" y="297" text-anchor="middle">α₁₅v₅</text>
+            <path class="d-ln" d="M200 306 L386 340" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M300 306 L391 336" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M400 306 V332" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M500 306 L409 336" marker-end="url(#l14-f2-ah)"/>
+            <path class="d-ln" d="M600 306 L414 340" marker-end="url(#l14-f2-ah)"/>
+            <circle class="node" cx="400" cy="350" r="16"/><text class="d-t" x="400" y="356" text-anchor="middle">Σ</text>
+            <path class="d-ln" d="M400 366 V384" marker-end="url(#l14-f2-ah)"/>
+            <rect class="d-box-acc" x="360" y="386" width="80" height="28" rx="6"/><text class="d-t" x="400" y="405" text-anchor="middle">z₁</text>
+            <text class="d-s" x="452" y="404">z₁ = Σ<tspan dy="3" style="font-size:0.78em">j</tspan><tspan dy="-3"> α</tspan><tspan dy="3" style="font-size:0.78em">1j</tspan><tspan dy="-3"> v</tspan><tspan dy="3" style="font-size:0.78em">j</tspan><tspan dy="-3">, the new vector for “I”</tspan></text>
+            <text class="d-s" x="150" y="436">z₂, …, z₅: the same steps with q₂, …, q₅ as the query, each independent of the others.</text>
+          </svg>
+        </div>
+        <figcaption><b>Computing \(\mathbf{z}_1\), the self-attention output for "I".</b> Each embedding gives a query, a key and a value. The fixed query \(\mathbf{q}_1\) is dotted with every key, the softmax turns the five scores into weights, and \(\mathbf{z}_1\) is the weighted sum of the values. The greyed queries are not used for \(\mathbf{z}_1\); each of them drives its own output in the same way.</figcaption>
+      </figure>
+      <p class="note">The slides' running example embeds "I enjoyed the movie transformers" in \(\mathbb{R}^3\) as \([1,0,0]\), \([0,1,0]\), \([1,1,0]\), \([1,0,1]\) and \([1,1,1]\), with two-dimensional queries, keys and values, so each \(W\) is \(2 \times 3\). The interactive figure in the next section uses the same embeddings.</p>
+    </section>
+
+    <section id="matrix-form">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=MLdUzA6ltEQ&amp;t=585s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 9:45</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=MLdUzA6ltEQ&amp;t=866s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 14:26 one formula</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=MLdUzA6ltEQ&amp;t=1145s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 19:05 the scaling</a>
+        </div>
+        <h2>All outputs at once: scaled dot-product attention</h2>
+      </div>
+      <p>Computing \(\mathbf{z}_1\), then \(\mathbf{z}_2\), then \(\mathbf{z}_3\) one after another would bring back the RNN's problem. The computation vectorizes. Stack the embeddings as the columns of \(H = [\mathbf{h}_1, \dots, \mathbf{h}_T]\). Since \(\mathbf{q}_j = W_Q\mathbf{h}_j\) for every \(j\), one matrix product gives every query, and likewise for the keys and values:</p>
+      <div class="eq">\[ Q = W_Q H = [\mathbf{q}_1, \dots, \mathbf{q}_T], \qquad K = W_K H = [\mathbf{k}_1, \dots, \mathbf{k}_T], \qquad V = W_V H = [\mathbf{v}_1, \dots, \mathbf{v}_T] \]</div>
+      <p>With 64-dimensional embeddings and \(64 \times 64\) matrices (the lecture's example), \(Q, K, V \in \mathbb{R}^{64 \times T}\) <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=MLdUzA6ltEQ&amp;t=678s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 11:18</a>. The matrices could just as well project to a smaller or a larger space. What matters is that \(T\) inputs give \(T\) queries, \(T\) keys and \(T\) values, all at once. Then the whole output is one formula.</p>
+      <div class="result">
+        <span class="lbl">Scaled dot-product attention</span>
+        \[ Z = [\mathbf{z}_1, \mathbf{z}_2, \dots, \mathbf{z}_T] = \operatorname{softmax}\!\Big(\frac{Q^\top K}{\sqrt{d_k}}\Big)\,V^\top \]
+        <p>\(d_k\) is the dimension of the key vectors and the softmax acts on each row. Since \(d_k\) scales the values of \(Q^\top K\), this is called the <dfn>scaled dot product</dfn>. Shapes: \(Q^\top K\) is \((T \times 64)(64 \times T) = T \times T\), and \(Z\) is \((T \times T)(T \times 64) = T \times 64\), with row \(i\) holding \(\mathbf{z}_i\).</p>
+      </div>
+      <p>To check that this is the same computation as before, follow row 2 <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=MLdUzA6ltEQ&amp;t=988s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 16:28</a>. Entry \((i, j)\) of \(Q^\top K\) is \(\mathbf{q}_i^\top\mathbf{k}_j\), so row 2 is \([\mathbf{q}_2^\top\mathbf{k}_1, \dots, \mathbf{q}_2^\top\mathbf{k}_T]\), and after scaling and the softmax it is \([\alpha_{21}, \dots, \alpha_{2T}]\). The rows of \(V^\top\) are \(\mathbf{v}_1^\top, \dots, \mathbf{v}_T^\top\). Row 2 of a product is a combination of the rows of the right factor, weighted by row 2 of the left factor:</p>
+      <div class="eq">\[ \text{row 2 of } \operatorname{softmax}\!\Big(\frac{Q^\top K}{\sqrt{d_k}}\Big)V^\top = \sum_{j=1}^{T}\alpha_{2j}\,\mathbf{v}_j^\top = \mathbf{z}_2^\top \]</div>
+      <p>Every step is a matrix product or an element-wise operation, so no output waits for another. The block is a chain of four operations <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=MLdUzA6ltEQ&amp;t=1177s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 19:37</a>: MatMul (\(Q^\top K\)), Scale (\(1/\sqrt{d_k}\)), Softmax, and MatMul with \(V^\top\). Together with the three projections it is called one <dfn>head</dfn> of attention.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 720 316" role="img" aria-label="Flow chart. H feeds three projection boxes giving Q, K and V, each 64 by T. Q and K enter MatMul to give Q transpose K, a T by T matrix, which goes through Scale by one over root d k, an optional Mask used only in the decoder, and a row-wise Softmax. The resulting weights and V transpose enter a second MatMul, which outputs Z, T by 64.">
+            <defs>
+              <marker id="l14-f3-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <rect class="d-box" x="16" y="118" width="70" height="40" rx="6"/><text class="d-t" x="51" y="136" text-anchor="middle">H</text><text class="d-al" x="51" y="151" text-anchor="middle">d × T</text>
+            <text class="d-s" x="51" y="176" text-anchor="middle">embeddings</text>
+            <rect class="d-box" x="128" y="40" width="100" height="40" rx="6"/><text x="178" y="57" text-anchor="middle" style="font-size:12.5px">Q = W<tspan dy="3" style="font-size:9.5px">Q</tspan><tspan dy="-3"> H</tspan></text><text class="d-al" x="178" y="72" text-anchor="middle">64 × T</text>
+            <rect class="d-box" x="128" y="118" width="100" height="40" rx="6"/><text x="178" y="135" text-anchor="middle" style="font-size:12.5px">K = W<tspan dy="3" style="font-size:9.5px">K</tspan><tspan dy="-3"> H</tspan></text><text class="d-al" x="178" y="150" text-anchor="middle">64 × T</text>
+            <rect class="d-box" x="128" y="214" width="100" height="40" rx="6"/><text x="178" y="231" text-anchor="middle" style="font-size:12.5px">V = W<tspan dy="3" style="font-size:9.5px">V</tspan><tspan dy="-3"> H</tspan></text><text class="d-al" x="178" y="246" text-anchor="middle">64 × T</text>
+            <line class="d-ln" x1="86" y1="130" x2="126" y2="64" marker-end="url(#l14-f3-ah)"/>
+            <line class="d-ln" x1="86" y1="138" x2="126" y2="138" marker-end="url(#l14-f3-ah)"/>
+            <line class="d-ln" x1="86" y1="146" x2="126" y2="230" marker-end="url(#l14-f3-ah)"/>
+
+            <rect class="d-plot" x="246" y="62" width="466" height="210" rx="10"/>
+            <text class="d-row" x="256" y="54">one head: scaled dot-product attention</text>
+            <rect class="d-box-acc" x="262" y="78" width="90" height="40" rx="6"/><text class="d-t" x="307" y="95" text-anchor="middle">MatMul</text><text class="d-al" x="307" y="110" text-anchor="middle">QᵀK</text>
+            <line class="d-ln" x1="228" y1="60" x2="260" y2="88" marker-end="url(#l14-f3-ah)"/>
+            <line class="d-ln" x1="228" y1="138" x2="260" y2="110" marker-end="url(#l14-f3-ah)"/>
+            <rect class="d-box" x="384" y="78" width="82" height="40" rx="6"/><text class="d-t" x="425" y="95" text-anchor="middle">Scale</text><text class="d-al" x="425" y="110" text-anchor="middle">÷ √d<tspan dy="3" style="font-size:0.78em">k</tspan></text>
+            <line class="d-ln" x1="352" y1="98" x2="382" y2="98" marker-end="url(#l14-f3-ah)"/><text class="d-al" x="367" y="90" text-anchor="middle">T×T</text>
+            <rect class="d-off" x="498" y="78" width="82" height="40" rx="6"/><text class="d-t t-off" x="539" y="95" text-anchor="middle">Mask</text><text class="d-s t-off" x="539" y="110" text-anchor="middle">decoder only</text>
+            <line class="d-ln" x1="466" y1="98" x2="496" y2="98" marker-end="url(#l14-f3-ah)"/><text class="d-al" x="481" y="90" text-anchor="middle">T×T</text>
+            <rect class="d-box-acc" x="612" y="78" width="92" height="40" rx="6"/><text class="d-t" x="658" y="95" text-anchor="middle">Softmax</text><text class="d-s" x="658" y="110" text-anchor="middle">each row</text>
+            <line class="d-ln" x1="580" y1="98" x2="610" y2="98" marker-end="url(#l14-f3-ah)"/><text class="d-al" x="595" y="90" text-anchor="middle">T×T</text>
+            <line class="d-ln" x1="658" y1="118" x2="658" y2="212" marker-end="url(#l14-f3-ah)"/><text class="d-al" x="650" y="170" text-anchor="end">weights A, T × T</text>
+            <rect class="d-box-acc" x="612" y="214" width="92" height="40" rx="6"/><text class="d-t" x="658" y="231" text-anchor="middle">MatMul</text><text class="d-al" x="658" y="246" text-anchor="middle">A Vᵀ</text>
+            <line class="d-ln" x1="228" y1="234" x2="610" y2="234" marker-end="url(#l14-f3-ah)"/><text class="d-al" x="420" y="226" text-anchor="middle">Vᵀ, T × 64</text>
+            <line class="d-ln" x1="658" y1="254" x2="658" y2="284" marker-end="url(#l14-f3-ah)"/>
+            <text class="d-t" x="658" y="302" text-anchor="middle">Z, T × 64</text>
+            <text class="d-t" x="16" y="302">Z = softmax(QᵀK / √d<tspan dy="3" style="font-size:0.78em">k</tspan><tspan dy="-3">) Vᵀ</tspan></text>
+          </svg>
+        </div>
+        <figcaption><b>One head of scaled dot-product attention.</b> Three projections turn the embeddings into \(Q\), \(K\) and \(V\). One matrix product gives all \(T \times T\) scores, which are scaled, masked in the decoder only, normalized row by row and used to weight the values. Every arrow carries a whole matrix, so all \(T\) outputs come out together. Shapes follow the lecture's 64-dimensional example.</figcaption>
+      </figure>
+
+      <p class="callout">The lecture states the scaling without justifying it. Not in the lecture: the original paper's reason is that if the entries of \(\mathbf{q}\) and \(\mathbf{k}\) are independent with mean 0 and variance 1, then \(\mathbf{q}\cdot\mathbf{k}\) has variance \(d_k\). Large scores push the softmax toward a one-hot vector, where its gradients are tiny, and dividing by \(\sqrt{d_k}\) brings the variance back to 1. The scale slider below shows the saturation.</p>
+
+      <figure id="att-fig">
+        <div class="controls">
+          <label for="att-preset">Weight matrices</label>
+          <select id="att-preset">
+            <option value="example" selected>Example matrices</option>
+            <option value="shared">Keys reuse the query matrix</option>
+            <option value="zero">Zero query matrix</option>
+            <option value="random">Random matrices</option>
+          </select>
+          <button class="btn" id="att-new" type="button">New random weights</button>
+        </div>
+        <div class="controls">
+          <label for="att-scale">Multiply \(W_Q\) and \(W_K\) by \(c\)</label>
+          <input type="range" id="att-scale" min="0.5" max="4" step="0.1" value="1">
+          <output id="att-scale-out" for="att-scale">1.0</output>
+          <label class="check" for="att-sqrt"><input type="checkbox" id="att-sqrt" checked> Divide by \(\sqrt{d_k}\)</label>
+          <label class="check" for="att-mask"><input type="checkbox" id="att-mask"> Causal mask (decoder)</label>
+        </div>
+        <div class="controls">
+          <label for="att-q">Query word</label>
+          <select id="att-q">
+            <option value="0">I</option>
+            <option value="1">enjoyed</option>
+            <option value="2">the</option>
+            <option value="3" selected>movie</option>
+            <option value="4">transformers</option>
+          </select>
+        </div>
+        <div class="readouts">
+          <div><span class="k">Largest weight in the row</span><span class="v mine" id="att-max">–</span></div>
+          <div><span class="k">Row sum Σ<sub>j</sub> α<sub>ij</sub></span><span class="v" id="att-sum">–</span></div>
+          <div><span class="k">Output z<sub>i</sub></span><span class="v" id="att-z">–</span></div>
+        </div>
+        <div class="status" id="att-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="l14-att-svg" viewBox="0 0 760 460" role="img" aria-label="Top: a table of the five words with their embeddings h j, queries, keys and values, beside the three weight matrices. Bottom: the five by five score matrix, the five by five attention-weight matrix shaded by weight, and the five by two output matrix Z, with the selected query word's row outlined and its weighted sum written out below."></svg></div>
+        <figcaption><b>Self-attention on the slides' five-word example.</b> The embeddings \(\mathbf{h}_j \in \mathbb{R}^3\) are the slides'; the weight matrices are synthetic, chosen for this page, and \(2 \times 3\), so \(d_k = 2\). Row \(i\) of the score matrix is query \(i\) against every key, the softmax turns each row into weights that sum to 1, and \(\mathbf{z}_i\) is the weighted sum of the values. The causal mask gives the decoder's version: entries above the diagonal become \(-\infty\) and get weight 0. The scale slider multiplies \(W_Q\) and \(W_K\), so the scores grow with \(c^2\); the tables show the scaled matrices. Click a row to change the query word.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ============ MODULE 16.2: MULTI-HEAD AND ENCODER ============ -->
+    <section id="multi-head">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=VN2Bfi0_pbw&amp;t=157s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 2:37</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=VN2Bfi0_pbw&amp;t=250s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 4:10 why several heads</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=VN2Bfi0_pbw&amp;t=646s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 10:46 combining heads</a>
+        </div>
+        <h2>Multi-head attention</h2>
+      </div>
+      <p>One head takes \(H\), forms \(Q, K, V\) with its own \(W_Q, W_K, W_V\), and returns \(\mathbf{z}_1, \dots, \mathbf{z}_T\). Nothing stops us from running a second head with a second set of matrices, which returns a second set of outputs. Two questions follow: why do it, and what to do with two outputs per word?</p>
+      <h3>Why more than one head</h3>
+      <p>A CNN layer has many filters (<a href="lecture-08.html">Lecture 8</a>). Each runs the same operation with its own weights and, we hope, picks up a different characteristic of the image, such as edges or blur, and more filters give more abstract representations. Heads play the same role. One head learns one way of gathering context, and a word may need more than one.</p>
+      <p>Take "it" in "The animal didn't cross the street because it was too tired" <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=VN2Bfi0_pbw&amp;t=341s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 5:41</a>. One useful link is to "animal", the noun it stands for. Another is to "was", the verb it is the subject of. With two heads, one can put a large weight on "animal" and the other a large weight on "was". The slides show this in a trained transformer (a Tensor2Tensor visualization). With a single head, "it" is most strongly linked to "was". With two heads, the first head links it to "was" and the second to "animal".</p>
+      <p>Nobody tells a head what to look at <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=VN2Bfi0_pbw&amp;t=433s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 7:13</a>. The heads only have more parameters and so more freedom. If focusing on "animal" in one head lowers the loss, training will make it do so. Each head computes its attention independently, so the heads also run in parallel, as the filters of a CNN layer do.</p>
+      <h3>Combining the heads <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=VN2Bfi0_pbw&amp;t=769s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 12:49</a></h3>
+      <p>For each word, concatenate the outputs of the heads and pass the result through a linear transformation \(W_O\). The sizes need care. With 512-dimensional embeddings, eight heads that each returned 512 dimensions would concatenate to 4096, and the next transformation would need many more parameters. So each head projects down: \(W_Q^i, W_K^i, W_V^i \in \mathbb{R}^{64 \times 512}\), every head returns 64-dimensional vectors, and the eight heads concatenate back to \(8 \times 64 = 512\). (The video's two-head example uses 256 dimensions per head for the same reason.)</p>
+      <div class="result">
+        <span class="lbl">Multi-head attention, h = 8</span>
+        \[ \begin{gathered} \text{MultiHead}(Q, K, V) = \text{Concat}(\text{head}_1, \dots, \text{head}_8)\,W_O, \\ \text{head}_i = \text{Attention}(Q^i, K^i, V^i), \qquad Q^i = W_Q^i H,\ \ K^i = W_K^i H,\ \ V^i = W_V^i H \end{gathered} \]
+        <p>The concatenation is \(T \times 512\) and \(W_O\) is \(512 \times 512\), so the sublayer maps \(T\) vectors of size 512 to \(T\) vectors of size 512.</p>
+      </div>
+      <p>The input is projected into \(h = 8\) different representation subspaces. In the paper's words, this lets the model "jointly attend to information from different representation subspaces at different positions".</p>
+      <p class="note">The concatenation happens per word <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=VN2Bfi0_pbw&amp;t=860s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 14:20</a>: word 1's eight head outputs are joined, then word 2's, and so on. Every layer keeps \(T\) vectors in and \(T\) vectors out.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 720 300" role="img" aria-label="H, of size T by 512, fans out to eight heads; heads 1, 2 and 8 are drawn. Each head projects to its own Q, K and V of 64 dimensions and runs scaled dot-product attention, giving T by 64. The eight outputs enter a tall Concatenate block, giving T by 512, then a Linear layer W O of 512 by 512, giving the output, T by 512.">
+            <defs>
+              <marker id="l14-f4-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <rect class="d-box" x="14" y="126" width="72" height="48" rx="6"/><text class="d-t" x="50" y="146" text-anchor="middle">H</text><text class="d-al" x="50" y="163" text-anchor="middle">T × 512</text>
+            <line class="d-ln" x1="86" y1="144" x2="126" y2="60" marker-end="url(#l14-f4-ah)"/>
+            <line class="d-ln" x1="86" y1="148" x2="126" y2="130" marker-end="url(#l14-f4-ah)"/>
+            <line class="d-ln" x1="86" y1="156" x2="126" y2="242" marker-end="url(#l14-f4-ah)"/>
+
+            <text class="d-row" x="128" y="30">head 1</text>
+            <rect class="d-box" x="128" y="36" width="124" height="40" rx="6"/><text x="190" y="53" text-anchor="middle" style="font-size:12.5px">Q¹, K¹, V¹</text><text class="d-al" x="190" y="68" text-anchor="middle">64 × T each</text>
+            <line class="d-ln" x1="252" y1="56" x2="282" y2="56" marker-end="url(#l14-f4-ah)"/>
+            <rect class="d-box-acc" x="284" y="36" width="140" height="40" rx="6"/><text x="354" y="53" text-anchor="middle" style="font-size:12px">scaled dot-product</text><text class="d-s" x="354" y="68" text-anchor="middle">attention</text>
+            <line class="d-ln" x1="424" y1="56" x2="468" y2="56" marker-end="url(#l14-f4-ah)"/><text class="d-al" x="446" y="50" text-anchor="middle">T×64</text>
+
+            <text class="d-row" x="128" y="102">head 2</text>
+            <rect class="d-box" x="128" y="108" width="124" height="40" rx="6"/><text x="190" y="125" text-anchor="middle" style="font-size:12.5px">Q², K², V²</text><text class="d-al" x="190" y="140" text-anchor="middle">64 × T each</text>
+            <line class="d-ln" x1="252" y1="128" x2="282" y2="128" marker-end="url(#l14-f4-ah)"/>
+            <rect class="d-box-acc" x="284" y="108" width="140" height="40" rx="6"/><text x="354" y="125" text-anchor="middle" style="font-size:12px">scaled dot-product</text><text class="d-s" x="354" y="140" text-anchor="middle">attention</text>
+            <line class="d-ln" x1="424" y1="128" x2="468" y2="128" marker-end="url(#l14-f4-ah)"/><text class="d-al" x="446" y="122" text-anchor="middle">T×64</text>
+
+            <text class="d-t" x="190" y="196" text-anchor="middle" style="font-size:18px">⋮</text>
+            <text class="d-t" x="354" y="196" text-anchor="middle" style="font-size:18px">⋮</text>
+            <text class="d-s" x="206" y="192">heads 3 to 7</text>
+
+            <text class="d-row" x="128" y="218">head 8</text>
+            <rect class="d-box" x="128" y="224" width="124" height="40" rx="6"/><text x="190" y="241" text-anchor="middle" style="font-size:12.5px">Q⁸, K⁸, V⁸</text><text class="d-al" x="190" y="256" text-anchor="middle">64 × T each</text>
+            <line class="d-ln" x1="252" y1="244" x2="282" y2="244" marker-end="url(#l14-f4-ah)"/>
+            <rect class="d-box-acc" x="284" y="224" width="140" height="40" rx="6"/><text x="354" y="241" text-anchor="middle" style="font-size:12px">scaled dot-product</text><text class="d-s" x="354" y="256" text-anchor="middle">attention</text>
+            <line class="d-ln" x1="424" y1="244" x2="468" y2="244" marker-end="url(#l14-f4-ah)"/><text class="d-al" x="446" y="238" text-anchor="middle">T×64</text>
+
+            <rect class="d-box" x="470" y="24" width="44" height="252" rx="6"/>
+            <text class="d-t" x="492" y="150" text-anchor="middle" transform="rotate(-90 492 150)">Concatenate (per word)</text>
+            <line class="d-ln" x1="514" y1="150" x2="556" y2="150" marker-end="url(#l14-f4-ah)"/><text class="d-al" x="535" y="142" text-anchor="middle">T×512</text>
+            <rect class="d-box" x="558" y="118" width="80" height="64" rx="6"/><text class="d-t" x="598" y="140" text-anchor="middle">Linear</text><text x="598" y="157" text-anchor="middle">W<tspan dy="3" style="font-size:9.5px">O</tspan></text><text class="d-al" x="598" y="173" text-anchor="middle">512 × 512</text>
+            <line class="d-ln" x1="638" y1="150" x2="702" y2="150" marker-end="url(#l14-f4-ah)"/><text class="d-al" x="669" y="142" text-anchor="middle">T × 512</text>
+            <text class="d-s" x="646" y="170">one vector</text><text class="d-s" x="646" y="184">per word</text>
+          </svg>
+        </div>
+        <figcaption><b>Multi-head attention with eight heads.</b> Head \(i\) has its own \(W_Q^i, W_K^i, W_V^i\) (\(64 \times 512\)) and runs the scaled dot-product attention of the previous figure on its 64-dimensional \(Q^i, K^i, V^i\). The eight \(T \times 64\) outputs are concatenated word by word into \(T \times 512\) and mixed by \(W_O\). The heads do not depend on one another, so they run in parallel.</figcaption>
+      </figure>
+    </section>
+
+    <section id="ffn">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=VN2Bfi0_pbw&amp;t=892s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 14:52</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=VN2Bfi0_pbw&amp;t=983s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 16:23 inside the FFN</a>
+        </div>
+        <h2>The position-wise feed-forward network</h2>
+      </div>
+      <p>Back to the basic block. The encoder's self-attention becomes multi-head attention, and its output goes to a feed-forward network. In the slides' terminology these two sublayers form one <dfn>encoder layer</dfn>, and the encoder is a stack of \(N = 6\) such layers.</p>
+      <p>The feed-forward network is small. Each attention output \(\mathbf{z}_i \in \mathbb{R}^{512}\) goes through one hidden layer of \(l = 2048\) ReLU units and back to 512 dimensions:</p>
+      <div class="eq">\[ \mathbf{o}_i = \text{FFN}(\mathbf{z}_i) = W_2\,\max(0,\ W_1\mathbf{z}_i + \mathbf{b}_1) + \mathbf{b}_2, \qquad W_1 \in \mathbb{R}^{2048 \times 512},\ \ W_2 \in \mathbb{R}^{512 \times 2048} \]</div>
+      <p class="note">The slide writes \(\text{FFN}(\mathbf{z}) = \max(0, W_1\mathbf{z} + \mathbf{b}_1)W_2 + \mathbf{b}_2\), half in the row-vector style of the original paper; the computation is the same.</p>
+      <p>The <b>same</b> network, with the same \(W_1, \mathbf{b}_1, W_2, \mathbf{b}_2\), is applied to every position separately <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=VN2Bfi0_pbw&amp;t=1074s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 17:54</a>. The slides draw it as FFN 1 for \(\mathbf{z}_1\), FFN 2 for \(\mathbf{z}_2\), up to FFN 5, all identical. The words do not interact here: the attention sublayer mixes information across positions, and the feed-forward sublayer transforms each position on its own. The video adds that any non-linearity can be used, typically one of the ReLU family such as GELU (<a href="lecture-07.html">Lecture 7</a>).</p>
+    </section>
+
+    <section id="encoder-stack">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=VN2Bfi0_pbw&amp;t=1138s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 18:58</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=VN2Bfi0_pbw&amp;t=1168s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 19:28 parallel within a layer</a>
+          <a class="ts" href="https://iitm-pod.slides.com/arunprakash_ai/lecture-17-transformers-ce11cb/fullscreen" target="_blank" rel="noopener">Slides</a>
+        </div>
+        <h2>The encoder stack and its size</h2>
+      </div>
+      <p>The slides count the parameters of one encoder layer with \(h = 8\) heads, \(d_k = d_q = d_v = 64\), \(d_{model} = 512\) and a sentence of \(T = 40\) words. Biases of the attention projections are not counted.</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Part</th><th>Shape</th><th class="num">Parameters</th></tr></thead>
+          <tbody>
+            <tr><td>\(W_Q\), one head</td><td>\(64 \times 512\)</td><td class="num">32,768</td></tr>
+            <tr><td>\(W_Q\), all 8 heads</td><td>\(8 \times 64 \times 512\)</td><td class="num">262,144</td></tr>
+            <tr><td>\(W_K\), all 8 heads</td><td>\(8 \times 64 \times 512\)</td><td class="num">262,144</td></tr>
+            <tr><td>\(W_V\), all 8 heads</td><td>\(8 \times 64 \times 512\)</td><td class="num">262,144</td></tr>
+            <tr><td>\(W_O\)</td><td>\(512 \times 512\)</td><td class="num">262,144</td></tr>
+            <tr><td>FFN</td><td>\(512 \cdot 2048 + 2048 + 2048 \cdot 512 + 512\)</td><td class="num">2,099,712 ≈ 2 × 10⁶</td></tr>
+            <tr><td><b>One encoder layer</b></td><td></td><td class="num"><b>≈ 3 million</b></td></tr>
+            <tr><td><b>Encoder stack</b>, \(N = 6\)</td><td>\(6 \times 3\) million</td><td class="num"><b>≈ 18 million</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">The slide prints 32,178 for \(64 \times 512\); the product is 32,768. No entry depends on \(T\), so the same weights serve sentences of any length.</p>
+      <p>Each layer takes a \(T \times 512\) input and returns a \(T \times 512\) output, and the output of one layer is the input of the next. The parallelism is <b>horizontal</b>. Within a layer, for a given input, all the queries, weights and outputs of the \(T\) positions are computed at once, where an RNN had to produce \(\mathbf{z}_1\), then \(\mathbf{z}_2\), and so on. It is not <b>vertical</b>: layer 2 still waits for the output of layer 1.</p>
+      <p>The output of the top encoder layer is written \(\mathbf{e}_1, \dots, \mathbf{e}_T\), or \(E\) as a matrix <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=VN2Bfi0_pbw&amp;t=1229s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 20:29</a>. Each \(\mathbf{e}_j\) is contextual and has passed through six layers of processing. It is what the decoder receives.</p>
+    </section>
+
+    <!-- ============ MODULE 16.2: DECODER ============ -->
+    <section id="decoder">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=cVuyWE4yMBU&amp;t=32s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 0:32</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=cVuyWE4yMBU&amp;t=63s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 1:03 the output</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=cVuyWE4yMBU&amp;t=157s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 2:37 the decoder stack</a>
+        </div>
+        <h2>The decoder: inputs, outputs and three sublayers</h2>
+      </div>
+      <p>The decoder works one output at a time: it produces a word, and that word becomes an input for producing the next. It has two kinds of input. One is the encoder output \(\mathbf{e}_1, \dots, \mathbf{e}_T\), which tells it what is being translated. The other is its own words decoded so far.</p>
+      <p>At every position the output is a probability distribution over the target vocabulary, of size \(1 \times |V|\), with \(|V| = 37{,}000\) in the slides. The predicted word is the argmax. The first input is the start symbol <code>&lt;Go&gt;</code>; ideally position 1 peaks at "Naan", position 2 at "transfarmar", and so on until a stop symbol is produced.</p>
+      <p>Like the encoder, the decoder is a stack of \(N = 6\) identical layers (common models use 6, 8 or 12, depending on the data and the task). Each decoder layer has <b>three</b> sublayers:</p>
+      <ol>
+        <li><b>masked multi-head (self) attention</b> over the decoder's own inputs;</li>
+        <li><b>multi-head (cross) attention</b> between the decoder and the encoder output;</li>
+        <li>a <b>feed-forward network</b>, the same kind as in the encoder.</li>
+      </ol>
+      <h3>Teacher forcing <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://iitm-pod.slides.com/arunprakash_ai/lecture-17-transformers-ce11cb/fullscreen" target="_blank" rel="noopener">Slides</a></h3>
+      <p>During training, the target sentence is fed to the decoder as one of its inputs. The usual alternative feeds the decoder's own previous prediction back in. If an early prediction is wrong, the later ones are likely to go wrong too, because each prediction is conditioned on those before it, and the errors accumulate. In the slides' English example, one wrong word sends the rest of the sentence away from the ground truth. Training would correct this eventually, but slowly. <dfn>Teacher forcing</dfn> feeds the ground-truth previous words instead, whatever the model predicted.</p>
+    </section>
+
+    <section id="masked-attention">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=cVuyWE4yMBU&amp;t=402s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 6:42</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=cVuyWE4yMBU&amp;t=532s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 8:52 zeroing the weights</a>
+        </div>
+        <h2>Masked self-attention</h2>
+      </div>
+      <p>The first decoder sublayer computes queries, keys and values exactly as in the encoder, \(Q = W_Q H\) and so on, where \(\mathbf{h}_1, \dots, \mathbf{h}_T\) are now the embeddings of the target sentence. There is one important difference, a <dfn>mask</dfn>.</p>
+      <p>With teacher forcing the whole target sentence is fed in at once, yet the output at position \(t\) has to be predicted from the words before it. So position \(t\) must not attend to the positions after it. The video explains the same rule from the inference side. The decoder assumes a maximum output length \(T_1\). When only <code>&lt;Go&gt;</code> has been produced, the other inputs are junk, so their attention weights are set to 0 and the first representation depends on <code>&lt;Go&gt;</code> alone. In general, positions that have not been decoded yet never take part in the computation, and the remaining weights are rescaled to sum to 1 <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=cVuyWE4yMBU&amp;t=626s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 10:26</a>.</p>
+      <p>The slides implement this by inserting \(-\infty\) at the masked positions. A \(T \times T\) mask \(M\), 0 on and below the diagonal and \(-\infty\) above it, is added to the scaled scores before the softmax:</p>
+      <div class="eq">\[ M = \begin{bmatrix} 0 & -\infty & -\infty & \cdots & -\infty \\ 0 & 0 & -\infty & \cdots & -\infty \\ \vdots & \vdots & \ddots & & \vdots \\ 0 & 0 & 0 & \cdots & 0 \end{bmatrix}, \qquad Z = \operatorname{softmax}\!\Big(\frac{Q^\top K}{\sqrt{d_k}} + M\Big)V^\top \]</div>
+      <p>Since \(e^{-\infty} = 0\), each masked entry gets a weight of exactly 0, and the softmax normalizes the surviving weights of each row to sum to 1. Row \(t\) uses keys \(1, \dots, t\) only. The rescaling the video mentions happens automatically.</p>
+      <ul>
+        <li>At inference there is no target sentence and so no teacher forcing. The decoder acts as an <b>auto-regressor</b>, feeding its own predictions back one step at a time.</li>
+        <li>In practice the encoder also uses masking in its attention, to hide the padding tokens of sequences shorter than \(T\).</li>
+      </ul>
+      <p>Tick "Causal mask" in the <a href="#att-fig">self-attention figure</a> to see the triangular pattern.</p>
+    </section>
+
+    <section id="cross-attention">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=cVuyWE4yMBU&amp;t=781s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 13:01</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=cVuyWE4yMBU&amp;t=875s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 14:35 what the weights mean</a>
+        </div>
+        <h2>Cross attention</h2>
+      </div>
+      <p>The second sublayer brings the two inputs of the decoder together. From the masked self-attention sublayer come the vectors \(\mathbf{s}_1, \dots, \mathbf{s}_T\) (the matrix \(S\)). From the top layer of the encoder come \(\mathbf{e}_1, \dots, \mathbf{e}_T\) (the matrix \(E\)), shared by all layers of the decoder stack. Queries are built from the decoder and keys and values from the encoder, with a new set of matrices \(W_{Q_2}, W_{K_2}, W_{V_2}\):</p>
+      <div class="eq">\[ Q_2 = W_{Q_2}\,S, \qquad K_2 = W_{K_2}\,E, \qquad V_2 = W_{V_2}\,E, \qquad Z = \operatorname{softmax}\big(Q_2^\top K_2\big)\,V_2^\top \]</div>
+      <p>Because it attends from one half of the model to the other, this is called <dfn>encoder–decoder attention</dfn> or <dfn>cross attention</dfn>. It is computed with several heads whose outputs are concatenated, as before, and the result goes through the feed-forward network to give the layer's output vectors \(O\).</p>
+      <p class="note">The slide's formula leaves out the \(1/\sqrt{d_k}\). The heads here are the same scaled dot-product heads as elsewhere, as in the original paper.</p>
+      <p>For decoder position \(i\), the query \(\mathbf{q}_i\) is scored against the keys of all the source words, so \(\alpha_{ij}\) is the attention that target position \(i\) pays to source word \(j\). The new representation is a weighted sum of the encoder's values, a refinement of \(\mathbf{s}_i\) in the light of the input sentence. This is the RNN attention of <a href="lecture-13.html">Lecture 13</a> (query from the decoder, keys and values from the encoder), computed for all decoder positions in one matrix product. Source and target may have different lengths, say \(T\) and \(T_1\); then \(Q_2^\top K_2\) is \(T_1 \times T\).</p>
+      <ol class="algo">
+        <li class="algo-title">One decoder layer, in the slides' notation</li>
+        <li>Masked self-attention: \(\{Q_1, K_1, V_1\}\) \(= f(W_{Q_1}, W_{K_1}, W_{V_1}, \mathbf{h}_{1:T})\), then \(\mathbf{s}_{1:T} = f(Q_1, K_1, V_1; \text{Mask}; W_{O_1})\).</li>
+        <li>Cross attention: \(Q_2 = W_{Q_2}S\) from the decoder, \(K_2 = W_{K_2}E\) and \(V_2 = W_{V_2}E\) from the encoder output \(\mathbf{e}_{1:T}\), then \(f(Q_2, K_2, V_2; W_{O_2})\).</li>
+        <li>The feed-forward network on each position, giving the layer's output.</li>
+      </ol>
+      <p>Parameters of one decoder layer (slides): the FFN has \(2 \times (512 \times 2048) + 2048 + 512 \approx 2\) million, the masked multi-head attention about 1 million and the cross attention about 1 million, so about <b>4 million per decoder layer</b>.</p>
+    </section>
+
+    <section id="decoder-output">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=cVuyWE4yMBU&amp;t=1000s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 16:40</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=cVuyWE4yMBU&amp;t=1030s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 17:10 summary</a>
+        </div>
+        <h2>From decoder vectors to words</h2>
+      </div>
+      <p>The top decoder layer outputs one 512-dimensional vector per position. A linear transformation \(W_D\) of size \(512 \times |V|\) maps it to \(|V|\) scores, and a softmax turns them into a probability distribution over the vocabulary. At inference the argmax word is fed back as the next input.</p>
+      <p>This output layer alone is large: \(512 \times 37{,}000 \approx 19\) million parameters, out of about 65 million for the whole architecture.</p>
+      <p>To summarize the model so far: an encoder layer has two sublayers (multi-head self-attention and a feed-forward network), and a decoder layer has three (masked multi-head self-attention, multi-head cross attention and a feed-forward network). The key difference in the decoder is the mask: inputs that are not available yet must not take part in the computation, so their weights are set to 0.</p>
+      <p class="note">The M5 video, the last recording of the course, ends here. The rest of the lecture, from positional encoding to the warm-up schedule, is in the slides only.</p>
+    </section>
+
+    <!-- ============ MODULE 16.3: POSITIONAL ENCODING ============ -->
+    <section id="position-problem">
+      <div class="sec-head">
+        <a class="ts" href="https://iitm-pod.slides.com/arunprakash_ai/lecture-17-transformers-ce11cb/fullscreen" target="_blank" rel="noopener">Slides</a>
+        <h2>Self-attention ignores word order</h2>
+      </div>
+      <p>An RNN encodes the position of each word in its hidden states, because it reads the words in order. Nothing in a transformer layer does this. The slides call the output of self-attention permutation-invariant: shuffle the input words and each word gets the same output vector as before, only in a different place in the list, since a weighted sum does not care about order. Position has to be put in explicitly.</p>
+      <p>The fix is to add a <dfn>positional encoding</dfn> vector \(\mathbf{p}_j\) to the embedding \(\mathbf{h}'_j\) of the word at position \(j\), before the first layer:</p>
+      <div class="eq">\[ \mathbf{h}_j = \mathbf{h}'_j + \mathbf{p}_j, \qquad \mathbf{h}'_j,\ \mathbf{p}_j \in \mathbb{R}^{512} \]</div>
+      <p>How should \(\mathbf{p}_j\) be filled? The slides consider three simple options and set them aside as unsuitable when the sentence length varies:</p>
+      <ul>
+        <li>a constant vector whose entries all equal the position \(j\);</li>
+        <li>a one-hot vector for the position \(j = 0, 1, \dots, T\);</li>
+        <li>a learned embedding for every possible position.</li>
+      </ul>
+      <p>The method chosen rests on a hypothesis. If each position gets a unique pattern of features, the model will learn to attend by relative position.</p>
+    </section>
+
+    <section id="sinusoidal">
+      <div class="sec-head">
+        <a class="ts" href="https://iitm-pod.slides.com/arunprakash_ai/lecture-17-transformers-ce11cb/fullscreen" target="_blank" rel="noopener">Slides</a>
+        <h2>Sinusoidal positional encoding</h2>
+      </div>
+      <p>The transformer generates the features with sines and cosines of the position, at frequencies that fall with the dimension index. For position \(j\) and \(d_{model} = 512\):</p>
+      <div class="result">
+        <span class="lbl">Sinusoidal encoding function</span>
+        \[ PE_{(j,\,2i)} = \sin\!\Big(\frac{j}{10000^{2i/d_{model}}}\Big), \qquad PE_{(j,\,2i+1)} = \cos\!\Big(\frac{j}{10000^{2i/d_{model}}}\Big), \qquad i = 0, 1, \dots, 255 \]
+        <p>Even dimensions use the sine and odd dimensions the cosine. Each pair \((2i, 2i+1)\) shares one frequency \(\omega_i = 1/10000^{2i/d_{model}}\), which falls from \(\omega_0 = 1\) to about \(10^{-4}\).</p>
+      </div>
+      <p class="note">The slide writes the cosine's exponent as \((2i+1)/d_{model}\) and lets \(i\) run to 256. The form above is the original paper's, which matches the slide's description: for a fixed position, sine at even and cosine at odd dimensions.</p>
+      <p>At position 0 every sine is 0 and every cosine is 1, so \(\mathbf{p}_0 = [0, 1, 0, 1, \dots, 0, 1]^\top\). This alternating vector is added to the first word of every sentence. The slides evaluate \(PE_{(j,i)}\) for positions \(j = 0, \dots, 8\) and dimensions \(i = 0, \dots, 63\) and draw it as a heat map. Each even column is a sine and each odd column a cosine, with the frequency decreasing (the wavelength increasing) as \(i\) grows.</p>
+      <h3>Does it respect distance?</h3>
+      <p>Words can be compared by how far apart they are. For "I enjoyed the film transformer" the distance matrix \(|j - k|\) is:</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th></th><th class="c">I</th><th class="c">enjoyed</th><th class="c">the</th><th class="c">film</th><th class="c">transformer</th></tr></thead>
+          <tbody>
+            <tr><td>I</td><td class="c hi">0</td><td class="c">1</td><td class="c">2</td><td class="c">3</td><td class="c">4</td></tr>
+            <tr><td>enjoyed</td><td class="c">1</td><td class="c hi">0</td><td class="c">1</td><td class="c">2</td><td class="c">3</td></tr>
+            <tr><td>the</td><td class="c">2</td><td class="c">1</td><td class="c hi">0</td><td class="c">1</td><td class="c">2</td></tr>
+            <tr><td>film</td><td class="c">3</td><td class="c">2</td><td class="c">1</td><td class="c hi">0</td><td class="c">1</td></tr>
+            <tr><td>transformer</td><td class="c">4</td><td class="c">3</td><td class="c">2</td><td class="c">1</td><td class="c hi">0</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>In every row the distance grows to the left and right of the 0, and the matrix is symmetric about the diagonal. A good positional encoding should behave the same way: \(\lVert\mathbf{p}_j - \mathbf{p}_k\rVert\) should grow with \(|j - k|\).</p>
+      <p>One-hot encoding fails this test. Two different one-hot vectors differ in exactly two entries, so their Euclidean distance is always \(\sqrt{2}\), whatever the positions. The sinusoidal encoding passes it. The slides check this graphically, and the figure below does the same.</p>
+      <p class="callout">Not in the lecture, a short reason. Expanding the squares with \(\sin^2 + \cos^2 = 1\) and \(\cos a\cos b + \sin a \sin b = \cos(a - b)\) gives the expression below. It depends only on \(j - k\), and is symmetric in it.</p>
+      <div class="eq">\[ \begin{aligned} \lVert\mathbf{p}_j - \mathbf{p}_k\rVert^2 &= \sum_{i}\big[(\sin\omega_i j - \sin\omega_i k)^2 + (\cos\omega_i j - \cos\omega_i k)^2\big] \\ &= \sum_i \big(2 - 2\cos\omega_i (j - k)\big) \end{aligned} \]</div>
+
+      <figure id="pe-fig">
+        <div class="controls">
+          <label for="pe-j">Position \(j\)</label>
+          <input type="range" id="pe-j" min="0" max="49" step="1" value="6">
+          <output id="pe-j-out" for="pe-j">6</output>
+          <button class="btn" id="pe-play" type="button">Sweep positions</button>
+          <label class="check" for="pe-onehot"><input type="checkbox" id="pe-onehot" checked> Compare one-hot</label>
+        </div>
+        <div class="readouts">
+          <div><span class="k">p<sub>j</sub>, first four entries</span><span class="v" id="pe-vec">–</span></div>
+          <div><span class="k">Distance at |j − k| = 1</span><span class="v mine" id="pe-d1">–</span></div>
+          <div><span class="k">at |j − k| = 5</span><span class="v" id="pe-d5">–</span></div>
+          <div><span class="k">at |j − k| = 20</span><span class="v" id="pe-d20">–</span></div>
+        </div>
+        <div class="status" id="pe-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="l14-pe-svg" viewBox="0 0 760 332" role="img" aria-label="Left: a heat map of the sinusoidal encoding for positions 0 to 49 and the first 64 dimensions, with vertical stripes that widen to the right; the selected position's row is outlined. Right: the distance from the selected position's encoding to every other position's, a curve that is zero at the selected position and rises on both sides, against a flat dashed line at root 2 for one-hot vectors."></svg></div>
+        <figcaption><b>Sinusoidal positional encodings with \(d_{model} = 512\).</b> Left: \(PE_{(j,i)}\) for positions 0 to 49 and the first 64 dimensions; strong colour is \(+1\), pale is \(-1\), and the selected position is outlined. Right: the Euclidean distance from \(\mathbf{p}_j\) to every \(\mathbf{p}_k\) over all 512 dimensions, against one-hot vectors (dashed, \(\sqrt{2}\) for every \(k \ne j\)). The sinusoidal curve is 0 at \(k = j\), rises on both sides and keeps the same shape for every \(j\).</figcaption>
+      </figure>
+    </section>
+
+    <!-- ============ MODULES 16.4 AND 16.5: TRAINING ============ -->
+    <section id="residual-norm">
+      <div class="sec-head">
+        <a class="ts" href="https://iitm-pod.slides.com/arunprakash_ai/lecture-17-transformers-ce11cb/fullscreen" target="_blank" rel="noopener">Slides</a>
+        <h2>A deep stack needs residuals and normalization</h2>
+      </div>
+      <p>For a rough comparison with a plain feed-forward network, count attention layers and hidden layers. Every encoder layer has one attention layer and two hidden layers (\(W_1\) and \(W_2\) of the FFN). Every decoder layer has two attention layers and two hidden layers. With 6 encoder and 6 decoder layers the network is \(6 \times 3 + 6 \times 4 = 42\) layers deep, followed by the linear and softmax output.</p>
+      <p>That raises the two usual questions for a deep network, and the slides give the usual answers.</p>
+      <ul>
+        <li>How do we ensure the gradient flows across the network? <b>Residual connections</b>, as in ResNet (<a href="lecture-08.html">Lecture 8</a>).</li>
+        <li>How do we speed up training? <b>Normalization</b>.</li>
+      </ul>
+    </section>
+
+    <section id="layer-norm">
+      <div class="sec-head">
+        <a class="ts" href="https://iitm-pod.slides.com/arunprakash_ai/lecture-17-transformers-ce11cb/fullscreen" target="_blank" rel="noopener">Slides</a>
+        <h2>Batch norm or layer norm?</h2>
+      </div>
+      <p>Batch normalization (<a href="lecture-07.html">Lecture 7</a>) works per neuron, across a mini-batch. Let \(x_i^j\) be the activation of neuron \(i\) of layer \(l\) for training example \(j\), and let an accumulator at layer \(l\) store these activations for the \(m\) examples of the batch. The three indices \(l\), \(i\), \(j\) can be pictured as the axes of a cube. For each neuron:</p>
+      <div class="eq">\[ \mu_i = \frac{1}{m}\sum_{j=1}^{m} x_i^j, \qquad \sigma_i^2 = \frac{1}{m}\sum_{j=1}^{m}\big(x_i^j - \mu_i\big)^2, \qquad \hat{x}_i = \frac{x_i - \mu_i}{\sqrt{\sigma_i^2 + \epsilon}}, \qquad \hat{y}_i = \gamma\,\hat{x}_i + \beta \]</div>
+      <p>Batch norm can be applied to transformers, but it has limitations.</p>
+      <ul>
+        <li>The mean and variance are estimates whose accuracy depends on \(m\). A small batch gives a large error.</li>
+        <li>A batch size of 1 is ruled out: the statistics degenerate to \(\mu_i = x_i\) and \(\sigma_i = 0\).</li>
+        <li>Empirically, naive batch norm degrades performance on NLP tasks. A systematic study confirmed this and proposed a modified batch norm called PowerNorm.</li>
+      </ul>
+      <p><dfn>Layer normalization</dfn> is a simple alternative that works well. It averages over the \(H\) hidden units of the layer, one example at a time:</p>
+      <div class="eq">\[ \mu_l = \frac{1}{H}\sum_{i=1}^{H} x_i, \qquad \sigma_l = \sqrt{\frac{1}{H}\sum_{i=1}^{H}\big(x_i - \mu_l\big)^2}, \qquad \hat{x}_i = \frac{x_i - \mu_l}{\sqrt{\sigma_l^2 + \epsilon}}\ \ \forall i, \qquad \hat{y}_i = \gamma\,\hat{x}_i + \beta \]</div>
+      <p>The statistics no longer depend on the number of examples in the batch, so layer norm works even with a batch size of 1, as an RNN may need.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 720 250" role="img" aria-label="Two grids of activations, five units by six examples. Left, batch norm: the row of unit 2 across all examples is highlighted, the values that share one mean and variance. Right, layer norm: the column of example 3 across all units is highlighted.">
+            <text class="d-h" x="40" y="22">Batch norm: one unit, all examples</text>
+            <text class="d-al" x="100" y="44" text-anchor="middle">1</text><text class="d-al" x="140" y="44" text-anchor="middle">2</text><text class="d-al" x="180" y="44" text-anchor="middle">3</text><text class="d-al" x="220" y="44" text-anchor="middle">4</text><text class="d-al" x="260" y="44" text-anchor="middle">…</text><text class="d-al" x="300" y="44" text-anchor="middle">m</text>
+            <text class="d-al" x="72" y="69" text-anchor="end">x₁</text><text class="d-al" x="72" y="95" text-anchor="end">x₂</text><text class="d-al" x="72" y="121" text-anchor="end">x₃</text><text class="d-al" x="72" y="147" text-anchor="end">x₄</text><text class="d-al" x="72" y="173" text-anchor="end">x₅</text>
+            <g>
+              <rect class="d-box" x="80" y="52" width="40" height="26"/><rect class="d-box" x="120" y="52" width="40" height="26"/><rect class="d-box" x="160" y="52" width="40" height="26"/><rect class="d-box" x="200" y="52" width="40" height="26"/><rect class="d-box" x="240" y="52" width="40" height="26"/><rect class="d-box" x="280" y="52" width="40" height="26"/>
+              <rect class="d-box-acc" x="80" y="78" width="40" height="26"/><rect class="d-box-acc" x="120" y="78" width="40" height="26"/><rect class="d-box-acc" x="160" y="78" width="40" height="26"/><rect class="d-box-acc" x="200" y="78" width="40" height="26"/><rect class="d-box-acc" x="240" y="78" width="40" height="26"/><rect class="d-box-acc" x="280" y="78" width="40" height="26"/>
+              <rect class="d-box" x="80" y="104" width="40" height="26"/><rect class="d-box" x="120" y="104" width="40" height="26"/><rect class="d-box" x="160" y="104" width="40" height="26"/><rect class="d-box" x="200" y="104" width="40" height="26"/><rect class="d-box" x="240" y="104" width="40" height="26"/><rect class="d-box" x="280" y="104" width="40" height="26"/>
+              <rect class="d-box" x="80" y="130" width="40" height="26"/><rect class="d-box" x="120" y="130" width="40" height="26"/><rect class="d-box" x="160" y="130" width="40" height="26"/><rect class="d-box" x="200" y="130" width="40" height="26"/><rect class="d-box" x="240" y="130" width="40" height="26"/><rect class="d-box" x="280" y="130" width="40" height="26"/>
+              <rect class="d-box" x="80" y="156" width="40" height="26"/><rect class="d-box" x="120" y="156" width="40" height="26"/><rect class="d-box" x="160" y="156" width="40" height="26"/><rect class="d-box" x="200" y="156" width="40" height="26"/><rect class="d-box" x="240" y="156" width="40" height="26"/><rect class="d-box" x="280" y="156" width="40" height="26"/>
+            </g>
+            <text class="d-s" x="100" y="95" text-anchor="middle">x₂¹</text><text class="d-s" x="140" y="95" text-anchor="middle">x₂²</text><text class="d-s" x="180" y="95" text-anchor="middle">x₂³</text><text class="d-s" x="220" y="95" text-anchor="middle">x₂⁴</text><text class="d-s" x="260" y="95" text-anchor="middle">…</text><text class="d-s" x="300" y="95" text-anchor="middle">x₂ᵐ</text>
+            <text class="d-al" x="80" y="200">rows: units i · columns: examples j</text>
+            <text class="d-s" x="80" y="220">μᵢ, σᵢ² from the m values of one unit</text>
+            <text class="d-s" x="80" y="238">needs the batch; with m = 1, μᵢ = xᵢ and σᵢ = 0</text>
+
+            <line class="d-rule" x1="378" y1="12" x2="378" y2="240"/>
+
+            <text class="d-h" x="400" y="22">Layer norm: one example, all units</text>
+            <text class="d-al" x="460" y="44" text-anchor="middle">1</text><text class="d-al" x="500" y="44" text-anchor="middle">2</text><text class="d-al" x="540" y="44" text-anchor="middle">3</text><text class="d-al" x="580" y="44" text-anchor="middle">4</text><text class="d-al" x="620" y="44" text-anchor="middle">…</text><text class="d-al" x="660" y="44" text-anchor="middle">m</text>
+            <text class="d-al" x="432" y="69" text-anchor="end">x₁</text><text class="d-al" x="432" y="95" text-anchor="end">x₂</text><text class="d-al" x="432" y="121" text-anchor="end">x₃</text><text class="d-al" x="432" y="147" text-anchor="end">x₄</text><text class="d-al" x="432" y="173" text-anchor="end">x₅</text>
+            <g>
+              <rect class="d-box" x="440" y="52" width="40" height="26"/><rect class="d-box" x="480" y="52" width="40" height="26"/><rect class="d-box-acc" x="520" y="52" width="40" height="26"/><rect class="d-box" x="560" y="52" width="40" height="26"/><rect class="d-box" x="600" y="52" width="40" height="26"/><rect class="d-box" x="640" y="52" width="40" height="26"/>
+              <rect class="d-box" x="440" y="78" width="40" height="26"/><rect class="d-box" x="480" y="78" width="40" height="26"/><rect class="d-box-acc" x="520" y="78" width="40" height="26"/><rect class="d-box" x="560" y="78" width="40" height="26"/><rect class="d-box" x="600" y="78" width="40" height="26"/><rect class="d-box" x="640" y="78" width="40" height="26"/>
+              <rect class="d-box" x="440" y="104" width="40" height="26"/><rect class="d-box" x="480" y="104" width="40" height="26"/><rect class="d-box-acc" x="520" y="104" width="40" height="26"/><rect class="d-box" x="560" y="104" width="40" height="26"/><rect class="d-box" x="600" y="104" width="40" height="26"/><rect class="d-box" x="640" y="104" width="40" height="26"/>
+              <rect class="d-box" x="440" y="130" width="40" height="26"/><rect class="d-box" x="480" y="130" width="40" height="26"/><rect class="d-box-acc" x="520" y="130" width="40" height="26"/><rect class="d-box" x="560" y="130" width="40" height="26"/><rect class="d-box" x="600" y="130" width="40" height="26"/><rect class="d-box" x="640" y="130" width="40" height="26"/>
+              <rect class="d-box" x="440" y="156" width="40" height="26"/><rect class="d-box" x="480" y="156" width="40" height="26"/><rect class="d-box-acc" x="520" y="156" width="40" height="26"/><rect class="d-box" x="560" y="156" width="40" height="26"/><rect class="d-box" x="600" y="156" width="40" height="26"/><rect class="d-box" x="640" y="156" width="40" height="26"/>
+            </g>
+            <text class="d-s" x="540" y="69" text-anchor="middle">x₁³</text><text class="d-s" x="540" y="95" text-anchor="middle">x₂³</text><text class="d-s" x="540" y="121" text-anchor="middle">x₃³</text><text class="d-s" x="540" y="147" text-anchor="middle">x₄³</text><text class="d-s" x="540" y="173" text-anchor="middle">x₅³</text>
+            <text class="d-al" x="440" y="200">rows: units i · columns: examples j</text>
+            <text class="d-s" x="440" y="220">μₗ, σₗ from the H units of one example</text>
+            <text class="d-s" x="440" y="238">independent of the batch; works with size 1</text>
+          </svg>
+        </div>
+        <figcaption><b>Which activations share statistics.</b> Each grid holds one layer's activations for a mini-batch, one row per unit \(i\) and one column per example \(j\). Batch norm normalizes along a row (one unit across the examples), so it depends on the batch size. Layer norm normalizes down a column (all units of one example), so it behaves the same for a batch of one.</figcaption>
+      </figure>
+    </section>
+
+    <section id="architecture">
+      <div class="sec-head">
+        <a class="ts" href="https://iitm-pod.slides.com/arunprakash_ai/lecture-17-transformers-ce11cb/fullscreen" target="_blank" rel="noopener">Slides</a>
+        <h2>The complete architecture</h2>
+      </div>
+      <p>The complete layer adds a residual connection and a layer norm, an <dfn>Add &amp; Layer Norm</dfn> block, after every sublayer: after each multi-head attention, each feed-forward network and each cross-attention block.</p>
+      <p class="note">Standard form, from the original paper (the slides draw the block without a formula): each sublayer outputs \(\text{LayerNorm}\big(\mathbf{x} + \text{Sublayer}(\mathbf{x})\big)\), where the "Add" is the residual sum.</p>
+      <p>The full transformer puts the pieces together.</p>
+      <ul>
+        <li>The output of the <b>top</b> encoder layer is fed to <b>every</b> decoder layer, where cross attention uses it for keys and values.</li>
+        <li>The input embeddings are learned while the model trains. No pretrained embedding model such as word2vec is used, so the embeddings are another set of weights.</li>
+        <li>The positional encoding is added to the input embeddings. The sinusoidal function is fixed, but it could also be parameterized.</li>
+      </ul>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 56 720 548" role="img" aria-label="The transformer. Left, the encoder: source words, a learned input embedding, plus positional encoding, then a layer repeated six times of multi-head self-attention and a feed-forward network, each followed by Add and Layer Norm, with residual arrows around each. Its top output E goes to the cross attention of the decoder. Right, the decoder: Go and the target words, output embedding plus positional encoding, then a layer repeated six times of masked multi-head self-attention, multi-head cross attention and a feed-forward network, each followed by Add and Layer Norm with residual arrows. On top, a linear layer W D and a softmax give probabilities for the next word.">
+            <defs>
+              <marker id="l14-f6-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="l14-f6-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <!-- encoder -->
+            <text class="d-s" x="210" y="592" text-anchor="middle">I enjoyed the movie transformers</text>
+            <line class="d-ln" x1="210" y1="578" x2="210" y2="550" marker-end="url(#l14-f6-ah)"/>
+            <rect class="d-box" x="122" y="522" width="176" height="26" rx="5"/><text x="210" y="539" text-anchor="middle" style="font-size:12.5px">Input embedding (learned)</text>
+            <line class="d-ln" x1="210" y1="522" x2="210" y2="501" marker-end="url(#l14-f6-ah)"/>
+            <circle class="node" cx="210" cy="488" r="11"/><text class="d-t" x="210" y="493" text-anchor="middle">+</text>
+            <text class="d-s" x="24" y="484">positional</text><text class="d-s" x="24" y="498">encoding p<tspan dy="3" style="font-size:0.78em">j</tspan></text>
+            <line class="d-ln" x1="98" y1="488" x2="197" y2="488" marker-end="url(#l14-f6-ah)"/>
+            <line class="d-ln" x1="210" y1="477" x2="210" y2="428" marker-end="url(#l14-f6-ah)"/>
+            <rect class="d-plot" x="96" y="264" width="228" height="182" rx="10"/>
+            <text class="d-row" x="96" y="258">encoder layer</text>
+            <text class="d-h" x="88" y="360" text-anchor="end">× 6</text>
+            <rect class="d-box-acc" x="122" y="392" width="176" height="34" rx="5"/><text x="210" y="406" text-anchor="middle" style="font-size:12.5px">Multi-head</text><text x="210" y="420" text-anchor="middle" style="font-size:12.5px">self-attention</text>
+            <circle class="pt-plain" cx="210" cy="440" r="2.5"/>
+            <path class="d-ln" d="M210 440 H108 V367 H120" marker-end="url(#l14-f6-ah)"/>
+            <line class="d-ln" x1="210" y1="392" x2="210" y2="380" marker-end="url(#l14-f6-ah)"/>
+            <rect class="b-ok" x="122" y="356" width="176" height="22" rx="5"/><text class="d-s" x="210" y="371" text-anchor="middle">Add &amp; Layer Norm</text>
+            <circle class="pt-plain" cx="210" cy="349" r="2.5"/>
+            <line class="d-ln" x1="210" y1="356" x2="210" y2="344" marker-end="url(#l14-f6-ah)"/>
+            <path class="d-ln" d="M210 349 H108 V289 H120" marker-end="url(#l14-f6-ah)"/>
+            <rect class="d-box" x="122" y="314" width="176" height="28" rx="5"/><text x="210" y="332" text-anchor="middle" style="font-size:12.5px">Feed-forward network</text>
+            <line class="d-ln" x1="210" y1="314" x2="210" y2="302" marker-end="url(#l14-f6-ah)"/>
+            <rect class="b-ok" x="122" y="278" width="176" height="22" rx="5"/><text class="d-s" x="210" y="293" text-anchor="middle">Add &amp; Layer Norm</text>
+            <path class="d-ln-acc" d="M210 278 V250 H372 V325 H420" marker-end="url(#l14-f6-aha)"/>
+            <text class="d-s" x="220" y="243" style="fill: var(--accent)">E, to every decoder layer</text>
+            <text class="d-s" x="366" y="329" text-anchor="end" style="fill: var(--accent)">K, V</text>
+
+            <!-- decoder -->
+            <text class="d-s" x="510" y="592" text-anchor="middle">&lt;Go&gt; Naan transfarmar padaththai</text>
+            <line class="d-ln" x1="510" y1="578" x2="510" y2="550" marker-end="url(#l14-f6-ah)"/>
+            <rect class="d-box" x="422" y="522" width="176" height="26" rx="5"/><text x="510" y="539" text-anchor="middle" style="font-size:12.5px">Output embedding (learned)</text>
+            <line class="d-ln" x1="510" y1="522" x2="510" y2="501" marker-end="url(#l14-f6-ah)"/>
+            <circle class="node" cx="510" cy="488" r="11"/><text class="d-t" x="510" y="493" text-anchor="middle">+</text>
+            <text class="d-s" x="628" y="484">positional</text><text class="d-s" x="628" y="498">encoding p<tspan dy="3" style="font-size:0.78em">j</tspan></text>
+            <line class="d-ln" x1="622" y1="488" x2="523" y2="488" marker-end="url(#l14-f6-ah)"/>
+            <line class="d-ln" x1="510" y1="477" x2="510" y2="428" marker-end="url(#l14-f6-ah)"/>
+            <rect class="d-plot" x="396" y="180" width="228" height="266" rx="10"/>
+            <text class="d-row" x="396" y="174">decoder layer</text>
+            <text class="d-h" x="632" y="318">× 6</text>
+            <rect class="d-box-acc" x="422" y="392" width="176" height="34" rx="5"/><text x="510" y="406" text-anchor="middle" style="font-size:12.5px">Masked multi-head</text><text x="510" y="420" text-anchor="middle" style="font-size:12.5px">self-attention</text>
+            <circle class="pt-plain" cx="510" cy="440" r="2.5"/>
+            <path class="d-ln" d="M510 440 H612 V367 H600" marker-end="url(#l14-f6-ah)"/>
+            <line class="d-ln" x1="510" y1="392" x2="510" y2="380" marker-end="url(#l14-f6-ah)"/>
+            <rect class="b-ok" x="422" y="356" width="176" height="22" rx="5"/><text class="d-s" x="510" y="371" text-anchor="middle">Add &amp; Layer Norm</text>
+            <circle class="pt-plain" cx="510" cy="349" r="2.5"/>
+            <line class="d-ln" x1="510" y1="356" x2="510" y2="344" marker-end="url(#l14-f6-ah)"/>
+            <text class="d-al" x="502" y="352" text-anchor="end">Q</text>
+            <path class="d-ln" d="M510 349 H612 V283 H600" marker-end="url(#l14-f6-ah)"/>
+            <rect class="d-box-acc" x="422" y="308" width="176" height="34" rx="5"/><text x="510" y="322" text-anchor="middle" style="font-size:12.5px">Multi-head</text><text x="510" y="336" text-anchor="middle" style="font-size:12.5px">cross attention</text>
+            <line class="d-ln" x1="510" y1="308" x2="510" y2="296" marker-end="url(#l14-f6-ah)"/>
+            <rect class="b-ok" x="422" y="272" width="176" height="22" rx="5"/><text class="d-s" x="510" y="287" text-anchor="middle">Add &amp; Layer Norm</text>
+            <circle class="pt-plain" cx="510" cy="265" r="2.5"/>
+            <line class="d-ln" x1="510" y1="272" x2="510" y2="260" marker-end="url(#l14-f6-ah)"/>
+            <path class="d-ln" d="M510 265 H612 V205 H600" marker-end="url(#l14-f6-ah)"/>
+            <rect class="d-box" x="422" y="230" width="176" height="28" rx="5"/><text x="510" y="248" text-anchor="middle" style="font-size:12.5px">Feed-forward network</text>
+            <line class="d-ln" x1="510" y1="230" x2="510" y2="218" marker-end="url(#l14-f6-ah)"/>
+            <rect class="b-ok" x="422" y="194" width="176" height="22" rx="5"/><text class="d-s" x="510" y="209" text-anchor="middle">Add &amp; Layer Norm</text>
+            <line class="d-ln" x1="510" y1="194" x2="510" y2="164" marker-end="url(#l14-f6-ah)"/>
+            <rect class="d-box" x="422" y="138" width="176" height="24" rx="5"/><text x="510" y="154" text-anchor="middle" style="font-size:12.5px">Linear W<tspan dy="3" style="font-size:9.5px">D</tspan><tspan dy="-3">, 512 × |V|</tspan></text>
+            <line class="d-ln" x1="510" y1="138" x2="510" y2="128" marker-end="url(#l14-f6-ah)"/>
+            <rect class="d-box" x="422" y="102" width="176" height="24" rx="5"/><text x="510" y="118" text-anchor="middle" style="font-size:12.5px">Softmax</text>
+            <line class="d-ln" x1="510" y1="102" x2="510" y2="82" marker-end="url(#l14-f6-ah)"/>
+            <text class="d-s" x="510" y="72" text-anchor="middle">probabilities for the next word, 1 × |V|</text>
+          </svg>
+        </div>
+        <figcaption><b>The transformer.</b> Left, the encoder: input embeddings plus positional encodings pass through 6 identical layers of multi-head self-attention and a feed-forward network, each followed by Add &amp; Layer Norm (the side arrows are the residual connections). Right, the decoder: the target embeddings, behind the start symbol and fed in full for teacher forcing, pass through 6 layers of masked self-attention, cross attention and a feed-forward network. The top encoder output \(E\) supplies the keys and values of the cross attention in every decoder layer, and a linear layer with a softmax turns the top decoder output into word probabilities.</figcaption>
+      </figure>
+
+      <ol class="algo">
+        <li class="algo-title">A training forward pass, end to end</li>
+        <li>Look up the embeddings of the \(T\) source words and add \(\mathbf{p}_j\) to word \(j\), giving a \(T \times 512\) input.</li>
+        <li>Pass it through 6 encoder layers, each: multi-head self-attention, Add &amp; Layer Norm, feed-forward network, Add &amp; Layer Norm. The top layer gives \(E = \mathbf{e}_{1:T}\).</li>
+        <li>Look up the embeddings of <code>&lt;Go&gt;</code> and the target words (teacher forcing) and add their positional encodings.</li>
+        <li>Pass them through 6 decoder layers, each: masked multi-head self-attention, Add &amp; Layer Norm, multi-head cross attention with keys and values from \(E\), Add &amp; Layer Norm, feed-forward network, Add &amp; Layer Norm.</li>
+        <li>Map each position's output with \(W_D\) and a softmax to a distribution over the vocabulary, and compare it with the next target word.</li>
+      </ol>
+    </section>
+
+    <section id="warmup">
+      <div class="sec-head">
+        <a class="ts" href="https://iitm-pod.slides.com/arunprakash_ai/lecture-17-transformers-ce11cb/fullscreen" target="_blank" rel="noopener">Slides</a>
+        <h2>Learning-rate warm-up</h2>
+      </div>
+      <p>Module 16.5 builds the transformer's learning-rate schedule in three attempts, for training with mini-batches.</p>
+      <ol>
+        <li><b>A decaying rate</b>, \(\eta = 1/\sqrt{\text{steps}} = \text{steps}^{-0.5}\). Suppose the model takes too long to converge: the error decays very slowly, especially over the first 4000 steps. So try a larger learning rate.</li>
+        <li><b>A growing rate</b>, increased linearly: \(\eta = \text{steps} \times 4000^{-1.5}\). Suppose the error now decays well for the first 4000 steps and increases after that.</li>
+        <li><b>Both</b>: increase the rate for the first 4000 steps and decrease it afterwards.</li>
+      </ol>
+      <div class="eq">\[ \eta = \begin{cases} \text{steps} \cdot 4000^{-1.5}, & \text{if steps} \le 4000 \\ \text{steps}^{-0.5}, & \text{otherwise} \end{cases} \]</div>
+      <p>This is counterintuitive. Training usually starts with a high learning rate and keeps decreasing it. Here the rate <dfn>warms up</dfn> during the initial steps and decreases only after the warm-up steps. The number of warm-up steps (4000 here) is another hyperparameter.</p>
+      <p>The two branches combine into one expression. The decreasing curve \(\text{step}^{-0.5}\) and the increasing curve \(\text{step} \cdot \text{warmup}^{-1.5}\) are equal at step = warmup, where both are \(\text{warmup}^{-0.5}\). Before that point the increasing curve is the smaller one; after it, the increasing curve is always above the decreasing one. So the piecewise rule is a minimum, multiplied by the scaling factor \(d_{model}^{-0.5}\):</p>
+      <div class="result">
+        <span class="lbl">Learning rate with warm-up</span>
+        \[ \eta = d_{model}^{-0.5}\cdot\min\big(\text{step}^{-0.5},\ \text{step}\cdot\text{warmup}^{-1.5}\big), \qquad \text{warmup} = 4000 \]
+        <p>With \(d_{model} = 512\) the peak, at step 4000, is \(512^{-0.5} \times 4000^{-0.5} \approx 7.0 \times 10^{-4}\).</p>
+      </div>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 720 300" role="img" aria-label="Plot of learning rate against training step from 0 to 20,000. A dashed straight line rises from zero; a solid curve falls like one over root step; they cross at step 4000. The schedule, drawn thick, follows the rising line up to a peak of about 7 times 10 to the minus 4 at step 4000, then follows the falling curve down to about 3.1 times 10 to the minus 4 at step 20,000.">
+            <line class="d-rule" x1="70" y1="195" x2="690" y2="195"/>
+            <line class="d-rule" x1="70" y1="140" x2="690" y2="140"/>
+            <line class="d-rule" x1="70" y1="85" x2="690" y2="85"/>
+            <line class="d-rule" x1="70" y1="30" x2="690" y2="30"/>
+            <line class="d-ln" x1="70" y1="250" x2="690" y2="250"/>
+            <line class="d-ln" x1="70" y1="30" x2="70" y2="250"/>
+            <text class="d-al" x="62" y="254" text-anchor="end">0</text>
+            <text class="d-al" x="62" y="199" text-anchor="end">2.5</text>
+            <text class="d-al" x="62" y="144" text-anchor="end">5.0</text>
+            <text class="d-al" x="62" y="89" text-anchor="end">7.5</text>
+            <text class="d-al" x="62" y="34" text-anchor="end">10</text>
+            <text class="d-al" x="70" y="18">learning rate η (× 10⁻⁴)</text>
+            <path class="d-ln" d="M70 250 V255 M225 250 V255 M380 250 V255 M535 250 V255 M690 250 V255"/>
+            <text class="d-al" x="70" y="268" text-anchor="middle">0</text>
+            <text class="d-al" x="225" y="268" text-anchor="middle">5,000</text>
+            <text class="d-al" x="380" y="268" text-anchor="middle">10,000</text>
+            <text class="d-al" x="535" y="268" text-anchor="middle">15,000</text>
+            <text class="d-al" x="690" y="268" text-anchor="end">20,000</text>
+            <text class="d-al" x="690" y="288" text-anchor="end">training step</text>
+            <line class="d-rule d-dash" x1="194" y1="30" x2="194" y2="250"/>
+            <text class="d-s" x="200" y="243">warm-up ends, step 4000</text>
+            <path class="d-ln d-dash" d="M70 250 L247.5 30"/>
+            <path class="d-ln" d="M130.5 30.0 L132.0 32.6 L139.8 45.0 L147.5 55.5 L155.2 64.6 L163.0 72.5 L170.8 79.5 L178.5 85.7 L186.2 91.2 L194.0 96.3 L201.8 100.9 L209.5 105.1 L217.2 108.9 L225.0 112.5 L232.8 115.8 L240.5 118.9 L248.2 121.8 L256.0 124.5 L263.8 127.0 L271.5 129.4 L279.2 131.7 L287.0 133.8 L294.8 135.8 L302.5 137.7 L310.2 139.6 L318.0 141.3 L325.8 143.0 L333.5 144.5 L341.2 146.1 L349.0 147.5 L356.8 148.9 L364.5 150.2 L372.2 151.5 L380.0 152.8 L387.8 154.0 L395.5 155.1 L403.2 156.2 L411.0 157.3 L418.8 158.3 L426.5 159.3 L434.2 160.3 L442.0 161.2 L449.8 162.2 L457.5 163.0 L465.2 163.9 L473.0 164.7 L480.8 165.5 L488.5 166.3 L496.2 167.1 L504.0 167.8 L511.8 168.6 L519.5 169.3 L527.2 169.9 L535.0 170.6 L542.8 171.3 L550.5 171.9 L558.2 172.5 L566.0 173.1 L573.8 173.7 L581.5 174.3 L589.2 174.9 L597.0 175.4 L604.8 176.0 L612.5 176.5 L620.2 177.0 L628.0 177.5 L635.8 178.0 L643.5 178.5 L651.2 179.0 L659.0 179.5 L666.8 179.9 L674.5 180.4 L682.2 180.8 L690.0 181.2"/>
+            <path class="d-ln-acc" style="stroke-width:3; stroke-linejoin:round" d="M70.0 250.0 L194.0 96.3 L201.8 100.9 L209.5 105.1 L217.2 108.9 L225.0 112.5 L232.8 115.8 L240.5 118.9 L248.2 121.8 L256.0 124.5 L263.8 127.0 L271.5 129.4 L279.2 131.7 L287.0 133.8 L294.8 135.8 L302.5 137.7 L310.2 139.6 L318.0 141.3 L325.8 143.0 L333.5 144.5 L341.2 146.1 L349.0 147.5 L356.8 148.9 L364.5 150.2 L372.2 151.5 L380.0 152.8 L387.8 154.0 L395.5 155.1 L403.2 156.2 L411.0 157.3 L418.8 158.3 L426.5 159.3 L434.2 160.3 L442.0 161.2 L449.8 162.2 L457.5 163.0 L465.2 163.9 L473.0 164.7 L480.8 165.5 L488.5 166.3 L496.2 167.1 L504.0 167.8 L511.8 168.6 L519.5 169.3 L527.2 169.9 L535.0 170.6 L542.8 171.3 L550.5 171.9 L558.2 172.5 L566.0 173.1 L573.8 173.7 L581.5 174.3 L589.2 174.9 L597.0 175.4 L604.8 176.0 L612.5 176.5 L620.2 177.0 L628.0 177.5 L635.8 178.0 L643.5 178.5 L651.2 179.0 L659.0 179.5 L666.8 179.9 L674.5 180.4 L682.2 180.8 L690.0 181.2"/>
+            <circle class="pt-new" cx="194" cy="96.3" r="4.5"/>
+            <line class="d-ln" x1="200" y1="93" x2="296" y2="73" style="stroke-width:1"/>
+            <text class="d-s" x="300" y="74">peak ≈ 7.0 × 10⁻⁴</text>
+            <line class="d-ln-acc" x1="470" y1="100" x2="498" y2="100" style="stroke-width:3"/>
+            <text class="d-s" x="506" y="104">schedule: the smaller of the two</text>
+            <line class="d-ln" x1="470" y1="118" x2="498" y2="118"/>
+            <text class="d-s" x="506" y="122">d⁻⁰·⁵ · step⁻⁰·⁵ (falls)</text>
+            <line class="d-ln d-dash" x1="470" y1="136" x2="498" y2="136"/>
+            <text class="d-s" x="506" y="140">d⁻⁰·⁵ · step · 4000⁻¹·⁵ (rises)</text>
+          </svg>
+        </div>
+        <figcaption><b>The warm-up schedule, drawn to scale</b> for \(d_{model} = 512\) and 4000 warm-up steps. The rising term \(d_{model}^{-0.5}\,\text{step}\cdot 4000^{-1.5}\) and the falling term \(d_{model}^{-0.5}\,\text{step}^{-0.5}\) cross at step 4000. The schedule follows whichever is smaller, so it climbs linearly to about \(7 \times 10^{-4}\) and then decays like \(1/\sqrt{\text{step}}\). Both terms are cut off at \(10^{-3}\).</figcaption>
+      </figure>
+      <p>Warm-up and other learning-rate schemes for general training are also discussed in <a href="lecture-05.html">Lecture 5</a>.</p>
+    </section>
+
+    <!-- ============ REVISION ============ -->
+    <section id="terms">
+      <div class="sec-head"><h2>Key terms</h2></div>
+      <dl class="terms">
+        <div><dt>Contextual representation</dt><dd>A vector for a word that depends on the other words of its sentence. RNN states and transformer outputs are both contextual.</dd></div>
+        <div><dt>Self-attention</dt><dd>Attention among the words of one sequence: \(\mathbf{z}_i = \sum_j \alpha_{ij}\mathbf{v}_j\), with weights from \(\mathbf{q}_i\) and every key \(\mathbf{k}_j\).</dd></div>
+        <div><dt>Query, key, value</dt><dd>\(\mathbf{q}_j = W_Q\mathbf{h}_j\), \(\mathbf{k}_j = W_K\mathbf{h}_j\), \(\mathbf{v}_j = W_V\mathbf{h}_j\): the vector a word scores others with, the one it is scored by, and the one it contributes.</dd></div>
+        <div><dt>Scaled dot-product attention</dt><dd>\(\operatorname{softmax}(Q^\top K/\sqrt{d_k})\,V^\top\): dot-product scores, scaled by \(1/\sqrt{d_k}\), a softmax per row, then a weighted sum of values.</dd></div>
+        <div><dt>Head</dt><dd>One set of \(W_Q, W_K, W_V\) together with its scaled dot-product attention.</dd></div>
+        <div><dt>Multi-head attention</dt><dd>8 heads of size 64 in parallel, concatenated per word to 512 dimensions and mixed by \(W_O\).</dd></div>
+        <div><dt>Position-wise FFN</dt><dd>The same 512 → 2048 → 512 ReLU network applied to each position separately.</dd></div>
+        <div><dt>Encoder layer</dt><dd>Multi-head self-attention and an FFN, each followed by Add &amp; Layer Norm; about 3 million parameters, stacked 6 times.</dd></div>
+        <div><dt>Teacher forcing</dt><dd>Training the decoder on the ground-truth previous words instead of its own predictions.</dd></div>
+        <div><dt>Masked self-attention</dt><dd>Self-attention with \(-\infty\) added above the diagonal of the scores, so position \(t\) attends only to positions \(1, \dots, t\).</dd></div>
+        <div><dt>Cross attention</dt><dd>Encoder–decoder attention: queries from the decoder, keys and values from the top encoder output \(E\).</dd></div>
+        <div><dt>Positional encoding</dt><dd>A vector \(\mathbf{p}_j\) added to the embedding at position \(j\); sinusoidal in the transformer, with \(\mathbf{p}_0 = [0, 1, 0, 1, \dots]\).</dd></div>
+        <div><dt>Layer normalization</dt><dd>Normalizing over the hidden units of a layer for each example, so it does not depend on the batch size.</dd></div>
+        <div><dt>Warm-up</dt><dd>Increasing the learning rate linearly for the first steps (4000) before decaying it as \(\text{step}^{-0.5}\).</dd></div>
+      </dl>
+    </section>
+
+    <section id="test">
+      <div class="sec-head"><h2>Test yourself</h2></div>
+      <div class="quiz">
+        <details><summary><span class="q">Q1</span><span>In an RNN encoder–decoder with attention, which attention weights can be computed in parallel, and which cannot?</span><span class="tog"></span></summary>
+          <p>At a fixed decoder step \(t\), all of \(\alpha_{t1}, \dots, \alpha_{tn}\) can: each needs only \(\mathbf{s}_{t-1}\) and \(\mathbf{h}_i\), and both are available. Weights of different steps cannot, because \(\alpha_{t+1,i}\) needs \(\mathbf{s}_t\), which needs \(\mathbf{c}_t\) and so every \(\alpha_{ti}\). The encoder states themselves are also computed one after another.</p></details>
+        <details><summary><span class="q">Q2</span><span>Two words have \(\mathbf{q}_1 = [1, 0]\), \(\mathbf{k}_1 = [1, 0]\), \(\mathbf{k}_2 = [0, 1]\), \(\mathbf{v}_1 = [2, 0]\), \(\mathbf{v}_2 = [0, 2]\), and \(d_k = 2\). Compute \(\mathbf{z}_1\).</span><span class="tog"></span></summary>
+          <p>Scores: \(\mathbf{q}_1\cdot\mathbf{k}_1 = 1\) and \(\mathbf{q}_1\cdot\mathbf{k}_2 = 0\); divided by \(\sqrt{2}\) they are 0.707 and 0. Softmax: \(\alpha_{11} = e^{0.707}/(e^{0.707} + e^{0})\) \(= 2.028/3.028 = 0.670\) and \(\alpha_{12} = 0.330\). So \(\mathbf{z}_1 = 0.670\,[2, 0] + 0.330\,[0, 2]\) \(= [1.34, 0.66]\).</p></details>
+        <details><summary><span class="q">Q3</span><span>Why does a transformer need positional encodings, and why is a one-hot position vector a poor choice?</span><span class="tog"></span></summary>
+          <p>Self-attention is permutation-invariant: shuffling the words leaves every word's output vector unchanged, so without extra input the model cannot tell word order. A one-hot vector gives each position its own code, but any two different one-hot vectors are \(\sqrt{2}\) apart, so it says nothing about which positions are near each other, and the slides also find it unsuitable for varying sentence lengths. With the sinusoidal encoding, \(\lVert\mathbf{p}_j - \mathbf{p}_k\rVert\) grows with \(|j - k|\).</p></details>
+        <details><summary><span class="q">Q4</span><span>With \(d_{model} = 512\) and 8 heads, why does each head produce 64-dimensional outputs? How many parameters does the multi-head attention sublayer have, and does the count depend on the sentence length?</span><span class="tog"></span></summary>
+          <p>So that the 8 heads concatenate to \(8 \times 64 = 512\) dimensions again; 512-dimensional heads would concatenate to 4096. Each head has \(W_Q^i, W_K^i, W_V^i \in \mathbb{R}^{64 \times 512}\), which is \(3 \times 32{,}768\); over 8 heads that is \(3 \times 262{,}144 = 786{,}432\). Adding \(W_O\) (\(512 \times 512 = 262{,}144\)) gives \(1{,}048{,}576 \approx 1\) million. None of these shapes involves \(T\), so the count is the same for any sentence length.</p></details>
+        <details><summary><span class="q">Q5</span><span>In masked self-attention with \(T = 3\), row 2 of the scaled scores is \([1, 1, 5]\). What are \(\alpha_{21}, \alpha_{22}, \alpha_{23}\)? What would they be without the mask?</span><span class="tog"></span></summary>
+          <p>The mask adds \([0, 0, -\infty]\), so the row becomes \([1, 1, -\infty]\) and the softmax gives \([0.5, 0.5, 0]\): position 2 sees only positions 1 and 2. Without the mask, \(e^5 \approx 148.4\) dominates \(e^1 \approx 2.72\), giving about \([0.018, 0.018, 0.965]\). Position 2 would mostly look at word 3, the future word that teacher forcing hands it during training.</p></details>
+        <details><summary><span class="q">Q6</span><span>In the decoder's cross attention, where do the queries, keys and values come from? What is the shape of \(Q_2^\top K_2\) for a 4-word target and a 5-word source?</span><span class="tog"></span></summary>
+          <p>Queries from the decoder, \(Q_2 = W_{Q_2}S\), built from the output of the masked self-attention sublayer. Keys and values from the encoder, \(K_2 = W_{K_2}E\) and \(V_2 = W_{V_2}E\), built from the top encoder layer's output. \(Q_2^\top K_2\) is \(4 \times 5\): for each target position, one weight per source word.</p></details>
+        <details><summary><span class="q">Q7</span><span>Why does the transformer use layer normalization rather than batch normalization?</span><span class="tog"></span></summary>
+          <p>Batch norm estimates each neuron's mean and variance from the \(m\) examples of a batch, so small batches give poor estimates, and with \(m = 1\) the statistics degenerate (\(\mu_i = x_i\), \(\sigma_i = 0\)). Naive batch norm was also found empirically to hurt NLP tasks. Layer norm computes the mean and variance over the hidden units of one example, so it does not depend on the batch at all.</p></details>
+        <details><summary><span class="q">Q8</span><span>With \(d_{model} = 512\) and 4000 warm-up steps, what is the learning rate at steps 1000, 4000 and 16000?</span><span class="tog"></span></summary>
+          <p>\(512^{-0.5} \approx 0.0442\). Step 1000 is in the warm-up: \(\eta = 0.0442 \times 1000 \times 4000^{-1.5}\) \(= 0.0442 \times 0.00395\) \(\approx 1.75 \times 10^{-4}\). Step 4000 is the peak: \(0.0442 \times 4000^{-0.5} \approx 6.99 \times 10^{-4}\). Step 16000 is in the decay: \(0.0442 \times 16000^{-0.5}\) \(= 0.0442 \times 0.00791\) \(\approx 3.49 \times 10^{-4}\), half the peak, because the step count is 4 times larger.</p></details>
+      </div>
+    </section>
+
+    <!-- PAGER:START --><nav class="pager" aria-label="Previous and next lecture"><a href="lecture-13.html"><span class="dir">← Lecture 13</span><span class="nm">Encoder–decoder models and attention</span></a><a class="next" href="index.html"><span class="dir">Finished →</span><span class="nm">Back to all lectures</span></a></nav><!-- PAGER:END -->
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the official lecture slides and the module videos' YouTube auto-generated captions; positional encoding, training and warm-up (Modules 16.3 to 16.5) follow the slides alone. Timestamp links open the video at that moment. Charts marked synthetic use data generated for these notes. Not an official IIT Madras resource.</div>
+</footer>
+
+<script src="notes.js"></script>
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const fmt = (x, d = 2) => { const v = Math.abs(x) < 0.5 * Math.pow(10, -d) ? 0 : x; return v.toFixed(d).replace('-', '−'); };
+  const SUB = '₀₁₂₃₄₅₆₇₈₉';
+  const sub = n => String(n).split('').map(c => SUB[+c]).join('');
+  const vec = v => '[' + v.map(x => fmt(x)).join(', ') + ']';
+  /* write text into an SVG <text>, turning _x into a lowered subscript */
+  const rich = (el, str) => {
+    while (el.firstChild) el.removeChild(el.firstChild);
+    let down = false;
+    str.split(/_([A-Za-z0-9]+)/).forEach((part, i) => {
+      if (!part) return;
+      const isSub = i % 2 === 1, t = mk('tspan', {}, el);
+      if (isSub && !down) { t.setAttribute('dy', 3); down = true; } else if (!isSub && down) { t.setAttribute('dy', -3); down = false; }
+      if (isSub) t.setAttribute('style', 'font-size: 0.78em');
+      t.textContent = part;
+    });
+    return el;
+  };
+
+  /* ---------- Scaled dot-product self-attention on the slides' example ---------- */
+  (() => {
+    const svg = document.getElementById('l14-att-svg'); if (!svg) return;
+    const words = ['I', 'enjoyed', 'the', 'movie', 'transformers'];
+    const H = [[1, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 1], [1, 1, 1]];
+    const T = words.length, DK = 2;
+    const EX = { WQ: [[1, -1, 1], [0, 2, -1]], WK: [[0, 1, 1], [1, 0, -1]], WV: [[1, 0, 0.5], [0, 1, 0.5]] };
+    let seed = 1405;
+    const rand = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    const rmat = () => [0, 1].map(() => [0, 1, 2].map(() => Math.round((rand() * 3 - 1.5) * 10) / 10));
+    let RW = { WQ: rmat(), WK: rmat(), WV: rmat() };
+    const el = id => document.getElementById(id);
+    const preset = el('att-preset'), scale = el('att-scale'), scaleOut = el('att-scale-out'), sq = el('att-sqrt'), mask = el('att-mask'), qSel = el('att-q');
+    const outMax = el('att-max'), outSum = el('att-sum'), outZ = el('att-z'), status = el('att-status');
+
+    const defs = mk('defs', {}, svg);
+    const mkr = mk('marker', { id: 'l14-att-ah', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse' }, defs);
+    mk('path', { d: 'M0,0 L10,5 L0,10 z', class: 'c-arrowhead' }, mkr);
+
+    /* top table: word, h, q, k, v */
+    const rowY = r => 44 + 22 * r;
+    const hl = mk('rect', { x: 4, width: 484, height: 21, rx: 4, class: 'att-row-hl' }, svg);
+    [['word', 86, 'end'], ['h_j', 140, 'middle'], ['query q_j', 236, 'middle'], ['key k_j', 336, 'middle'], ['value v_j', 436, 'middle']].forEach(([t, x, a]) => { rich(mk('text', { x, y: 20, 'text-anchor': a, class: 'c-title' }, svg), t); });
+    const tq = [], tk = [], tv = [];
+    words.forEach((w, r) => {
+      mk('text', { x: 86, y: rowY(r), 'text-anchor': 'end', class: 'c-note' }, svg).textContent = w;
+      mk('text', { x: 140, y: rowY(r), 'text-anchor': 'middle', class: 'att-num' }, svg).textContent = '[' + H[r].join(', ') + ']';
+      tq.push(mk('text', { x: 236, y: rowY(r), 'text-anchor': 'middle', class: 'att-num' }, svg));
+      tk.push(mk('text', { x: 336, y: rowY(r), 'text-anchor': 'middle', class: 'att-num' }, svg));
+      tv.push(mk('text', { x: 436, y: rowY(r), 'text-anchor': 'middle', class: 'att-num' }, svg));
+    });
+    /* weight matrices */
+    const wT = ['Q', 'K', 'V'].map((L, b) => {
+      const y0 = 30 + 46 * b;
+      const t = mk('text', { x: 540, y: y0 + 13, class: 'c-title' }, svg); t.appendChild(document.createTextNode('W')); const s = mk('tspan', { dy: 3, style: 'font-size: 9.5px' }, t); s.textContent = L;
+      mk('path', { d: `M592 ${y0 - 9} h-5 v32 h5`, class: 'att-brk' }, svg);
+      mk('path', { d: `M728 ${y0 - 9} h5 v32 h-5`, class: 'att-brk' }, svg);
+      return [0, 1].map(r => [0, 1, 2].map(c => mk('text', { x: 616 + 44 * c, y: y0 + 4 + 18 * r, 'text-anchor': 'middle', class: 'att-num' }, svg)));
+    });
+
+    /* grids: scores S, weights A, outputs Z */
+    const Y0 = 242, RH = 30, SX = 92, AX = 380, ZX = 660, CW = 50, ZW = 48;
+    const sTitle = mk('text', { x: SX, y: 166, class: 'c-title' }, svg);
+    rich(mk('text', { x: AX, y: 166, class: 'c-title' }, svg), 'Weights α_ij: softmax of each row');
+    rich(mk('text', { x: ZX, y: 166, class: 'c-title' }, svg), 'Outputs z_i');
+    [SX, AX].forEach(x0 => words.forEach((w, j) => { const x = x0 + CW * j + 20, y = 234; mk('text', { x, y, transform: `rotate(-40 ${x} ${y})`, class: 'c-note' }, svg).textContent = w; }));
+    ['dim 1', 'dim 2'].forEach((t, d) => { mk('text', { x: ZX + ZW * d + 24, y: 234, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = t; });
+    const cS = [], cA = [], cZ = [], rows = [];
+    words.forEach((w, r) => {
+      const g = mk('g', { class: 'att-row' }, svg); rows.push(g);
+      const y = Y0 + RH * r;
+      mk('rect', { x: 0, y, width: 760, height: RH, style: 'fill: transparent' }, g);
+      mk('text', { x: 86, y: y + 19, 'text-anchor': 'end', class: 'c-note' }, g).textContent = w;
+      cS.push(words.map((_, j) => { const b = mk('rect', { x: SX + CW * j + 1, y: y + 1, width: CW - 2, height: RH - 2, rx: 3, class: 'att-cell' }, g); const t = mk('text', { x: SX + CW * j + CW / 2, y: y + 19, 'text-anchor': 'middle', class: 'att-num' }, g); return { b, t }; }));
+      cA.push(words.map((_, j) => { const b = mk('rect', { x: AX + CW * j + 1, y: y + 1, width: CW - 2, height: RH - 2, rx: 3, class: 'att-cell' }, g); const h = mk('rect', { x: AX + CW * j + 1, y: y + 1, width: CW - 2, height: RH - 2, rx: 3, class: 'att-heat' }, g); const t = mk('text', { x: AX + CW * j + CW / 2, y: y + 19, 'text-anchor': 'middle', class: 'att-num' }, g); return { b, h, t }; }));
+      cZ.push([0, 1].map(d => { mk('rect', { x: ZX + ZW * d + 1, y: y + 1, width: ZW - 2, height: RH - 2, rx: 3, class: 'att-cell' }, g); return mk('text', { x: ZX + ZW * d + ZW / 2, y: y + 19, 'text-anchor': 'middle', class: 'att-num' }, g); }));
+    });
+    const oS = mk('rect', { x: SX, width: CW * T, height: RH, rx: 4, class: 'c-hl' }, svg);
+    const oA = mk('rect', { x: AX, width: CW * T, height: RH, rx: 4, class: 'c-hl' }, svg);
+    const oZ = mk('rect', { x: ZX, width: ZW * 2, height: RH, rx: 4, class: 'c-hl' }, svg);
+    mk('line', { x1: SX + CW * T + 6, y1: Y0 + 75, x2: AX - 6, y2: Y0 + 75, class: 'c-line', 'marker-end': 'url(#l14-att-ah)' }, svg);
+    mk('line', { x1: AX + CW * T + 5, y1: Y0 + 75, x2: ZX - 5, y2: Y0 + 75, class: 'c-line', 'marker-end': 'url(#l14-att-ah)' }, svg);
+    const expl = mk('text', { x: SX, y: 418, class: 'att-num' }, svg);
+    mk('text', { x: SX, y: 444, class: 'c-tick' }, svg).textContent = 'Click a row of any matrix to make that word the query.';
+
+    const mv = (M, h) => M.map(r => r[0] * h[0] + r[1] * h[1] + r[2] * h[2]);
+    const draw = () => {
+      const p = preset.value, c = parseFloat(scale.value);
+      const base = p === 'random' ? RW : EX;
+      const WQ = (p === 'zero' ? [[0, 0, 0], [0, 0, 0]] : base.WQ).map(r => r.map(x => x * c));
+      const WK = (p === 'shared' ? base.WQ : base.WK).map(r => r.map(x => x * c));
+      const WV = base.WV;
+      const Q = H.map(h => mv(WQ, h)), K = H.map(h => mv(WK, h)), V = H.map(h => mv(WV, h));
+      const div = sq.checked ? Math.sqrt(DK) : 1, masked = mask.checked;
+      const S = Q.map((q, i) => K.map((k, j) => (masked && j > i) ? -Infinity : (q[0] * k[0] + q[1] * k[1]) / div));
+      const A = S.map(row => { const m = Math.max(...row); const e = row.map(s => s === -Infinity ? 0 : Math.exp(s - m)); const t = e.reduce((a, b) => a + b, 0); return e.map(x => x / t); });
+      const Z = A.map(a => [0, 1].map(d => a.reduce((s, w, j) => s + w * V[j][d], 0)));
+      const qi = parseInt(qSel.value, 10);
+
+      words.forEach((_, r) => { tq[r].textContent = vec(Q[r]); tk[r].textContent = vec(K[r]); tv[r].textContent = vec(V[r]); });
+      [WQ, WK, WV].forEach((M, b) => M.forEach((row, r) => row.forEach((x, cc) => { wT[b][r][cc].textContent = fmt(x); })));
+      hl.setAttribute('y', rowY(qi) - 15);
+      rich(sTitle, 'Scores q_i·k_j' + (sq.checked ? ' / √d_k' : ' (not scaled)') + (masked ? ', masked' : ''));
+      S.forEach((row, i) => row.forEach((s, j) => {
+        const off = s === -Infinity;
+        cS[i][j].b.setAttribute('class', off ? 'att-off' : 'att-cell');
+        cS[i][j].t.setAttribute('class', off ? 'att-num dim' : 'att-num');
+        cS[i][j].t.textContent = off ? '−∞' : fmt(s);
+        const a = A[i][j];
+        cA[i][j].b.setAttribute('class', off ? 'att-off' : 'att-cell');
+        cA[i][j].h.setAttribute('fill-opacity', off ? 0 : (0.9 * a).toFixed(3));
+        cA[i][j].t.setAttribute('class', off ? 'att-num dim' : (0.9 * a > 0.66 ? 'att-num inv' : 'att-num'));
+        cA[i][j].t.textContent = off ? '0' : fmt(a);
+      }));
+      Z.forEach((z, i) => z.forEach((x, d) => { cZ[i][d].textContent = fmt(x); }));
+      [oS, oA, oZ].forEach(o => o.setAttribute('y', Y0 + RH * qi));
+
+      const row = A[qi]; let jm = 0; row.forEach((a, j) => { if (a > row[jm]) jm = j; });
+      outMax.textContent = fmt(row[jm]) + ' (' + words[jm] + ')';
+      outSum.textContent = fmt(row.reduce((s, a) => s + a, 0), 3);
+      outZ.textContent = vec(Z[qi]);
+      const terms = row.map((a, j) => (masked && j > qi) ? null : fmt(a) + ' v' + sub(j + 1)).filter(Boolean);
+      expl.textContent = 'z' + sub(qi + 1) + ' = ' + terms.join(' + ') + ' = ' + vec(Z[qi]);
+
+      const visible = masked ? qi + 1 : T;
+      let msg = '';
+      if (p === 'zero') msg = 'Zero query matrix: every score is 0, so each of the ' + visible + ' visible words gets weight 1/' + visible + ' and every output is a plain average of their values.';
+      else if (masked) msg = 'Causal mask: "' + words[qi] + '" can attend only to ' + words.slice(0, qi + 1).join(', ') + '. The −∞ scores get weight exactly 0, and the rest still sum to 1.';
+      else if (p === 'shared') msg = 'With one matrix for queries and keys, the score matrix is symmetric (score i→j equals j→i). The weights are not, because each row is normalized on its own.';
+      if (p !== 'zero' && visible > 1 && row[jm] > 0.95) msg += (msg ? ' ' : '') + 'Row "' + words[qi] + '" is almost one-hot: large dot products saturate the softmax, which is what the 1/√d_k scaling guards against.';
+      status.textContent = msg;
+    };
+    preset.addEventListener('change', draw);
+    el('att-new').addEventListener('click', () => { RW = { WQ: rmat(), WK: rmat(), WV: rmat() }; preset.value = 'random'; draw(); });
+    scale.addEventListener('input', () => { scaleOut.textContent = parseFloat(scale.value).toFixed(1); draw(); });
+    [sq, mask, qSel].forEach(x => x.addEventListener('change', draw));
+    rows.forEach((g, r) => g.addEventListener('click', () => { qSel.value = String(r); draw(); }));
+    draw();
+  })();
+
+  /* ---------- Sinusoidal positional encodings and their distances ---------- */
+  (() => {
+    const svg = document.getElementById('l14-pe-svg'); if (!svg) return;
+    const D = 512, NP = 50, NI = 64;
+    const P = [];
+    for (let j = 0; j < NP; j++) { const v = new Float64Array(D); for (let d = 0; d < D; d++) { const w = Math.pow(10000, -(d - (d % 2)) / D); v[d] = d % 2 ? Math.cos(j * w) : Math.sin(j * w); } P.push(v); }
+    const dist = (a, b) => { let s = 0; for (let d = 0; d < D; d++) { const t = P[a][d] - P[b][d]; s += t * t; } return Math.sqrt(s); };
+    const DM = P.map((_, a) => P.map((_, b) => dist(a, b)));
+
+    /* heat map */
+    const HX = 56, HY = 44, CW = 4, CH = 5;
+    mk('text', { x: HX, y: 20, class: 'c-title' }, svg).textContent = 'PE(j, i), first 64 of 512 dimensions';
+    [0, 16, 32, 48, 63].forEach(i => { mk('text', { x: HX + CW * i + 2, y: 38, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = i; });
+    [0, 10, 20, 30, 40, 49].forEach(j => { mk('text', { x: HX - 6, y: HY + CH * j + 5, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = j; });
+    mk('text', { x: 14, y: HY + 125, transform: `rotate(-90 14 ${HY + 125})`, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = 'position j';
+    mk('text', { x: HX + 128, y: 312, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = 'dimension i (even: sin, odd: cos)';
+    const g = mk('g', {}, svg);
+    for (let j = 0; j < NP; j++) for (let i = 0; i < NI; i++) mk('rect', { x: HX + CW * i, y: HY + CH * j, width: CW + 0.3, height: CH + 0.3, class: 'pe-cell', 'fill-opacity': ((P[j][i] + 1) / 2).toFixed(3) }, g);
+    mk('rect', { x: HX, y: HY, width: CW * NI, height: CH * NP, class: 'pe-frame' }, svg);
+    const sel = mk('rect', { x: HX - 2, width: CW * NI + 4, height: CH + 2, rx: 1.5, class: 'c-hl' }, svg);
+
+    /* distance plot */
+    const X0 = 392, X1 = 740, Y0 = 44, Y1 = 294;
+    const sx = k => X0 + k * (X1 - X0) / (NP - 1), sy = d => Y1 - d * (Y1 - Y0) / 16;
+    rich(mk('text', { x: X0, y: 20, class: 'c-title' }, svg), 'Distance ‖p_j − p_k‖ over all 512 dimensions');
+    const gg = mk('g', { class: 'c-grid' }, svg);
+    [4, 8, 12, 16].forEach(d => { mk('line', { x1: X0, x2: X1, y1: sy(d), y2: sy(d) }, gg); });
+    [0, 4, 8, 12, 16].forEach(d => { mk('text', { x: X0 - 6, y: sy(d) + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = d; });
+    [0, 10, 20, 30, 40, 49].forEach(k => { mk('text', { x: sx(k), y: Y1 + 16, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = k; });
+    mk('line', { x1: X0, x2: X1, y1: Y1, y2: Y1, class: 'c-axis' }, svg);
+    mk('line', { x1: X0, x2: X0, y1: Y0, y2: Y1, class: 'c-axis' }, svg);
+    mk('text', { x: X1, y: 328, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = 'position k';
+    const mark = mk('line', { y1: Y0, y2: Y1, class: 'pe-mark' }, svg);
+    const oh = mk('path', { class: 'pe-onehot' }, svg);
+    const line = mk('path', { class: 'pe-line' }, svg);
+    const dot = mk('circle', { r: 4.5, class: 'c-pt-hi' }, svg);
+    const lblS = mk('text', { class: 'c-lbl' }, svg); lblS.textContent = 'sinusoidal';
+    const lblO = mk('text', { class: 'c-note' }, svg); lblO.textContent = 'one-hot: √2 for every k ≠ j';
+
+    const slider = document.getElementById('pe-j'), out = document.getElementById('pe-j-out'), ohBox = document.getElementById('pe-onehot'), play = document.getElementById('pe-play');
+    const status = document.getElementById('pe-status');
+    const at = (j, gap) => (j + gap < NP ? DM[j][j + gap] : DM[j][j - gap]);
+    const update = () => {
+      const j = parseInt(slider.value, 10);
+      out.textContent = j;
+      sel.setAttribute('y', HY + CH * j - 1);
+      mark.setAttribute('x1', sx(j)); mark.setAttribute('x2', sx(j));
+      line.setAttribute('d', DM[j].map((d, k) => (k ? 'L' : 'M') + sx(k).toFixed(1) + ' ' + sy(d).toFixed(1)).join(' '));
+      oh.setAttribute('d', DM[j].map((_, k) => (k ? 'L' : 'M') + sx(k).toFixed(1) + ' ' + sy(k === j ? 0 : Math.SQRT2).toFixed(1)).join(' '));
+      dot.setAttribute('cx', sx(j)); dot.setAttribute('cy', sy(0));
+      const right = j < NP / 2;
+      lblS.setAttribute('x', right ? X1 - 4 : X0 + 6); lblS.setAttribute('text-anchor', right ? 'end' : 'start'); lblS.setAttribute('y', sy(DM[j][right ? NP - 1 : 0]) + 18);
+      lblO.setAttribute('x', right ? X1 - 4 : X0 + 6); lblO.setAttribute('text-anchor', right ? 'end' : 'start'); lblO.setAttribute('y', sy(Math.SQRT2) - 8);
+      const showOH = ohBox.checked; oh.style.display = showOH ? '' : 'none'; lblO.style.display = showOH ? '' : 'none';
+      document.getElementById('pe-vec').textContent = '[' + [0, 1, 2, 3].map(d => fmt(P[j][d])).join(', ') + ']';
+      document.getElementById('pe-d1').textContent = fmt(at(j, 1));
+      document.getElementById('pe-d5').textContent = fmt(at(j, 5));
+      document.getElementById('pe-d20').textContent = fmt(at(j, 20));
+      status.textContent = j === 0
+        ? 'p₀ = [0, 1, 0, 1, …]: at position 0 every sine is 0 and every cosine is 1.'
+        : 'Same distances for every j: the distance depends only on |j − k|, so the curve is symmetric about k = ' + j + ' and rises away from it.';
+    };
+    let timer = null;
+    const stop = () => { clearInterval(timer); timer = null; play.textContent = 'Sweep positions'; };
+    play.addEventListener('click', () => {
+      if (timer) { stop(); return; }
+      if (reduce) { slider.value = String((parseInt(slider.value, 10) + 10) % NP); update(); return; }
+      play.textContent = 'Stop';
+      timer = setInterval(() => { const j = (parseInt(slider.value, 10) + 1) % NP; slider.value = String(j); update(); if (j === NP - 1) stop(); }, 90);
+    });
+    slider.addEventListener('input', () => { if (timer) stop(); update(); });
+    ohBox.addEventListener('change', update);
+    update();
+  })();
+})();
+</script>
+</body>
+</html>
