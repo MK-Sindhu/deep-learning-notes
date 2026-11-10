@@ -1,0 +1,1159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lecture 8 · Convolutional neural networks · DL Notes</title>
+<meta name="description" content="CS6910 Deep Learning (IIT Madras) notes, Lecture 8: the convolution operation, output sizes with stride and padding, sparse connectivity, weight sharing and pooling, and the LeNet, AlexNet, ZFNet, VGGNet, GoogLeNet and ResNet architectures.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<style>
+.l08-nw td:first-child { white-space: nowrap; }
+.controls .grp { display: inline-flex; align-items: center; gap: 10px; }
+.controls .grp input[type="range"] { width: 120px; }
+.controls .grp output { min-width: 2ch; }
+.controls select { font: 500 14px/1.3 var(--font-head); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 8px; }
+.dg .l08-side { fill: var(--paper); stroke: var(--ink-2); stroke-width: 1.2; }
+.dg .l08-bar { fill: var(--accent); }
+.dg .l08-bar-old { fill: var(--muted); fill-opacity: .35; }
+.cv-cell { fill: var(--surface); stroke: var(--rule); stroke-width: 1; }
+.cv-pad { fill: var(--paper); stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.cv-empty { fill: var(--surface); stroke: var(--rule); stroke-width: 1; stroke-dasharray: 2 3; }
+.cv-pos { fill: var(--accent); }
+.cv-neg { fill: var(--ink-2); }
+.cv-win { fill: none; stroke: var(--accent); stroke-width: 3; }
+.cv-cur { fill: none; stroke: var(--accent); stroke-width: 3; }
+.cv-hit { fill: var(--surface); fill-opacity: 0; cursor: pointer; }
+.cv-v { fill: var(--ink); font: 500 12px var(--font-mono); }
+.cv-vp { fill: var(--muted); font: 500 12px var(--font-mono); }
+.cv-title { fill: var(--ink-2); font: 600 12.5px var(--font-head); }
+.cv-op { fill: var(--ink-2); font: 600 22px var(--font-head); }
+</style>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <!-- PARTNAV:START --><nav class="partnav" aria-label="Lectures"><a href="index.html">DL Notes</a><span class="sep">/</span><span>Lecture 8</span><span class="sep">·</span><a href="lecture-09.html">Lecture 9 →</a></nav><!-- PARTNAV:END -->
+    <div class="eyebrow">CS6910 · Deep Learning · IIT Madras</div>
+    <h1>Convolutional neural networks: from the convolution operation to ResNet</h1>
+    <p class="lede">A convolution slides a small filter over its input, and a convolutional network learns those filters by backpropagation instead of hand-coding them. This lecture works out layer sizes and parameter counts from first principles, then follows the ImageNet architectures from LeNet and AlexNet through ZFNet and VGGNet to GoogLeNet and ResNet.</p>
+    <div class="meta">
+      <span><b>Lecture 8</b></span>
+      <span>Instructor <b>Prof. Mitesh M. Khapra</b></span>
+      <span>About <b>115 min</b> of video</span>
+      <span><b>8</b> modules</span>
+    </div>
+    <div class="watch">
+      <a class="btn solid" href="https://www.cse.iitm.ac.in/~miteshk/CS7015/Slides/Teaching/pdf/Lecture11.pdf" target="_blank" rel="noopener">Slides</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=Dsq-fSb_lj4" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 2:54</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=yw8xwS15Pf4" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 18:29</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=7eiYBFladus" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 12:26</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=PmZp5VtMwLE" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 16:57</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=9eZN8U-68eI" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 17:39</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=53ysOFHCaqI" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 20:48</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=mHhhXlEB32c" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 2:57</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=UukbB6q6CTo" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 22:50</a>
+    </div>
+  </div>
+</header>
+
+<div class="page gutter">
+  <nav class="toc" aria-label="Contents">
+    <div>
+      <h4>Module 11.1 · Convolution</h4>
+      <ul>
+        <li><a href="#conv-1d">A weighted average in 1-D</a></li>
+        <li><a href="#conv-2d">Convolution in 2-D</a></li>
+        <li><a href="#feature-maps">Feature maps and volumes</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 11.2 · Sizes</h4>
+      <ul>
+        <li><a href="#output-size">Filter, padding, stride</a></li>
+        <li><a href="#size-formula">The size formula</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 11.3 · CNNs</h4>
+      <ul>
+        <li><a href="#learned-filters">Learning the filters</a></li>
+        <li><a href="#sparse">Sparse connectivity</a></li>
+        <li><a href="#sharing">Weight sharing</a></li>
+        <li><a href="#pooling">A full CNN and pooling</a></li>
+        <li><a href="#lenet">LeNet-5, layer by layer</a></li>
+        <li><a href="#training">Training a CNN</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 11.4 · ImageNet</h4>
+      <ul>
+        <li><a href="#imagenet">The ImageNet challenge</a></li>
+        <li><a href="#alexnet">AlexNet</a></li>
+        <li><a href="#zfnet">ZFNet</a></li>
+        <li><a href="#vggnet">VGGNet</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 11.5 · GoogLeNet, ResNet</h4>
+      <ul>
+        <li><a href="#inception">The Inception module</a></li>
+        <li><a href="#googlenet">GoogLeNet</a></li>
+        <li><a href="#resnet">ResNet</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Revision</h4>
+      <ul>
+        <li><a href="#terms">Key terms</a></li>
+        <li><a href="#test">Test yourself</a></li>
+        <li><a href="index.html">All lectures</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="glance" id="glance">
+      <h2>At a glance</h2>
+      <ul>
+        <li><dfn>Convolution</dfn> slides a small array of weights, the <b>filter</b>, over the input and replaces each position by a weighted sum of its neighbourhood. One filter over an image gives one <b>feature map</b>; \(K\) filters give \(K\) maps.</li>
+        <li>A filter always spans the full depth of its input, so it moves only across width and height. For a \(W_1 \times H_1 \times D_1\) input, \(K\) filters of size \(F \times F\), stride \(S\) and padding \(P\): \(W_2 = (W_1 - F + 2P)/S + 1\), likewise \(H_2\), and \(D_2 = K\).</li>
+        <li>A <b>CNN</b> learns its filters with backpropagation instead of using hand-made edge detectors or SIFT/HOG features. <b>Sparse connectivity</b> and <b>weight sharing</b> keep it small: LeNet's first layer has 150 weights where a dense layer between the same sizes would need about 800,000. <b>Pooling</b> shrinks each map and has no parameters.</li>
+        <li>On ImageNet the error fell from 25.8% (2011, hand-crafted features) to 16.4% with AlexNet (8 layers, 27.55M parameters), then 11.7% (ZFNet), 7.3% (VGGNet) and 6.7% (GoogLeNet). In AlexNet and VGGNet most parameters sit in the fully connected layers.</li>
+        <li><b>GoogLeNet</b> runs 1×1, 3×3 and 5×5 convolutions and max pooling in parallel (the Inception module), cuts depth with 1×1 convolutions, and replaces the big fully connected layer by average pooling: 12 times fewer parameters than AlexNet. <b>ResNet</b> adds identity skip connections, \(H(\mathbf{x}) = F(\mathbf{x}) + \mathbf{x}\), which let a 152-layer network train and reach 3.57%.</li>
+      </ul>
+    </div>
+
+    <!-- ============ MODULE 11.1 ============ -->
+    <section id="conv-1d">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=Dsq-fSb_lj4&amp;t=61s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 1:01 lecture roadmap</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yw8xwS15Pf4&amp;t=45s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 0:45</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yw8xwS15Pf4&amp;t=244s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 4:04 a 7-entry filter</a>
+        </div>
+        <h2>Convolution as a weighted average in 1-D</h2>
+      </div>
+      <p>The short M1 video sets the plan: the convolution operation, pooling, full convolutional networks and their parameter counts, and the standard architectures from LeNet to ResNet. The lecture itself starts with a tracking problem. A laser sensor reports the position of an aeroplane at discrete time steps, say every few seconds on a flight from Chennai to Delhi. The sensor is noisy, so one reading is not trusted on its own. A better estimate of the position at time \(t\) averages several past readings, and because the plane keeps moving, recent readings should count for more than old ones. That is a weighted average:</p>
+      <div class="eq">\[ s_t = \sum_{a=0}^{\infty} x_{t-a}\, w_{-a} = (\mathbf{x} * \mathbf{w})_t \]</div>
+      <p>\(\mathbf{x}\) is the input, the array of weights \(\mathbf{w}\) is the <dfn>filter</dfn> (also called the kernel), and the operation is <dfn>convolution</dfn>, written \(\mathbf{x} * \mathbf{w}\). Each weight is indexed by how far back it looks: \(w_0\) multiplies the current reading, \(w_{-1}\) the previous one, and so on.</p>
+      <p>Readings from long ago tell us little about where the plane is now, so in practice the sum runs over a small window. Using the last 7 readings, \(a = 0, \dots, 6\), the filter has 7 entries. To get the next estimate, slide the filter one step to the right and repeat the multiply-and-add.</p>
+      <div class="eq">\[ s_t = \sum_{a=0}^{6} x_{t-a}\, w_{-a}, \qquad s_6 = x_6 w_0 + x_5 w_{-1} + x_4 w_{-2} + x_3 w_{-3} + x_2 w_{-4} + x_1 w_{-5} + x_0 w_{-6} \]</div>
+      <div class="tbl-wrap">
+        <table class="mini l08-nw">
+          <thead><tr><th>t</th><th class="num">0</th><th class="num">1</th><th class="num">2</th><th class="num">3</th><th class="num">4</th><th class="num">5</th><th class="num">6</th><th class="num">7</th><th class="num">8</th><th class="num">9</th><th class="num">10</th><th class="num">11</th></tr></thead>
+          <tbody>
+            <tr><td>Reading \(x_t\)</td><td class="num">1.00</td><td class="num">1.10</td><td class="num">1.20</td><td class="num">1.40</td><td class="num">1.70</td><td class="num">1.80</td><td class="num">1.90</td><td class="num">2.10</td><td class="num">2.20</td><td class="num">2.40</td><td class="num">2.50</td><td class="num">2.70</td></tr>
+            <tr><td>Filter for \(s_6\)</td><td class="num">0.01</td><td class="num">0.01</td><td class="num">0.02</td><td class="num">0.02</td><td class="num">0.04</td><td class="num">0.4</td><td class="num"><b>0.5</b></td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>\(s_t\) on the slide</td><td></td><td></td><td></td><td></td><td></td><td></td><td class="num">1.80</td><td class="num">1.96</td><td class="num">2.11</td><td class="num">2.16</td><td class="num">2.28</td><td class="num">2.42</td></tr>
+            <tr><td>\(s_t\) recomputed</td><td></td><td></td><td></td><td></td><td></td><td></td><td class="num">1.81</td><td class="num">1.97</td><td class="num">2.11</td><td class="num">2.27</td><td class="num">2.41</td><td class="num">2.57</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The filter, from \(w_{-6}\) to \(w_0\), is 0.01, 0.01, 0.02, 0.02, 0.04, 0.4, 0.5. Its entries add up to 1, so each \(s_t\) is a true weighted average, and 90% of the weight is on the two latest readings. For \(s_6\):</p>
+      <div class="eq">\[ \begin{aligned} s_6 &= 1.90(0.5) + 1.80(0.4) + 1.70(0.04) + 1.40(0.02) + 1.20(0.02) + 1.10(0.01) + 1.00(0.01) \\ &= 0.95 + 0.72 + 0.068 + 0.028 + 0.024 + 0.011 + 0.010 = 1.811 \end{aligned} \]</div>
+      <p class="note">Estimates start at \(t = 6\), the first step with 7 readings behind it. The last row recomputes every \(s_t\) from the slide's \(\mathbf{w}\) and \(\mathbf{x}\): the first three match the slide to within 0.01, and the slide's last three are a little lower than these weights give. The idea is unaffected.</p>
+    </section>
+
+    <section id="conv-2d">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=yw8xwS15Pf4&amp;t=353s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 5:53</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yw8xwS15Pf4&amp;t=521s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 8:41 succeeding neighbours</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yw8xwS15Pf4&amp;t=558s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 9:18 toy example</a>
+        </div>
+        <h2>Convolution in two dimensions</h2>
+      </div>
+      <p>The same story works for a camera. An image is a 2-D input, and if we are unsure of a pixel's value we can re-estimate it from a weighted average of its neighbourhood. The filter is now a 2-D array of size \(m \times n\), one weight per neighbour (in practice square, \(m = n\)). The textbook formula looks at the neighbours before pixel \((i, j)\):</p>
+      <div class="eq">\[ S_{ij} = (I * K)_{ij} = \sum_{a=0}^{m-1} \sum_{b=0}^{n-1} I_{i-a,\; j-b}\; K_{a,b} \]</div>
+      <p>It has \(m \times n\) terms, one per neighbour, each with its own weight from the kernel matrix \(K\). For pixel \((4, 4)\) the term with \(a = b = 1\) uses \(I_{3,3}\). Nothing forces us to look backwards. Different packages use different conventions, and the most common one looks at the neighbours after the pixel instead:</p>
+      <div class="eq">\[ S_{ij} = \sum_{a=0}^{m-1} \sum_{b=0}^{n-1} I_{i+a,\; j+b}\; K_{a,b} \]</div>
+      <p>A toy example makes this concrete. Place a \(2 \times 2\) kernel on the top-left corner of a \(3 \times 4\) input, multiply entry by entry and add. Then slide it one column right and repeat, and so on along each row:</p>
+      <div class="eq">\[ \begin{bmatrix} a & b & c & d \\ e & f & g & h \\ i & j & k & \ell \end{bmatrix} * \begin{bmatrix} w & x \\ y & z \end{bmatrix} = \begin{bmatrix} aw + bx + ey + fz & bw + cx + fy + gz & cw + dx + gy + hz \\ ew + fx + iy + jz & fw + gx + jy + kz & gw + hx + ky + \ell z \end{bmatrix} \]</div>
+      <p>The output (\(2 \times 3\)) is smaller than the input (\(3 \times 4\)). Module 11.2 explains exactly by how much. For the rest of the lecture the kernel is <b>centred on the pixel of interest</b>, so it looks at neighbours on both sides <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=yw8xwS15Pf4&amp;t=630s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 10:30</a>:</p>
+      <div class="eq">\[ S_{ij} = (I * K)_{ij} = \sum_{a=-\lfloor m/2 \rfloor}^{\lfloor m/2 \rfloor} \;\; \sum_{b=-\lfloor n/2 \rfloor}^{\lfloor n/2 \rfloor} I_{i-a,\; j-b}\; K_{\lfloor m/2 \rfloor + a,\; \lfloor n/2 \rfloor + b} \]</div>
+      <p class="note">Standard name (not in the lecture): the "succeeding neighbours" version, with no flipping of the kernel, is what deep learning libraries actually compute. Mathematicians call it cross-correlation. Since the kernel is learned, the flip makes no difference to what a network can represent.</p>
+    </section>
+
+    <section id="feature-maps">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=yw8xwS15Pf4&amp;t=630s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 10:30 blur, sharpen, edges</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yw8xwS15Pf4&amp;t=801s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 13:21 feature maps</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yw8xwS15Pf4&amp;t=929s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 15:29 3-D filters</a>
+        </div>
+        <h2>Filters on images, feature maps and volumes</h2>
+      </div>
+      <p>Three \(3 \times 3\) kernels show what a convolution can do to an image:</p>
+      <div class="eq">\[ \underbrace{\begin{bmatrix} 1 & 1 & 1 \\ 1 & 1 & 1 \\ 1 & 1 & 1 \end{bmatrix}}_{\text{blurs}} \qquad \underbrace{\begin{bmatrix} 0 & -1 & 0 \\ -1 & 5 & -1 \\ 0 & -1 & 0 \end{bmatrix}}_{\text{sharpens}} \qquad \underbrace{\begin{bmatrix} 1 & 1 & 1 \\ 1 & -8 & 1 \\ 1 & 1 & 1 \end{bmatrix}}_{\text{detects edges}} \]</div>
+      <ul>
+        <li><b>Blur.</b> Every pixel is replaced by (a multiple of) the average of its \(3 \times 3\) neighbourhood, so sharp transitions are smoothed away.</li>
+        <li><b>Sharpen.</b> Take 5 times the pixel and subtract its four neighbours. Where the neighbours are similar they cancel and the pixel stands out more.</li>
+        <li><b>Edge detector.</b> Add the 8 neighbours and subtract 8 times the pixel. If all neighbours equal the pixel the result is 0; it is nonzero only where something changes, which is along the boundaries of objects.</li>
+      </ul>
+      <p>The blur and sharpen buttons of photo-editing software apply exactly such convolutions across the whole image, and many other visual effects come from some convolution.</p>
+      <p>Sliding a kernel over the image gives one output value per placement. The resulting array is called a <dfn>feature map</dfn>, because each output summarizes some feature of its neighbourhood. In the edge-detector map, a dark (zero) pixel records the feature "this pixel does not lie on a boundary". The weights need not form an average at all. With several different kernels (one blurring, one sharpening, one detecting edges, …) we get several feature maps of the same input.</p>
+      <h3>Three-dimensional inputs</h3>
+      <p>A 1-D filter slides over a 1-D input and a 2-D filter over a 2-D input. A colour image is 3-D: three channels (R, G, B) of size \(m \times n\). The filter then becomes a box with a width, a height and a depth, a <dfn>volume</dfn>. Throughout this lecture its depth equals the depth of the input. So the filter can slide along the width and the height but not along the depth, and each placement gives one number. In effect it is a 2-D convolution on a 3-D input, and the output of one filter is 2-D. \(K\) filters give \(K\) such 2-D maps.</p>
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 700 280" role="img" aria-label="An input volume of width W1, height H1 and depth D1 with a filter box of size F by F that spans the full depth. One placement of the filter gives one cell of a two-dimensional feature map of size W2 by H2. Stacking the maps from K filters gives an output volume of depth D2 equal to K.">
+            <defs><marker id="l08-vol-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <!-- input volume -->
+            <polygon class="l08-side" points="40,96 170,96 200,66 70,66"/>
+            <polygon class="l08-side" points="170,96 200,66 200,196 170,226"/>
+            <rect class="d-box" x="40" y="96" width="130" height="130"/>
+            <line class="d-ln" x1="50" y1="86" x2="180" y2="86" style="opacity:.5"/>
+            <line class="d-ln" x1="60" y1="76" x2="190" y2="76" style="opacity:.5"/>
+            <line class="d-ln" x1="180" y1="86" x2="180" y2="216" style="opacity:.5"/>
+            <line class="d-ln" x1="190" y1="76" x2="190" y2="206" style="opacity:.5"/>
+            <!-- filter box on the input -->
+            <polygon class="d-box-acc" points="52,108 92,108 122,78 82,78"/>
+            <polygon class="d-box-acc" points="92,108 122,78 122,118 92,148"/>
+            <rect class="d-box-acc" x="52" y="108" width="40" height="40"/>
+            <line class="d-ln" x1="102" y1="50" x2="102" y2="76"/>
+            <text class="d-s" x="60" y="44">filter F × F × D₁ (full depth)</text>
+            <text class="d-al" x="105" y="244" text-anchor="middle">W₁</text>
+            <text class="d-al" x="32" y="166" text-anchor="end">H₁</text>
+            <text class="d-al" x="206" y="78">D₁</text>
+            <text class="d-s" x="40" y="266">input, e.g. RGB with D₁ = 3</text>
+            <!-- one feature map -->
+            <line class="d-ln d-dash" x1="92" y1="108" x2="304" y2="122"/>
+            <line class="d-ln d-dash" x1="92" y1="148" x2="304" y2="136"/>
+            <rect class="d-box" x="300" y="118" width="90" height="90"/>
+            <rect x="304" y="122" width="14" height="14" style="fill: var(--mark); stroke: var(--ink); stroke-width: 1.2"/>
+            <text class="d-s" x="345" y="108" text-anchor="middle">one filter → one map</text>
+            <text class="d-al" x="345" y="226" text-anchor="middle">W₂</text>
+            <text class="d-al" x="292" y="168" text-anchor="end">H₂</text>
+            <text class="d-s" x="300" y="266">sum of F·F·D₁ products per cell</text>
+            <!-- K filters -->
+            <line class="d-ln" x1="402" y1="163" x2="456" y2="163" marker-end="url(#l08-vol-ah)"/>
+            <text class="d-s" x="429" y="153" text-anchor="middle">K filters</text>
+            <!-- output volume -->
+            <polygon class="l08-side" points="490,118 580,118 628,70 538,70"/>
+            <polygon class="l08-side" points="580,118 628,70 628,160 580,208"/>
+            <rect class="d-box-acc" x="490" y="118" width="90" height="90"/>
+            <line class="d-ln" x1="502" y1="106" x2="592" y2="106" style="opacity:.6"/>
+            <line class="d-ln" x1="514" y1="94" x2="604" y2="94" style="opacity:.6"/>
+            <line class="d-ln" x1="526" y1="82" x2="616" y2="82" style="opacity:.6"/>
+            <line class="d-ln" x1="592" y1="106" x2="592" y2="196" style="opacity:.6"/>
+            <line class="d-ln" x1="604" y1="94" x2="604" y2="184" style="opacity:.6"/>
+            <line class="d-ln" x1="616" y1="82" x2="616" y2="172" style="opacity:.6"/>
+            <text class="d-al" x="535" y="226" text-anchor="middle">W₂</text>
+            <text class="d-al" x="482" y="168" text-anchor="end">H₂</text>
+            <text class="d-al" x="636" y="100">D₂ = K</text>
+            <text class="d-s" x="490" y="266">K maps stacked: the output volume</text>
+          </svg>
+        </div>
+        <figcaption><b>A volume filter on a volume input.</b> The filter's depth equals the input's, so it moves only across width and height and each placement produces one number. One filter gives one 2-D feature map; \(K\) filters give \(K\) maps, which stack into an output volume of depth \(K\).</figcaption>
+      </figure>
+      <p class="note">If the filter were shallower than the input (depth 2 on a depth-3 input, say), it would also have to slide along the depth and the output would be 3-D. The lecture mentions this only to set it aside; every CNN here uses full-depth filters.</p>
+    </section>
+
+    <!-- ============ MODULE 11.2 ============ -->
+    <section id="output-size">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=7eiYBFladus&amp;t=13s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 0:13</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=7eiYBFladus&amp;t=147s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 2:27 the shrinking output</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=7eiYBFladus&amp;t=305s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 5:05 padding</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=7eiYBFladus&amp;t=478s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 7:58 stride</a>
+        </div>
+        <h2>Output size: filter size, padding and stride</h2>
+      </div>
+      <p>The sizes of inputs, filters and outputs decide the shapes of the matrices in the network, how many parameters it has and how much memory it needs. Module 11.2 makes them precise. The quantities are:</p>
+      <ul>
+        <li>the input's width \(W_1\), height \(H_1\) and depth \(D_1\) (3 for an RGB image);</li>
+        <li>the <dfn>stride</dfn> \(S\), defined below;</li>
+        <li>the number of filters \(K\);</li>
+        <li>the <dfn>spatial extent</dfn> \(F\) of each filter, always square, so \(F \times F\), with depth equal to \(D_1\);</li>
+        <li>the output volume \(W_2 \times H_2 \times D_2\), which is what we want to compute.</li>
+      </ul>
+      <h3>No padding</h3>
+      <p>Take a \(7 \times 7\) input and a \(3 \times 3\) filter centred on each pixel in turn. On a border pixel the filter would stick out of the image, where the values are undefined, so the filter cannot be placed there. The output loses one row and one column on each side and is \(5 \times 5\). A \(5 \times 5\) filter cannot be placed within 2 pixels of the border, so the output is \(3 \times 3\), smaller still. In general a filter of size \(F\) loses \(\lfloor F/2 \rfloor\) columns on each side, \(F - 1\) in total:</p>
+      <div class="eq">\[ W_2 = W_1 - F + 1, \qquad H_2 = H_1 - F + 1 \]</div>
+      <h3>Padding</h3>
+      <p>To keep the output as large as the input, add a border of zeros around the input. This is <dfn>padding</dfn>: \(P = 1\) adds one row of zeros at the top and bottom and one column at the left and right, which is exactly the strip a \(3 \times 3\) filter could not reach. The filter can now be placed on every original pixel. Each unit of padding adds 2 to the width (one column on each side):</p>
+      <div class="eq">\[ W_2 = W_1 - F + 2P + 1, \qquad H_2 = H_1 - F + 2P + 1 \]</div>
+      <p>A \(5 \times 5\) filter needs \(P = 2\) to keep the size: \(W_1 - 5 + 4 + 1 = W_1\).</p>
+      <h3>Stride</h3>
+      <p>The <dfn>stride</dfn> is the interval at which the filter is applied. So far the filter moved one pixel at a time (\(S = 1\)). With \(S = 2\) it skips every second position, which roughly halves the output's width and height; \(S = 4\) cuts them to about a quarter.</p>
+    </section>
+
+    <section id="size-formula">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=7eiYBFladus&amp;t=551s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 9:11 divide by S</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=7eiYBFladus&amp;t=625s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 10:25 depth and exercises</a>
+        </div>
+        <h2>The size formula, and two exercises</h2>
+      </div>
+      <p>Dividing by the stride gives the final formula for width and height. The depth is simpler: each filter produces one 2-D map, so \(K\) filters produce a volume of depth \(K\).</p>
+      <div class="result">
+        <span class="lbl">Output volume of a convolution layer</span>
+        \[ W_2 = \frac{W_1 - F + 2P}{S} + 1, \qquad H_2 = \frac{H_1 - F + 2P}{S} + 1, \qquad D_2 = K \]
+        <p>Input \(W_1 \times H_1 \times D_1\); \(K\) filters, each \(F \times F \times D_1\); stride \(S\); zero padding \(P\) on every side.</p>
+      </div>
+      <p class="note">The lecture notes that when \(W_1 - F + 2P\) is not a multiple of \(S\) the exact count involves a floor, and leaves the detail as an exercise. The usual convention (not stated in the lecture) is \(W_2 = \lfloor (W_1 - F + 2P)/S \rfloor + 1\): a last step that would cross the border is dropped.</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Exercise</th><th>Input</th><th>Filters</th><th>Output</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>\(227 \times 227 \times 3\)</td><td>\(K = 96\), \(F = 11\), \(S = 4\), \(P = 0\)</td><td>\(W_2 = H_2 = \frac{227 - 11}{4} + 1 = 55\), \(D_2 = 96\): <b>55 × 55 × 96</b></td></tr>
+            <tr><td>2</td><td>\(32 \times 32 \times 1\)</td><td>\(K = 6\), \(F = 5\), \(S = 1\), \(P = 0\)</td><td>\(W_2 = H_2 = \frac{32 - 5}{1} + 1 = 28\), \(D_2 = 6\): <b>28 × 28 × 6</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Neither exercise is random. The first is the first convolution layer of AlexNet and the second the first layer of LeNet-5; both networks come later in this lecture.</p>
+
+      <figure id="conv-fig">
+        <div class="controls">
+          <span class="grp"><label for="cv-filter">Filter</label>
+          <select id="cv-filter">
+            <option value="blur">3×3 blur (all ones)</option>
+            <option value="sharpen">3×3 sharpen</option>
+            <option value="edge" selected>3×3 edge detector</option>
+            <option value="box5">5×5 all ones</option>
+          </select></span>
+          <span class="grp"><label for="cv-stride">Stride S</label>
+          <input type="range" id="cv-stride" min="1" max="3" step="1" value="1">
+          <output id="cv-stride-out" for="cv-stride">1</output></span>
+          <span class="grp"><label for="cv-pad">Padding P</label>
+          <input type="range" id="cv-pad" min="0" max="2" step="1" value="0">
+          <output id="cv-pad-out" for="cv-pad">0</output></span>
+          <button class="btn" id="cv-step" type="button">Next position</button>
+          <button class="btn" id="cv-play" type="button">Play</button>
+          <button class="btn" id="cv-reset" type="button">Reset</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">Output size W₂ × H₂</span><span class="v mine" id="cv-size">–</span></div>
+          <div><span class="k">(W₁ − F + 2P)/S + 1</span><span class="v" id="cv-formula">–</span></div>
+          <div><span class="k">Current output</span><span class="v" id="cv-cur">–</span></div>
+          <div><span class="k">Computed</span><span class="v" id="cv-done">–</span></div>
+        </div>
+        <div class="status" id="cv-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="l08-cv-svg" viewBox="0 0 860 294" role="img" aria-label="A 7 by 7 input grid, with optional rings of zero padding, a kernel grid, and the output feature map. The kernel window is outlined on the input and the output cell it produces is outlined on the output; computed outputs are shaded by value."></svg></div>
+        <figcaption><b>Sliding a filter over a 7 × 7 input.</b> The input holds a bright square (6) and a dimmer band (2) on a dark background (0); dashed cells are zero padding. Each step places the kernel at the next position, multiplies entry by entry and adds, filling one output cell; click any output cell to jump to it. Change the stride and padding and the output size follows the formula above. The edge detector gives 0 on flat regions and inside the square, and large values along its boundary (with padding, the zeros outside the image also create edges at the border).</figcaption>
+      </figure>
+    </section>
+
+    <!-- ============ MODULE 11.3 ============ -->
+    <section id="learned-filters">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=PmZp5VtMwLE&amp;t=49s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 0:49</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=PmZp5VtMwLE&amp;t=177s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 2:57 SIFT and HOG</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=PmZp5VtMwLE&amp;t=326s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 5:26 learn the kernels</a>
+        </div>
+        <h2>From hand-crafted features to learned filters</h2>
+      </div>
+      <p>What does convolution have to do with neural networks? The lecture answers through image classification: assign an image to one of a few classes, here car, bus, monument and flower. There are three classical ways to set it up.</p>
+      <ol>
+        <li><b>Raw pixels.</b> Flatten a \(20 \times 20\) image into a 400-dimensional vector and train any multi-class classifier on it.</li>
+        <li><b>A hand-chosen filter.</b> For these classes the shape of the object matters, while the sky, the lawn and the colour of the car do not. Running an edge detector first keeps the outlines and discards the rest, giving a more refined representation. The kernel was hand-coded from domain knowledge.</li>
+        <li><b>Engineered features.</b> Before 2012 the computer vision community designed ever better features. The most popular were SIFT and HOG, which describe how pixel gradients change across the image. Much work showed that they worked well on many image tasks.</li>
+      </ol>
+      <p>In all three the feature extraction is static and deterministic. Learning happens only in the classifier on top, which is like training only the output (softmax) layer of a feedforward network. This is the machine learning recipe: engineer features, then learn a classifier.</p>
+      <p>An edge detector is just a small matrix, and a network is full of matrices that we learn. So the lecture asks a sequence of questions. Can we learn a meaningful kernel instead of hand-coding it? Can we learn several kernels, giving several representations of the input? Can we stack layers of kernels, each building a more abstract representation from the one below? The answer to all three is yes. Treat the kernels as parameters, alongside the classifier's weights, and train everything end to end with backpropagation on the classification loss (cross-entropy for this multi-class problem). Such a network is a <dfn>convolutional neural network</dfn> (CNN). In the lecture's framing, this is where deep learning parts from classical machine learning: the representation is learned, not hand-crafted.</p>
+    </section>
+
+    <section id="sparse">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=PmZp5VtMwLE&amp;t=549s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 9:09</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=PmZp5VtMwLE&amp;t=686s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 11:26 sparse connections</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=PmZp5VtMwLE&amp;t=758s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 12:38 is information lost?</a>
+        </div>
+        <h2>Sparse connectivity</h2>
+      </div>
+      <p>How is a CNN different from a regular feedforward network? Take digit recognition (10 classes) on a tiny \(4 \times 4\) image. A feedforward network flattens it into 16 inputs, adds hidden layers and ends in 10 outputs. Every neuron in the first hidden layer, \(h_{11}\) for example, takes input from all 16 pixels: the connections are dense.</p>
+      <p>Now apply a \(2 \times 2\) convolution with stride 2. \(h_{11}\) is computed from pixels 1, 2, 5 and 6 only, and \(h_{12}\) from pixels 3, 4, 7 and 8. Only a few local inputs feed each output. This <dfn>sparse connectivity</dfn> uses what we know about images: the interactions between neighbouring pixels matter more than those between the top-left corner and the bottom-right corner. It also reduces the number of parameters.</p>
+      <p>Are we losing information by dropping interactions between distant pixels? Not really, because a CNN has several layers. With a window of 3 in the figure below, \(x_1\) and \(x_5\) do not meet in layer 1: no \(h\) depends on both. But \(g_3\) depends on \(h_2\), \(h_3\) and \(h_4\), which together depend on \(x_1, \dots, x_5\). So the two pixels interact one layer up. Early layers capture small neighbourhoods; later layers combine neighbourhoods of neighbourhoods, and eventually all pixels interact.</p>
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 720 290" role="img" aria-label="Left: a 4 by 4 image with pixels numbered 1 to 16; a 2 by 2 window with stride 2 sends pixels 1, 2, 5, 6 to h11 and pixels 3, 4, 7, 8 to h12. Right: three rows of five nodes, x1 to x5, h1 to h5 and g1 to g5, each node connected to the three nodes below it; the paths x1 to h2 to g3 and x5 to h4 to g3 are highlighted.">
+            <text class="d-h" x="20" y="24">A 2 × 2 kernel, stride 2</text>
+            <rect x="30" y="50" width="80" height="80" style="fill: var(--accent-soft)"/>
+            <g class="d-plot">
+              <rect x="30" y="50" width="160" height="160"/>
+              <line x1="70" y1="50" x2="70" y2="210"/><line x1="110" y1="50" x2="110" y2="210"/><line x1="150" y1="50" x2="150" y2="210"/>
+              <line x1="30" y1="90" x2="190" y2="90"/><line x1="30" y1="130" x2="190" y2="130"/><line x1="30" y1="170" x2="190" y2="170"/>
+            </g>
+            <rect class="d-ln-acc" x="30" y="50" width="80" height="80" style="stroke-width:2.4"/>
+            <rect class="d-ln-acc d-dash" x="110" y="50" width="80" height="80" style="stroke-width:2"/>
+            <g class="d-s" text-anchor="middle">
+              <text x="50" y="74">1</text><text x="90" y="74">2</text><text x="130" y="74">3</text><text x="170" y="74">4</text>
+              <text x="50" y="114">5</text><text x="90" y="114">6</text><text x="130" y="114">7</text><text x="170" y="114">8</text>
+              <text x="50" y="154">9</text><text x="90" y="154">10</text><text x="130" y="154">11</text><text x="170" y="154">12</text>
+              <text x="50" y="194">13</text><text x="90" y="194">14</text><text x="130" y="194">15</text><text x="170" y="194">16</text>
+            </g>
+            <rect x="226" y="80" width="40" height="40" style="fill: var(--accent-soft)"/>
+            <rect class="d-ln-acc" x="226" y="80" width="40" height="40" style="stroke-width:2.4"/>
+            <rect class="d-ln-acc d-dash" x="266" y="80" width="40" height="40" style="stroke-width:2"/>
+            <rect class="d-plot" x="226" y="120" width="40" height="40"/><rect class="d-plot" x="266" y="120" width="40" height="40"/>
+            <g class="d-s" text-anchor="middle"><text x="246" y="104">h₁₁</text><text x="286" y="104">h₁₂</text><text x="246" y="144">h₂₁</text><text x="286" y="144">h₂₂</text></g>
+            <text class="d-al" x="266" y="72" text-anchor="middle">output</text>
+            <text class="d-s" x="20" y="240">h₁₁ uses pixels 1, 2, 5, 6; h₁₂ uses 3, 4, 7, 8.</text>
+            <text class="d-s" x="20" y="258">A dense layer would feed all 16 pixels to every h.</text>
+
+            <line class="d-rule" x1="330" y1="10" x2="330" y2="280"/>
+
+            <text class="d-h" x="350" y="24">Window of 3: interactions appear one layer up</text>
+            <g class="d-ln" style="opacity:.45">
+              <line x1="380" y1="213" x2="380" y2="167"/><line x1="380" y1="213" x2="440" y2="167"/>
+              <line x1="440" y1="213" x2="380" y2="167"/><line x1="440" y1="213" x2="440" y2="167"/><line x1="440" y1="213" x2="500" y2="167"/>
+              <line x1="500" y1="213" x2="440" y2="167"/><line x1="500" y1="213" x2="500" y2="167"/><line x1="500" y1="213" x2="560" y2="167"/>
+              <line x1="560" y1="213" x2="500" y2="167"/><line x1="560" y1="213" x2="560" y2="167"/><line x1="560" y1="213" x2="620" y2="167"/>
+              <line x1="620" y1="213" x2="560" y2="167"/><line x1="620" y1="213" x2="620" y2="167"/>
+              <line x1="380" y1="133" x2="380" y2="87"/><line x1="380" y1="133" x2="440" y2="87"/>
+              <line x1="440" y1="133" x2="380" y2="87"/><line x1="440" y1="133" x2="440" y2="87"/>
+              <line x1="500" y1="133" x2="440" y2="87"/><line x1="500" y1="133" x2="500" y2="87"/><line x1="500" y1="133" x2="560" y2="87"/>
+              <line x1="560" y1="133" x2="560" y2="87"/><line x1="560" y1="133" x2="620" y2="87"/>
+              <line x1="620" y1="133" x2="560" y2="87"/><line x1="620" y1="133" x2="620" y2="87"/>
+            </g>
+            <line class="d-ln-acc" x1="380" y1="213" x2="440" y2="167" style="stroke-width:2.4"/>
+            <line class="d-ln-acc" x1="620" y1="213" x2="560" y2="167" style="stroke-width:2.4"/>
+            <line class="d-ln-acc" x1="440" y1="133" x2="500" y2="87" style="stroke-width:2.4"/>
+            <line class="d-ln-acc" x1="560" y1="133" x2="500" y2="87" style="stroke-width:2.4"/>
+            <circle class="node" cx="380" cy="70" r="17"/><circle class="node" cx="440" cy="70" r="17"/><circle class="node-acc" cx="500" cy="70" r="17"/><circle class="node" cx="560" cy="70" r="17"/><circle class="node" cx="620" cy="70" r="17"/>
+            <circle class="node" cx="380" cy="150" r="17"/><circle class="node-acc" cx="440" cy="150" r="17"/><circle class="node" cx="500" cy="150" r="17"/><circle class="node-acc" cx="560" cy="150" r="17"/><circle class="node" cx="620" cy="150" r="17"/>
+            <circle class="node-acc" cx="380" cy="230" r="17"/><circle class="node" cx="440" cy="230" r="17"/><circle class="node" cx="500" cy="230" r="17"/><circle class="node" cx="560" cy="230" r="17"/><circle class="node-acc" cx="620" cy="230" r="17"/>
+            <g text-anchor="middle">
+              <text x="380" y="75">g₁</text><text x="440" y="75">g₂</text><text x="500" y="75">g₃</text><text x="560" y="75">g₄</text><text x="620" y="75">g₅</text>
+              <text x="380" y="155">h₁</text><text x="440" y="155">h₂</text><text x="500" y="155">h₃</text><text x="560" y="155">h₄</text><text x="620" y="155">h₅</text>
+              <text x="380" y="235">x₁</text><text x="440" y="235">x₂</text><text x="500" y="235">x₃</text><text x="560" y="235">x₄</text><text x="620" y="235">x₅</text>
+            </g>
+            <text class="d-row" x="650" y="74">layer 2</text>
+            <text class="d-row" x="650" y="154">layer 1</text>
+            <text class="d-row" x="650" y="234">input</text>
+            <text class="d-s" x="350" y="272">x₁ and x₅ share no unit in layer 1, but both reach g₃ (via h₂ and h₄).</text>
+          </svg>
+        </div>
+        <figcaption><b>Local connections, global reach.</b> Left: with a \(2 \times 2\) kernel and stride 2, each output depends on just 4 of the 16 pixels. Right (after the figure in Goodfellow et al., 2016, which the slide uses): each unit sees 3 units below it. Two pixels that never share a unit in layer 1 still combine in layer 2, so depth recovers the long-range interactions that sparsity removed.</figcaption>
+      </figure>
+      <p class="note">Standard name (not in the lecture): the set of input pixels that can affect a unit is its receptive field. Here the receptive field of \(g_3\) is \(x_1, \dots, x_5\).</p>
+    </section>
+
+    <section id="sharing">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=PmZp5VtMwLE&amp;t=821s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 13:41</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=PmZp5VtMwLE&amp;t=914s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 15:14 many shared kernels</a>
+        </div>
+        <h2>Weight sharing</h2>
+      </div>
+      <p>The second property of a CNN concerns the kernel's values. Suppose one \(2 \times 2\) kernel sits on pixels 1, 2, 5, 6 of the \(4 \times 4\) image and another on pixels 11, 12, 15, 16. Should their weights differ? Think about what a filter is for. A kernel that detects edges must have the same configuration wherever it is applied, since an edge looks the same in any part of the image. The blur, sharpen and edge kernels earlier were all applied unchanged at every location.</p>
+      <p>So a CNN uses the same kernel at every position. This is <dfn>weight sharing</dfn>, and it makes learning easier: the network does not have to learn the same weights again and again at different locations. (Lecture 6 met the general idea as parameter sharing; see <a href="lecture-06.html">Lecture 6</a>.)</p>
+      <p>With a single shared \(2 \times 2\) kernel, layer 1 would have only 4 weights, far too few: the model would underfit. The fix is to use many kernels, each shared across all locations. With \(K\) kernels the layer has \(4K\) weights and produces \(K\) feature maps.</p>
+      <p class="rule-of-thumb">A CNN layer differs from a dense layer in two ways: each output sees only a local window (sparse connectivity), and every window uses the same kernel (weight sharing).</p>
+    </section>
+
+    <section id="pooling">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=9eZN8U-68eI&amp;t=42s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 0:42 a full CNN</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=9eZN8U-68eI&amp;t=174s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 2:54 pooling</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=9eZN8U-68eI&amp;t=278s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 4:38 stride 1, average pooling</a>
+        </div>
+        <h2>A full CNN: convolution, pooling, fully connected</h2>
+      </div>
+      <p>A complete network for handwritten character recognition (LeNet-5, next section) shows the overall pattern. The 2-D input image goes through a convolution layer with 6 filters, giving 6 feature maps. A <b>pooling layer</b> shrinks each map. The 6 shrunken maps form a volume, which is the input to the next convolution layer: 16 full-depth filters give 16 maps, one 2-D map per filter. Another pooling layer follows, and finally a few <b>fully connected</b> layers lead to the output. Each stage's output is the next stage's input, as with hidden layers in a feedforward network.</p>
+      <p>So a CNN alternates convolution and pooling layers. A pooling layer works on one feature map at a time. <dfn>Max pooling</dfn> with a \(2 \times 2\) filter and stride 2 looks at each \(2 \times 2\) block and keeps only its largest value. Each block becomes one number, which halves both width and height (a quarter of the values survive). With stride 1 the windows overlap and the map shrinks less. <dfn>Average pooling</dfn> keeps the mean of the window instead of the maximum.</p>
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 620 320" role="img" aria-label="A 4 by 4 feature map with rows 1 4 2 1, 5 8 3 4, 7 6 4 5, 1 3 1 2. Max pooling with a 2 by 2 window and stride 2 gives 8 4 over 7 5. With stride 1 it gives 8 8 4, 8 8 5, 7 6 5. The top-left window and its maximum 8 are highlighted in all three grids.">
+            <defs><marker id="l08-pool-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-t" x="30" y="78">One 4 × 4 feature map</text>
+            <rect x="30" y="92" width="80" height="80" style="fill: var(--accent-soft)"/>
+            <circle cx="90" cy="152" r="14" style="fill: var(--mark)"/>
+            <g class="d-plot">
+              <rect x="30" y="92" width="160" height="160"/>
+              <line x1="70" y1="92" x2="70" y2="252"/><line x1="150" y1="92" x2="150" y2="252"/>
+              <line x1="30" y1="132" x2="190" y2="132"/><line x1="30" y1="212" x2="190" y2="212"/>
+            </g>
+            <line class="d-ln" x1="110" y1="92" x2="110" y2="252" style="stroke-width:2"/>
+            <line class="d-ln" x1="30" y1="172" x2="190" y2="172" style="stroke-width:2"/>
+            <rect class="d-ln-acc" x="30" y="92" width="80" height="80" style="stroke-width:2.4"/>
+            <g text-anchor="middle">
+              <text x="50" y="117">1</text><text x="90" y="117">4</text><text x="130" y="117">2</text><text x="170" y="117">1</text>
+              <text x="50" y="157">5</text><text x="90" y="157">8</text><text x="130" y="157">3</text><text x="170" y="157">4</text>
+              <text x="50" y="197">7</text><text x="90" y="197">6</text><text x="130" y="197">4</text><text x="170" y="197">5</text>
+              <text x="50" y="237">1</text><text x="90" y="237">3</text><text x="130" y="237">1</text><text x="170" y="237">2</text>
+            </g>
+            <line class="d-ln" x1="198" y1="130" x2="318" y2="84" marker-end="url(#l08-pool-ah)"/>
+            <text class="d-s" x="246" y="92" text-anchor="middle">2 × 2, stride 2</text>
+            <line class="d-ln" x1="198" y1="214" x2="318" y2="238" marker-end="url(#l08-pool-ah)"/>
+            <text class="d-s" x="256" y="248" text-anchor="middle">2 × 2, stride 1</text>
+            <!-- stride 2 output -->
+            <circle cx="350" cy="60" r="14" style="fill: var(--mark)"/>
+            <g class="d-plot"><rect x="330" y="40" width="80" height="80"/><line x1="370" y1="40" x2="370" y2="120"/><line x1="330" y1="80" x2="410" y2="80"/></g>
+            <g text-anchor="middle"><text x="350" y="65">8</text><text x="390" y="65">4</text><text x="350" y="105">7</text><text x="390" y="105">5</text></g>
+            <text class="d-t" x="428" y="62">2 × 2 output</text>
+            <text class="d-s" x="428" y="80">each block keeps its max:</text>
+            <text class="d-s" x="428" y="96">width and height halve</text>
+            <!-- stride 1 output -->
+            <circle cx="350" cy="195" r="14" style="fill: var(--mark)"/>
+            <g class="d-plot"><rect x="330" y="175" width="120" height="120"/><line x1="370" y1="175" x2="370" y2="295"/><line x1="410" y1="175" x2="410" y2="295"/><line x1="330" y1="215" x2="450" y2="215"/><line x1="330" y1="255" x2="450" y2="255"/></g>
+            <g text-anchor="middle">
+              <text x="350" y="200">8</text><text x="390" y="200">8</text><text x="430" y="200">4</text>
+              <text x="350" y="240">8</text><text x="390" y="240">8</text><text x="430" y="240">5</text>
+              <text x="350" y="280">7</text><text x="390" y="280">6</text><text x="430" y="280">5</text>
+            </g>
+            <text class="d-t" x="466" y="222">3 × 3 output</text>
+            <text class="d-s" x="466" y="240">windows overlap,</text>
+            <text class="d-s" x="466" y="256">so it shrinks less</text>
+          </svg>
+        </div>
+        <figcaption><b>Max pooling, the slide's example.</b> The highlighted top-left window \(\{1, 4, 5, 8\}\) gives 8 in both outputs. With stride 2 the four blocks tile the map and give rows (8, 4) and (7, 5); with stride 1 the window visits 9 overlapping positions.</figcaption>
+      </figure>
+      <p>Pooling has <b>no parameters</b>: there is no weight matrix and no \(\mathbf{w}^\top\mathbf{x}\), just a fixed max (or average). It also leaves the <b>depth unchanged</b>, since it never takes a max across feature maps.</p>
+    </section>
+
+    <section id="lenet">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=9eZN8U-68eI&amp;t=339s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 5:39</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=9eZN8U-68eI&amp;t=402s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 6:42 150 vs a dense layer</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=9eZN8U-68eI&amp;t=613s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 10:13 don't forget the depth</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=9eZN8U-68eI&amp;t=746s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 12:26 fully connected layers</a>
+        </div>
+        <h2>LeNet-5, layer by layer</h2>
+      </div>
+      <p>LeNet-5 (from around 1997–98, already the fifth version) recognizes handwritten characters from a \(32 \times 32\) grey-scale image. Work out each layer with the size formula; a convolution filter has \(F \times F \times D_1\) weights, where \(D_1\) is the depth of that layer's input.</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Layer</th><th>Settings</th><th>Output volume</th><th class="num">Parameters</th><th>How</th></tr></thead>
+          <tbody>
+            <tr><td>Input</td><td></td><td>32 × 32 × 1</td><td class="num">–</td><td></td></tr>
+            <tr><td>Conv 1</td><td>K = 6, F = 5, S = 1, P = 0</td><td>28 × 28 × 6</td><td class="num">150</td><td>6 × (5 × 5 × 1)</td></tr>
+            <tr><td>Pool 1</td><td>max, F = 2, S = 2</td><td>14 × 14 × 6</td><td class="num">0</td><td>no weights</td></tr>
+            <tr><td>Conv 2</td><td>K = 16, F = 5, S = 1, P = 0</td><td>10 × 10 × 16</td><td class="num">2,400</td><td>16 × (5 × 5 × 6)</td></tr>
+            <tr><td>Pool 2</td><td>max, F = 2, S = 2</td><td>5 × 5 × 16</td><td class="num">0</td><td>no weights</td></tr>
+            <tr><td>FC 1</td><td>flatten 5 × 5 × 16 = 400 → 120</td><td>120</td><td class="num">48,120</td><td>400 × 120 + 120 biases</td></tr>
+            <tr><td>FC 2</td><td>120 → 84</td><td>84</td><td class="num">10,164</td><td>120 × 84 + 84</td></tr>
+            <tr><td>Output</td><td>84 → 10</td><td>10</td><td class="num">850</td><td>84 × 10 + 10</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li><b>Depth counts.</b> In class the first answer for Conv 2 was \(16 \times 25 = 400\). That forgets that each \(5 \times 5\) filter also spans the 6 maps of its input, so it has \(5 \times 5 \times 6 = 150\) weights, and 16 of them make 2,400.</li>
+        <li><b>Slide corrections.</b> The slide lists the pooling layers with \(S = 1\); to go from 28 to 14 the stride must be 2, as the lecturer points out. The slide's output layer has 10 units; for alphabet recognition it would be 26, giving \(84 \times 26 + 26\) parameters. The convolution counts on the slide leave out biases; the fully connected counts include them.</li>
+        <li><b>A fully connected layer</b> flattens the \(5 \times 5 \times 16\) volume into one 400-vector and connects every entry to every one of the 120 units, as in an ordinary feedforward network.</li>
+      </ul>
+      <p>Compare Conv 1 with a dense layer between the same sizes. The input has \(32 \times 32 = 1024\) values and the output \(28 \times 28 = 784\), so a fully connected layer would need \(1024 \times 784 = 802{,}816\) weights against 150 here. Sparse connectivity and weight sharing together make the difference. This is why CNNs with 4 or 5 layers could be trained even before the deep learning revival of 2006 (<a href="lecture-07.html">Lecture 7</a>): they had far fewer parameters than dense networks.</p>
+      <p>The table also shows a pattern that returns in every network below: the fully connected layers dominate. The convolution layers have hundreds or thousands of parameters; the first fully connected layer alone has 48,120.</p>
+      <p class="rule-of-thumb">For any CNN, you should be able to say for each layer: the input volume, the output volume, the number of filters and the number of parameters.</p>
+    </section>
+
+    <section id="training">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=9eZN8U-68eI&amp;t=884s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 14:44</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=9eZN8U-68eI&amp;t=947s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 15:47 in practice</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=53ysOFHCaqI&amp;t=1114s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 18:34 max pooling?</a>
+        </div>
+        <h2>Training a CNN with backpropagation</h2>
+      </div>
+      <p>Backpropagating through a convolution looks daunting, but a CNN can be written as a feedforward network in which only a few weights are active and the rest are fixed at zero. Take a \(3 \times 3\) input and a \(2 \times 2\) kernel:</p>
+      <div class="eq">\[ l = bw + cx + ey + fz, \qquad m = cw + dx + fy + gz, \qquad n = ew + fx + hy + iz, \qquad o = fw + gx + iy + jz \]</div>
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 700 300" role="img" aria-label="Left: a 3 by 3 input with entries b to j and a 2 by 2 kernel w, x, y, z. Right: the same convolution drawn as a network. Nine input nodes b to j connect to four output nodes l, m, n, o. Each output has exactly four incoming edges, one for each kernel weight, drawn in four line styles; every style appears four times.">
+            <text class="d-t" x="20" y="34">Input</text>
+            <g class="d-plot"><rect x="20" y="44" width="84" height="84"/><line x1="48" y1="44" x2="48" y2="128"/><line x1="76" y1="44" x2="76" y2="128"/><line x1="20" y1="72" x2="104" y2="72"/><line x1="20" y1="100" x2="104" y2="100"/></g>
+            <g text-anchor="middle"><text x="34" y="63">b</text><text x="62" y="63">c</text><text x="90" y="63">d</text><text x="34" y="91">e</text><text x="62" y="91">f</text><text x="90" y="91">g</text><text x="34" y="119">h</text><text x="62" y="119">i</text><text x="90" y="119">j</text></g>
+            <text class="d-t" x="20" y="166">Kernel</text>
+            <g class="d-plot"><rect x="20" y="176" width="56" height="56"/><line x1="48" y1="176" x2="48" y2="232"/><line x1="20" y1="204" x2="76" y2="204"/></g>
+            <g text-anchor="middle"><text x="34" y="195">w</text><text x="62" y="195">x</text><text x="34" y="223">y</text><text x="62" y="223">z</text></g>
+            <text class="d-s" x="400" y="30" text-anchor="middle">l = bw + cx + ey + fz, and likewise for m, n, o</text>
+            <!-- edges: w solid accent, x dashed accent, y solid ink, z dashed ink -->
+            <g class="d-ln-acc" style="stroke-width:2">
+              <line x1="290" y1="96" x2="180" y2="225"/><line x1="345" y1="96" x2="235" y2="225"/><line x1="455" y1="96" x2="345" y2="225"/><line x1="510" y1="96" x2="400" y2="225"/>
+            </g>
+            <g class="d-ln-acc d-dash" style="stroke-width:2">
+              <line x1="290" y1="96" x2="235" y2="225"/><line x1="345" y1="96" x2="290" y2="225"/><line x1="455" y1="96" x2="400" y2="225"/><line x1="510" y1="96" x2="455" y2="225"/>
+            </g>
+            <g class="d-ln" style="stroke-width:2">
+              <line x1="290" y1="96" x2="345" y2="225"/><line x1="345" y1="96" x2="400" y2="225"/><line x1="455" y1="96" x2="510" y2="225"/><line x1="510" y1="96" x2="565" y2="225"/>
+            </g>
+            <g class="d-ln d-dash" style="stroke-width:2">
+              <line x1="290" y1="96" x2="400" y2="225"/><line x1="345" y1="96" x2="455" y2="225"/><line x1="455" y1="96" x2="565" y2="225"/><line x1="510" y1="96" x2="620" y2="225"/>
+            </g>
+            <circle class="node-acc" cx="290" cy="80" r="16"/><circle class="node-acc" cx="345" cy="80" r="16"/><circle class="node-acc" cx="455" cy="80" r="16"/><circle class="node-acc" cx="510" cy="80" r="16"/>
+            <g text-anchor="middle"><text x="290" y="85">l</text><text x="345" y="85">m</text><text x="455" y="85">n</text><text x="510" y="85">o</text></g>
+            <circle class="node" cx="180" cy="240" r="15"/><circle class="node" cx="235" cy="240" r="15"/><circle class="node" cx="290" cy="240" r="15"/><circle class="node" cx="345" cy="240" r="15"/><circle class="node" cx="400" cy="240" r="15"/><circle class="node" cx="455" cy="240" r="15"/><circle class="node" cx="510" cy="240" r="15"/><circle class="node" cx="565" cy="240" r="15"/><circle class="node" cx="620" cy="240" r="15"/>
+            <g text-anchor="middle"><text x="180" y="245">b</text><text x="235" y="245">c</text><text x="290" y="245">d</text><text x="345" y="245">e</text><text x="400" y="245">f</text><text x="455" y="245">g</text><text x="510" y="245">h</text><text x="565" y="245">i</text><text x="620" y="245">j</text></g>
+            <!-- legend -->
+            <line class="d-ln-acc" x1="180" y1="282" x2="210" y2="282" style="stroke-width:2"/><text class="d-s" x="216" y="286">w</text>
+            <line class="d-ln-acc d-dash" x1="250" y1="282" x2="280" y2="282" style="stroke-width:2"/><text class="d-s" x="286" y="286">x</text>
+            <line class="d-ln" x1="320" y1="282" x2="350" y2="282" style="stroke-width:2"/><text class="d-s" x="356" y="286">y</text>
+            <line class="d-ln d-dash" x1="390" y1="282" x2="420" y2="282" style="stroke-width:2"/><text class="d-s" x="426" y="286">z</text>
+            <text class="d-s" x="460" y="286">each weight is used 4 times</text>
+          </svg>
+        </div>
+        <figcaption><b>A convolution is a sparse, weight-tied feedforward layer.</b> Each output connects to only 4 of the 9 inputs; the 20 missing edges are weights fixed at zero. The 16 edges that exist carry just 4 distinct values, one line style per kernel weight. Backpropagation runs on this network exactly as on any other.</figcaption>
+      </figure>
+      <p>Seen this way, nothing new is needed. Training a network with some connections switched off is familiar from dropout (<a href="lecture-06.html">Lecture 6</a>), and backpropagation (<a href="lecture-04.html">Lecture 4</a>) applies unchanged, with some careful coding to keep the absent weights out. In practice nobody builds the dense version, which would waste exactly the computation that sparse connections save. Instead the convolution and its derivative are defined directly, and frameworks such as TensorFlow and PyTorch compute the backward pass automatically from the forward convolution. Conceptually it is still the same backpropagation algorithm.</p>
+      <p class="note">Completing the idea (not worked out in the lecture): because \(w\) multiplies a different input in each of the four outputs, its gradient adds up the four contributions, \(\dfrac{\partial \mathcal{L}}{\partial w} = b\,\dfrac{\partial \mathcal{L}}{\partial l} + c\,\dfrac{\partial \mathcal{L}}{\partial m} + e\,\dfrac{\partial \mathcal{L}}{\partial n} + f\,\dfrac{\partial \mathcal{L}}{\partial o}\). A shared weight always collects gradient from every place it is used.</p>
+      <p>The lecture raises one more point and leaves it open: is everything in a CNN differentiable? In particular, how does the gradient pass through a max pooling layer?</p>
+      <p class="note">Not in the lecture: max is differentiable almost everywhere. Within each window, the output equals one input (the largest), so the gradient flows back to that input unchanged and the other inputs in the window get zero. For average pooling each input in the window gets \(1/F^2\) of the gradient.</p>
+    </section>
+
+    <!-- ============ MODULE 11.4 ============ -->
+    <section id="imagenet">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=53ysOFHCaqI&amp;t=8s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 0:08</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=53ysOFHCaqI&amp;t=109s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 1:49 AlexNet's jump</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=53ysOFHCaqI&amp;t=170s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 2:50 human level</a>
+        </div>
+        <h2>The ImageNet challenge</h2>
+      </div>
+      <p>The competition that made CNNs famous in 2012 is the ImageNet Large Scale Visual Recognition Challenge (ILSVRC). It uses 1000 categories of the ImageNet data set, with roughly a million training images. In 2010 and 2011 the entries were classical: extract SIFT or HOG features, train classifiers on top, and add ensembles and other tricks. An error of 28.2% means about 282 mistakes on 1000 test images.</p>
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 320" role="img" aria-label="Bar chart of ILSVRC error by year: 2010 28.2 percent and 2011 25.8 percent with shallow methods; 2012 AlexNet 16.4 percent with 8 layers; 2013 ZFNet 11.7 percent with 8 layers; 2014 VGG 7.3 percent with 19 layers; 2014 GoogLeNet 6.7 percent with 22 layers; 2015 ResNet 3.57 percent with 152 layers.">
+            <text class="d-al" x="60" y="26">error (%)</text>
+            <line class="d-rule" x1="60" y1="250" x2="640" y2="250"/>
+            <line class="d-rule" x1="60" y1="180" x2="640" y2="180" style="stroke-dasharray: 2 4"/>
+            <line class="d-rule" x1="60" y1="110" x2="640" y2="110" style="stroke-dasharray: 2 4"/>
+            <line class="d-rule" x1="60" y1="40" x2="640" y2="40" style="stroke-dasharray: 2 4"/>
+            <text class="d-al" x="52" y="254" text-anchor="end">0</text>
+            <text class="d-al" x="52" y="184" text-anchor="end">10</text>
+            <text class="d-al" x="52" y="114" text-anchor="end">20</text>
+            <text class="d-al" x="52" y="44" text-anchor="end">30</text>
+            <rect class="l08-bar-old" x="84" y="52.6" width="54" height="197.4"/>
+            <rect class="l08-bar-old" x="166" y="69.4" width="54" height="180.6"/>
+            <rect class="l08-bar" x="248" y="135.2" width="54" height="114.8"/>
+            <rect class="l08-bar" x="330" y="168.1" width="54" height="81.9"/>
+            <rect class="l08-bar" x="412" y="198.9" width="54" height="51.1"/>
+            <rect class="l08-bar" x="494" y="203.1" width="54" height="46.9"/>
+            <rect class="l08-bar" x="576" y="225" width="54" height="25"/>
+            <g class="d-t" text-anchor="middle">
+              <text x="111" y="46">28.2</text><text x="193" y="63">25.8</text><text x="275" y="129">16.4</text><text x="357" y="162">11.7</text><text x="439" y="193">7.3</text><text x="521" y="197">6.7</text><text x="603" y="219">3.57</text>
+            </g>
+            <g class="d-al" text-anchor="middle">
+              <text x="111" y="268">2010</text><text x="193" y="268">2011</text><text x="275" y="268">2012</text><text x="357" y="268">2013</text><text x="439" y="268">2014</text><text x="521" y="268">2014</text><text x="603" y="268">2015</text>
+            </g>
+            <g class="d-s" text-anchor="middle">
+              <text x="111" y="285">shallow</text><text x="193" y="285">shallow</text><text x="275" y="285">AlexNet</text><text x="357" y="285">ZFNet</text><text x="439" y="285">VGG</text><text x="521" y="285">GoogLeNet</text><text x="603" y="285">ResNet</text>
+              <text x="275" y="301">8 layers</text><text x="357" y="301">8 layers</text><text x="439" y="301">19 layers</text><text x="521" y="301">22 layers</text><text x="603" y="301">152 layers</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption><b>ILSVRC winning error by year</b>, as on the slide (grey: hand-crafted features; violet: CNNs). AlexNet cut the winning error from 25.8% to 16.4%; the lecture notes it was 8 to 9 points ahead of the next-best entry that year. Networks then grew deeper every year, from 8 layers to 152.</figcaption>
+      </figure>
+      <p>The rest of the lecture walks through these winners: AlexNet, ZFNet and VGGNet in this module, GoogLeNet and ResNet in the next. ResNet's 3.57% is what prompted claims that CNNs beat humans at this task. A person shown the same 1000 images would also make more than about 3.5% errors, since some images are blurred and some classes, such as dog breeds, are hard to tell apart.</p>
+      <p class="note">Not in the lecture: these are the challenge's top-5 error rates. A prediction counts as correct if the true label is among the model's five highest-scoring classes.</p>
+    </section>
+
+    <section id="alexnet">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=53ysOFHCaqI&amp;t=234s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 3:54</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=53ysOFHCaqI&amp;t=534s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 8:54 why this configuration?</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=53ysOFHCaqI&amp;t=596s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 9:56 counting layers</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=53ysOFHCaqI&amp;t=665s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 11:05 why shrink?</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=53ysOFHCaqI&amp;t=761s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 12:41 ReLU</a>
+        </div>
+        <h2>AlexNet (2012)</h2>
+      </div>
+      <p>AlexNet takes a \(227 \times 227 \times 3\) RGB image. The first layer is Exercise 1 from Module 11.2. The slides compute every layer with the size formula; the parameter count of a convolution layer is \((F \times F \times D_1) \times K\), biases left out.</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Layer</th><th>Settings</th><th>Output volume</th><th class="num">Parameters (slide)</th></tr></thead>
+          <tbody>
+            <tr><td>Input</td><td></td><td>227 × 227 × 3</td><td class="num">–</td></tr>
+            <tr><td>Conv 1</td><td>K = 96, F = 11, S = 4, P = 0</td><td>55 × 55 × 96</td><td class="num">(11 × 11 × 3) × 96 = 34K</td></tr>
+            <tr><td>Max pool 1</td><td>F = 3, S = 2</td><td>27 × 27 × 96</td><td class="num">0</td></tr>
+            <tr><td>Conv 2</td><td>K = 256, F = 5, S = 1, P = 0</td><td>23 × 23 × 256</td><td class="num">(5 × 5 × 96) × 256 = 0.6M</td></tr>
+            <tr><td>Max pool 2</td><td>F = 3, S = 2</td><td>11 × 11 × 256</td><td class="num">0</td></tr>
+            <tr><td>Conv 3</td><td>K = 384, F = 3, S = 1, P = 0</td><td>9 × 9 × 384</td><td class="num">(3 × 3 × 256) × 384 = 0.8M</td></tr>
+            <tr><td>Conv 4</td><td>K = 384, F = 3, S = 1, P = 0</td><td>7 × 7 × 384</td><td class="num">(3 × 3 × 384) × 384 = 1.327M</td></tr>
+            <tr><td>Conv 5</td><td>K = 256, F = 3, S = 1, P = 0</td><td>5 × 5 × 256</td><td class="num">(3 × 3 × 384) × 256 = 0.8M</td></tr>
+            <tr><td>Max pool 3</td><td>F = 3, S = 2</td><td>2 × 2 × 256</td><td class="num">0</td></tr>
+            <tr><td>FC 1</td><td>flatten 2 × 2 × 256 = 1024 → 4096</td><td>4096</td><td class="num">(2 × 2 × 256) × 4096 = 4M</td></tr>
+            <tr><td>FC 2</td><td>4096 → 4096</td><td>4096</td><td class="num">4096 × 4096 = 16M</td></tr>
+            <tr><td>FC 3</td><td>4096 → 1000 classes</td><td>1000</td><td class="num">4096 × 1000 = 4M</td></tr>
+            <tr><td><b>Total</b></td><td></td><td></td><td class="num"><b>27.55M</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li><b>Shrinking width, growing depth.</b> From \(227 \times 227 \times 3\) the maps shrink to \(27 \times 27 \times 96\) after the first pooling, while the depth grows because more filters capture more patterns. Pooling leaves depth unchanged and has no parameters.</li>
+        <li><b>Eight layers.</b> AlexNet is called an 8-layer network although the table has 12 rows. Only layers with parameters are counted: 5 convolution layers and 3 fully connected layers.</li>
+        <li><b>Where the parameters are.</b> About 24M of the 27.55M (4M + 16M + 4M) are in the fully connected layers.</li>
+        <li><b>Why shrink at all?</b> Pooling and large strides bring \(227 \times 227\) down to \(2 \times 2\) before the fully connected layers. Without them we would be left with maps of order \(200 \times 200\), and a fully connected layer on top would be infeasible, throwing away the savings of sparse connectivity and weight sharing. (Fully convolutional networks with no max pooling also work, the lecture adds; VGGNet below uses long runs of convolutions with few pooling layers.)</li>
+        <li><b>Why this configuration?</b> Nobody really knows. The kernel sizes and filter counts are hyperparameters, presumably chosen by trying many settings on a validation set. Some choices look sensible: large filters on the full image, smaller ones once it has shrunk. Others, such as three convolution layers back to back, have no clear rationale.</li>
+        <li><b>Engineering.</b> Every convolution is followed by a ReLU, applied to each entry of the feature map. The lecture credits AlexNet with bringing ReLU to CNNs in place of sigmoid or tanh (see <a href="lecture-07.html">Lecture 7</a>). Training it in 2012 took many tricks, including splitting the network across GPUs, which is part of why it came two years after the challenge began.</li>
+      </ul>
+      <p class="callout">Arithmetic check (not in the lecture): Conv 3 and Conv 5 each have \(3 \times 3 \times 256 \times 384 = 884{,}736 \approx 0.88\)M weights. The slide's 27.55M is the sum of the rounded per-layer figures; the exact products add up to about 28.8M. Also, the published AlexNet pads some of its convolutions, so its later maps are larger than these; the lecture's version uses \(P = 0\) throughout.</p>
+    </section>
+
+    <section id="zfnet">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=53ysOFHCaqI&amp;t=825s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 13:45</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=53ysOFHCaqI&amp;t=919s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 15:19 more filters</a>
+        </div>
+        <h2>ZFNet (2013)</h2>
+      </div>
+      <p>ZFNet is AlexNet with a few changes, so the lecture presents it as a layer-by-layer diff. The slide numbers the layers 1 to 10 from Conv 1 to FC 2, pooling layers included. The input is the same \(227 \times 227 \times 3\).</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Layer</th><th>Change from AlexNet</th><th>Difference in parameters</th></tr></thead>
+          <tbody>
+            <tr><td>1 (Conv 1)</td><td>F = 11 → 7</td><td>\((11^2 - 7^2) \times 3 \times 96 = 20.7\)K fewer</td></tr>
+            <tr><td>2–4</td><td>none</td><td>–</td></tr>
+            <tr><td>5 (Conv 3)</td><td>K = 384 → 512</td><td>\((3 \times 3 \times 256) \times (512 - 384) = 0.29\)M more</td></tr>
+            <tr><td>6 (Conv 4)</td><td>K = 384 → 1024</td><td>\(3 \times 3 \times (512 \times 1024 - 384 \times 384)\); slide: 0.8M</td></tr>
+            <tr><td>7 (Conv 5)</td><td>K = 256 → 512</td><td>\(3 \times 3 \times (1024 \times 512 - 384 \times 256)\); slide: 0.36M</td></tr>
+            <tr><td>8–10</td><td>none</td><td>–</td></tr>
+            <tr><td><b>Total</b></td><td></td><td><b>1.45M</b> more (slide)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The reasoning behind the first change: an \(11 \times 11\) neighbourhood is more than needed, though \(3 \times 3\) may be too small, so \(7 \times 7\) is a compromise. It also removes a few parameters. The deeper layers get more filters (512, 1024, 512 instead of 384, 384, 256), so ZFNet has more parameters than AlexNet overall. The error fell from 16.4% to 11.7%. The pooling and fully connected layers are unchanged, and like AlexNet it has 8 layers with parameters.</p>
+      <p class="callout">Arithmetic check (not in the lecture): the slide writes the layer 6 and 7 differences as AlexNet minus ZFNet and evaluates them to 0.8M and 0.36M. The products actually come to \(9 \times 376{,}832 \approx 3.39\)M and \(9 \times 425{,}984 \approx 3.83\)M, so the convolution layers add about 7.5M, not 1.45M. Two side effects of the changes are also missing from the slide: with \(F = 7\) and \(S = 4\) the formula gives \((227 - 7)/4 + 1 = 56\), not 55; and with 512 maps of size \(2 \times 2\) at the end, FC 1 would have \(2048 \times 4096\) weights, twice AlexNet's.</p>
+    </section>
+
+    <section id="vggnet">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=53ysOFHCaqI&amp;t=985s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 16:25</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=53ysOFHCaqI&amp;t=1145s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 19:05 parameter counts</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=mHhhXlEB32c&amp;t=43s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 0:43 representations</a>
+        </div>
+        <h2>VGGNet (2014)</h2>
+      </div>
+      <p>VGGNet's distinctive choice is to use \(3 \times 3\) kernels in every convolution layer, from the first to the last, and to stack them in runs between max pooling layers. The slide's figure takes a \(224 \times 224 \times 3\) input. The convolutions keep the width and height (so they must use padding \(P = 1\)), and each max pooling halves them.</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Block</th><th>Layers</th><th>Maps after the convolutions</th><th>After max pooling</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>2 × conv 3×3, 64 filters</td><td>224 × 224 × 64</td><td>112 × 112 × 64</td></tr>
+            <tr><td>2</td><td>2 × conv 3×3, 128 filters</td><td>112 × 112 × 128</td><td>56 × 56 × 128</td></tr>
+            <tr><td>3</td><td>3 × conv 3×3, 256 filters</td><td>56 × 56 × 256</td><td>28 × 28 × 256</td></tr>
+            <tr><td>4</td><td>3 × conv 3×3, 512 filters</td><td>28 × 28 × 512</td><td>14 × 14 × 512</td></tr>
+            <tr><td>5</td><td>3 × conv 3×3, 512 filters</td><td>14 × 14 × 512</td><td>7 × 7 × 512</td></tr>
+            <tr><td>FC</td><td>4096, 4096, then 1000-way softmax</td><td colspan="2">input: 7 × 7 × 512 flattened</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>That is 13 convolution layers and 3 fully connected layers, 16 layers with parameters: VGG-16. A later variant with 19 such layers is VGG-19. As with AlexNet, there is little intuition for why 16; the architecture is whatever gave the best ImageNet accuracy.</p>
+      <div class="result">
+        <span class="lbl">VGGNet's parameters (slide)</span>
+        \[ \underbrace{\sim 16\text{M}}_{\text{non-FC layers}} \qquad \underbrace{(512 \times 7 \times 7 \times 4096) + (4096 \times 4096) + (4096 \times 1024) \approx 122\text{M}}_{\text{FC layers}} \]
+        <p>Most of it, about 102M, is in the first fully connected layer.</p>
+      </div>
+      <p>The first fully connected layer is the problem. AlexNet and ZFNet ended with a \(2 \times 2 \times 256\) volume, a 1024-vector. VGGNet ends with \(7 \times 7 \times 512 = 25{,}088\) values, about 25 times more, and connecting each of them to 4096 units costs over 100 million weights. A very deep stack of convolutions holds far fewer parameters than this one layer.</p>
+      <p class="note">The slide writes the last factor as 1024; with 1000 output classes it is \(4096 \times 1000\). The three terms are about 102.8M, 16.8M and 4.1M, so either way the total is near 123M.</p>
+      <h3>Trained CNNs as feature extractors</h3>
+      <p>The short M7 video adds a point used in the next lecture. Once a network such as AlexNet or VGGNet has been trained on ImageNet (cross-entropy tracked over epochs until the training error is satisfactory), the output of any of its layers, flattened into a vector, is an abstract representation of the input image. So it is common to pass a new image through a network trained on ImageNet, take the vector from a fully connected layer (an "fc representation") or a convolution layer (a "conv representation"), and use it for some other image task. <a href="lecture-09.html">Lecture 9</a> looks inside these representations.</p>
+    </section>
+
+    <!-- ============ MODULE 11.5 ============ -->
+    <section id="inception">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=UukbB6q6CTo&amp;t=12s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 0:12</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=UukbB6q6CTo&amp;t=124s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 2:04 the cost</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=UukbB6q6CTo&amp;t=234s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 3:54 1×1 convolutions</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=UukbB6q6CTo&amp;t=442s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 7:22 the module</a>
+        </div>
+        <h2>The Inception module</h2>
+      </div>
+      <p>Consider the output volume at some layer in the middle of a CNN. Next we could apply max pooling, or a \(1 \times 1\), \(3 \times 3\) or \(5 \times 5\) convolution. Every network so far made one uniform choice per layer. But interactions may matter at several scales at once, so GoogLeNet asks: why choose? Apply all of them in parallel and concatenate the resulting feature maps.</p>
+      <p>Done naively this is expensive. With \(P = 0\) and \(S = 1\), convolving a \(W \times H \times D\) input with an \(F \times F \times D\) filter gives a \((W - F + 1) \times (H - F + 1)\) map, and each entry needs \(O(F \times F \times D)\) multiply-adds:</p>
+      <div class="eq">\[ \underbrace{(W - F + 1)(H - F + 1)}_{\text{entries per filter}} \;\times\; \underbrace{O(F \times F \times D)}_{\text{work per entry}} \]</div>
+      <h3>1×1 convolutions</h3>
+      <p>The fix is the <dfn>1×1 convolution</dfn>. On a single pixel it might seem to do nothing, but remember a filter spans the full depth: a \(1 \times 1\) filter is really \(1 \times 1 \times D\), and it combines the \(D\) values at one location into one number. It aggregates along the depth. Using \(D_1 < D\) such filters (\(S = 1\), \(P = 0\)) turns a \(W \times H \times D\) volume into \(W \times H \times D_1\): the width and height stay, the depth shrinks. A following \(F \times F\) convolution then costs \(O(F \times F \times D_1)\) per entry instead of \(O(F \times F \times D)\).</p>
+      <p>The 3×3 and 5×5 branches may want different reductions, so each gets its own set of \(1 \times 1\) filters, \(D_1\) before the \(3 \times 3\) and \(D_2\) before the \(5 \times 5\). That adds a little computation, but the trade-off is acceptable. Add a \(3 \times 3\) max pooling branch followed by its own \(1 \times 1\) convolutions, and a plain \(1 \times 1\) branch, and concatenate the four outputs along the depth. This block is the <dfn>Inception module</dfn>. Each branch is padded so that all four outputs have the same width and height and can be stacked. Earlier networks were purely serial; an Inception module runs several operations in parallel inside a serial chain.</p>
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 700 330" role="img" aria-label="The Inception module 3a. From a 28 by 28 by 192 input, four parallel branches: 64 one-by-one convolutions; 96 one-by-one convolutions then 128 three-by-three convolutions; 16 one-by-one convolutions then 32 five-by-five convolutions; three-by-three max pooling then 32 one-by-one convolutions. The outputs, of depth 64, 128, 32 and 32, are concatenated into 28 by 28 by 256.">
+            <defs><marker id="l08-inc-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <rect class="pill" x="190" y="16" width="320" height="42" rx="18"/>
+            <text class="d-t" x="350" y="35" text-anchor="middle">filter concatenation</text>
+            <text class="d-s" x="350" y="51" text-anchor="middle">28 × 28 × (64 + 128 + 32 + 32) = 28 × 28 × 256</text>
+            <!-- row 2: main operations -->
+            <rect class="d-box-acc" x="25" y="104" width="150" height="44"/>
+            <text class="d-t" x="100" y="124" text-anchor="middle">1×1 conv, 64</text>
+            <rect class="d-box-acc" x="195" y="104" width="150" height="44"/>
+            <text class="d-t" x="270" y="124" text-anchor="middle">3×3 conv, 128</text>
+            <text class="d-s" x="270" y="140" text-anchor="middle">on reduced input</text>
+            <rect class="d-box-acc" x="365" y="104" width="150" height="44"/>
+            <text class="d-t" x="440" y="124" text-anchor="middle">5×5 conv, 32</text>
+            <text class="d-s" x="440" y="140" text-anchor="middle">on reduced input</text>
+            <rect class="d-box-acc" x="535" y="104" width="150" height="44"/>
+            <text class="d-t" x="610" y="124" text-anchor="middle">1×1 conv, 32</text>
+            <text class="d-s" x="610" y="140" text-anchor="middle">reduce depth</text>
+            <!-- row 1: reductions and pooling -->
+            <rect class="d-box" x="195" y="186" width="150" height="44"/>
+            <text class="d-t" x="270" y="206" text-anchor="middle">1×1 conv, 96</text>
+            <text class="d-s" x="270" y="222" text-anchor="middle">reduce depth</text>
+            <rect class="d-box" x="365" y="186" width="150" height="44"/>
+            <text class="d-t" x="440" y="206" text-anchor="middle">1×1 conv, 16</text>
+            <text class="d-s" x="440" y="222" text-anchor="middle">reduce depth</text>
+            <rect class="d-box" x="535" y="186" width="150" height="44"/>
+            <text class="d-t" x="610" y="206" text-anchor="middle">3×3 max pool</text>
+            <text class="d-s" x="610" y="222" text-anchor="middle">stride 1, padded</text>
+            <!-- input -->
+            <rect class="d-box" x="220" y="276" width="260" height="38"/>
+            <text class="d-t" x="350" y="300" text-anchor="middle">previous layer: 28 × 28 × 192</text>
+            <!-- arrows input to branches -->
+            <line class="d-ln" x1="250" y1="276" x2="110" y2="152" marker-end="url(#l08-inc-ah)"/>
+            <line class="d-ln" x1="300" y1="276" x2="275" y2="234" marker-end="url(#l08-inc-ah)"/>
+            <line class="d-ln" x1="400" y1="276" x2="430" y2="234" marker-end="url(#l08-inc-ah)"/>
+            <line class="d-ln" x1="450" y1="276" x2="595" y2="234" marker-end="url(#l08-inc-ah)"/>
+            <line class="d-ln" x1="270" y1="186" x2="270" y2="152" marker-end="url(#l08-inc-ah)"/>
+            <line class="d-ln" x1="440" y1="186" x2="440" y2="152" marker-end="url(#l08-inc-ah)"/>
+            <line class="d-ln" x1="610" y1="186" x2="610" y2="152" marker-end="url(#l08-inc-ah)"/>
+            <!-- arrows to concat with depths -->
+            <line class="d-ln" x1="100" y1="104" x2="226" y2="61" marker-end="url(#l08-inc-ah)"/>
+            <line class="d-ln" x1="270" y1="104" x2="306" y2="61" marker-end="url(#l08-inc-ah)"/>
+            <line class="d-ln" x1="440" y1="104" x2="398" y2="61" marker-end="url(#l08-inc-ah)"/>
+            <line class="d-ln" x1="610" y1="104" x2="476" y2="61" marker-end="url(#l08-inc-ah)"/>
+            <g class="d-al"><text x="140" y="78">64</text><text x="296" y="90">128</text><text x="428" y="90">32</text><text x="552" y="78">32</text></g>
+          </svg>
+        </div>
+        <figcaption><b>Inception module 3a of GoogLeNet</b>, with the slide's numbers. Four branches see the same input. The 1×1 convolutions in front of the 3×3 and 5×5 branches cut the depth from 192 to 96 and 16, so the expensive filters run on thin volumes. The four outputs keep the 28 × 28 size and are stacked to depth 256.</figcaption>
+      </figure>
+      <p class="note">Worked numbers (not in the lecture): for the 5×5 branch of module 3a, 32 filters of size \(5 \times 5 \times 192\) on the \(28 \times 28\) map cost \(784 \times 32 \times 4800 \approx 120\)M multiplications. With 16 reducing \(1 \times 1\) filters first, the cost is \(784 \times 16 \times 192 \approx 2.4\)M for the reduction plus \(784 \times 32 \times 400 \approx 10\)M for the 5×5, about 12M in all: ten times less.</p>
+      <p>The lecture stresses that only two ideas here are profound: apply filters of several sizes in parallel, and use \(1 \times 1\) convolutions to keep the computation manageable. The rest is bookkeeping.</p>
+    </section>
+
+    <section id="googlenet">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=UukbB6q6CTo&amp;t=502s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 8:22</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=UukbB6q6CTo&amp;t=578s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 9:38 average pooling</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=UukbB6q6CTo&amp;t=719s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 11:59 12× fewer parameters</a>
+        </div>
+        <h2>GoogLeNet (2014)</h2>
+      </div>
+      <p>GoogLeNet (also called Inception Net) chains many Inception modules. On the slide's figure, an RGB input (229 × 229 on the slide; the lecture says 227 or 229) passes through:</p>
+      <ol class="algo">
+        <li class="algo-title">GoogLeNet, as on the slide</li>
+        <li>Convolution with 64 filters → 112 × 112 × 64, then max pooling → 56 × 56 × 64.</li>
+        <li>Convolution with 192 filters → 56 × 56 × 192, then max pooling → 28 × 28 × 192.</li>
+        <li>Inception 3a (→ 256) and 3b (→ 480) at 28 × 28, then max pooling → 14 × 14 × 480.</li>
+        <li>Inception 4a, 4b, 4c (→ 512 each), 4d (→ 528) and 4e (→ 832) at 14 × 14, then max pooling → 7 × 7 × 832.</li>
+        <li>Inception 5a (→ 832) and 5b (→ 1024) at 7 × 7.</li>
+        <li>Average pooling over each 7 × 7 map → 1024 values, dropout (40%), a fully connected layer to 1000 units, softmax.</li>
+      </ol>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Module</th><th class="num">1×1</th><th class="num">1×1 reduce → 3×3</th><th class="num">1×1 reduce → 5×5</th><th class="num">pool → 1×1</th><th class="num">Output depth</th></tr></thead>
+          <tbody>
+            <tr><td>3a</td><td class="num">64</td><td class="num">96 → 128</td><td class="num">16 → 32</td><td class="num">32</td><td class="num">256</td></tr>
+            <tr><td>3b</td><td class="num">128</td><td class="num">128 → 192</td><td class="num">32 → 96</td><td class="num">64</td><td class="num">480</td></tr>
+            <tr><td>4a</td><td class="num">192</td><td class="num">96 → 208</td><td class="num">16 → 48</td><td class="num">64</td><td class="num">512</td></tr>
+            <tr><td>4b</td><td class="num">160</td><td class="num">112 → 224</td><td class="num">24 → 64</td><td class="num">64</td><td class="num">512</td></tr>
+            <tr><td>4c</td><td class="num">128</td><td class="num">128 → 256</td><td class="num">24 → 64</td><td class="num">64</td><td class="num">512</td></tr>
+            <tr><td>4d</td><td class="num">112</td><td class="num">144 → 288</td><td class="num">32 → 64</td><td class="num">64</td><td class="num">528</td></tr>
+            <tr><td>4e</td><td class="num">256</td><td class="num">160 → 320</td><td class="num">32 → 128</td><td class="num">128</td><td class="num">832</td></tr>
+            <tr><td>5a</td><td class="num">256</td><td class="num">160 → 320</td><td class="num">32 → 128</td><td class="num">128</td><td class="num">832</td></tr>
+            <tr><td>5b</td><td class="num">384</td><td class="num">192 → 384</td><td class="num">48 → 128</td><td class="num">128</td><td class="num">1024</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The output depth of each module is the sum of its four branches, for example \(128 + 192 + 96 + 64 = 480\) for 3b. As with the earlier networks, the lecture sees little intuition behind these particular numbers; they are presumably what worked best.</p>
+      <h3>Getting rid of the big fully connected layer</h3>
+      <p>The last Inception module outputs \(7 \times 7 \times 1024\). Flattening it and connecting it to 1000 output units would take \(7 \times 7 \times 1024 \times 1000 = 50{,}176{,}000\) weights (49M on the slide), the same blow-up as in VGGNet. Instead, GoogLeNet averages each of the 1024 feature maps over its \(7 \times 7\) grid, which leaves a 1024-dimensional vector. The output weight matrix becomes \(W \in \mathbb{R}^{1024 \times 1000}\), and the input to the dense layer is 49 times smaller.</p>
+      <div class="result">
+        <span class="lbl">GoogLeNet vs AlexNet (slide)</span>
+        <p><b>12×</b> fewer parameters, <b>2×</b> more computation.</p>
+      </div>
+      <p>Most of the saving comes from dropping the fully connected layer. The Inception modules themselves add parameters; removing the dense layer is what makes them affordable. Twice AlexNet's computation is an acceptable price for a much deeper network: the lecturer counts 14 stages in the figure, each Inception module itself a split layer with parallel branches, and the chart above lists 22 layers. GoogLeNet was also more accurate than AlexNet, ZFNet and VGGNet (6.7% against VGGNet's 7.3%).</p>
+      <p class="rule-of-thumb">Three takeaways from GoogLeNet: filters of several sizes in parallel, 1×1 convolutions to cut computation, and average pooling to avoid a huge fully connected layer.</p>
+    </section>
+
+    <section id="resnet">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=UukbB6q6CTo&amp;t=784s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 13:04</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=UukbB6q6CTo&amp;t=986s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 16:26 deeper is worse</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=UukbB6q6CTo&amp;t=1062s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 17:42 residual learning</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=UukbB6q6CTo&amp;t=1223s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 20:23 bag of tricks</a>
+        </div>
+        <h2>ResNet (2015)</h2>
+      </div>
+      <p>Suppose a shallow network (shallow is relative: say 8 layers) trains well, reaching near-zero training error and reasonable test accuracy. Now insert a few more layers. Intuitively the deeper network should do at least as well, because one of its possible solutions copies the shallow one: let the new layers compute the identity. The solution space of the shallow network is a subset of the deeper network's.</p>
+      <p>In practice this does not happen. On CIFAR-10, plain networks of 20, 32, 44 and 56 layers get <b>worse</b> as they get deeper: the 56-layer network has the highest error, on both the training set and the test set. The lecture points to the training error: the deeper networks fit even the training data worse. The argument above relied on the network finding the identity mapping, but that is one solution among a huge number, a needle in a haystack. Obvious to us, it is not easy for gradient-based training to land on.</p>
+      <p>So make the identity explicit. Two stacked convolution layers take \(\mathbf{x}\) and learn some function \(H(\mathbf{x})\). Instead, let them learn only a <dfn>residual</dfn> \(F(\mathbf{x})\), and add the input back through a direct connection:</p>
+      <div class="result">
+        <span class="lbl">Residual block</span>
+        \[ H(\mathbf{x}) = F(\mathbf{x}) + \mathbf{x} \]
+        <p>The identity (skip) connection carries a copy of the input past every two layers (or three), so the network always retains it.</p>
+      </div>
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 620 300" role="img" aria-label="Left: a plain block, x passes through two layers with ReLU to give H of x. Right: a residual block, x passes through two layers giving F of x, and an identity connection carries x around the layers to an adder whose output is H of x equals F of x plus x.">
+            <defs>
+              <marker id="l08-res-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="l08-res-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <text class="d-h" x="30" y="22">Plain: learn H(x) directly</text>
+            <text class="d-t" x="130" y="48" text-anchor="middle">x</text>
+            <line class="d-ln" x1="130" y1="54" x2="130" y2="72" marker-end="url(#l08-res-ah)"/>
+            <rect class="d-box" x="70" y="74" width="120" height="30"/><text class="d-s" x="130" y="93" text-anchor="middle">conv layer</text>
+            <line class="d-ln" x1="130" y1="104" x2="130" y2="140" marker-end="url(#l08-res-ah)"/>
+            <text class="d-al" x="138" y="126">relu</text>
+            <rect class="d-box" x="70" y="142" width="120" height="30"/><text class="d-s" x="130" y="161" text-anchor="middle">conv layer</text>
+            <line class="d-ln" x1="130" y1="172" x2="130" y2="226" marker-end="url(#l08-res-ah)"/>
+            <text class="d-al" x="138" y="200">relu</text>
+            <text class="d-t" x="130" y="246" text-anchor="middle">H(x)</text>
+            <text class="d-s" x="30" y="282">the layers must build H(x) from scratch</text>
+
+            <line class="d-rule" x1="300" y1="10" x2="300" y2="290"/>
+
+            <text class="d-h" x="320" y="22">Residual: learn F(x), add x</text>
+            <text class="d-t" x="420" y="48" text-anchor="middle">x</text>
+            <line class="d-ln" x1="420" y1="54" x2="420" y2="72" marker-end="url(#l08-res-ah)"/>
+            <rect class="d-box" x="360" y="74" width="120" height="30"/><text class="d-s" x="420" y="93" text-anchor="middle">conv layer</text>
+            <line class="d-ln" x1="420" y1="104" x2="420" y2="140" marker-end="url(#l08-res-ah)"/>
+            <text class="d-al" x="428" y="126">relu</text>
+            <rect class="d-box" x="360" y="142" width="120" height="30"/><text class="d-s" x="420" y="161" text-anchor="middle">conv layer</text>
+            <line class="d-ln" x1="420" y1="172" x2="420" y2="202" marker-end="url(#l08-res-ah)"/>
+            <text class="d-s" x="412" y="192" text-anchor="end">F(x)</text>
+            <text class="d-al" x="428" y="192">relu</text>
+            <path class="d-ln-acc" d="M420 60 L540 60 L540 216 L434 216" marker-end="url(#l08-res-aha)" style="stroke-width:2.2"/>
+            <text class="d-s" x="548" y="140" style="fill: var(--accent)">identity: x</text>
+            <circle class="node" cx="420" cy="216" r="12"/>
+            <text class="d-t" x="420" y="221" text-anchor="middle">+</text>
+            <line class="d-ln" x1="420" y1="228" x2="420" y2="252" marker-end="url(#l08-res-ah)"/>
+            <text class="d-t" x="420" y="272" text-anchor="middle">H(x) = F(x) + x</text>
+          </svg>
+        </div>
+        <figcaption><b>A plain block and a residual block</b>, after the slide. With the skip connection, the two layers only have to model the difference between the desired output and the input. If the best thing these layers can do is nothing, they only need to drive \(F(\mathbf{x})\) towards zero.</figcaption>
+      </figure>
+      <p>This follows the earlier argument: a deeper copy of a working shallow network should be fine if its new layers can pass the input through, and the identity connection hands them that copy. With these skip connections the authors trained networks of <b>152 layers</b>. The last sentence of the figure caption is the standard intuition, not stated in this form in the lecture: pushing a residual towards zero is easier for an optimizer than assembling an identity map from scratch.</p>
+      <p>ResNet took first place in all five main tracks of the 2015 ImageNet and COCO challenges:</p>
+      <ul>
+        <li>ImageNet classification: "ultra-deep" 152-layer networks, 3.57% error;</li>
+        <li>ImageNet detection: 16% better than the second-best system;</li>
+        <li>ImageNet localization (finding where the object is): 27% better;</li>
+        <li>COCO detection: 11% better; COCO segmentation: 12% better.</li>
+      </ul>
+      <p>The downside is a very deep network that takes a long time to train, affordable mainly with very large computing resources.</p>
+      <h3>The bag of tricks</h3>
+      <p>The paper's training details, as listed on the slide (most were covered in earlier lectures):</p>
+      <ul>
+        <li>batch normalization after every convolution layer (<a href="lecture-07.html">Lecture 7</a>);</li>
+        <li>"Xavier/2" initialization, which is He initialization (<a href="lecture-07.html">Lecture 7</a>);</li>
+        <li>plain SGD with momentum 0.9, no Adam or Adagrad (<a href="lecture-05.html">Lecture 5</a>);</li>
+        <li>learning rate 0.1, divided by 10 whenever the validation error plateaus;</li>
+        <li>mini-batch size 256;</li>
+        <li>weight decay of \(10^{-5}\), that is, L2 regularization with \(\lambda = 10^{-5}\) (<a href="lecture-06.html">Lecture 6</a>);</li>
+        <li>no dropout.</li>
+      </ul>
+      <p>These are hyperparameters, separate from the model's parameters. The lecture's advice for reading deep learning papers: study the experimental section where such details are given. Without them you will often fail to reproduce a paper's results even with the architecture coded correctly; with them the chances are much better, though still not guaranteed.</p>
+      <h3>The ImageNet networks side by side</h3>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Network</th><th>ILSVRC</th><th class="num">Error</th><th class="num">Layers</th><th>Parameters (slides)</th><th>Key idea</th></tr></thead>
+          <tbody>
+            <tr><td>AlexNet</td><td>2012</td><td class="num">16.4%</td><td class="num">8</td><td>27.55M, ~24M in FC</td><td>a deep CNN with ReLU; 11×11 filters, stride 4</td></tr>
+            <tr><td>ZFNet</td><td>2013</td><td class="num">11.7%</td><td class="num">8</td><td>more than AlexNet</td><td>7×7 first filters; more filters in deeper layers</td></tr>
+            <tr><td>VGGNet</td><td>2014</td><td class="num">7.3%</td><td class="num">16 / 19</td><td>~16M + ~122M in FC</td><td>3×3 filters throughout, many layers</td></tr>
+            <tr><td>GoogLeNet</td><td>2014</td><td class="num">6.7%</td><td class="num">22</td><td>12× fewer than AlexNet</td><td>Inception modules, 1×1 reductions, average pooling</td></tr>
+            <tr><td>ResNet</td><td>2015</td><td class="num">3.57%</td><td class="num">152</td><td>not given</td><td>residual (skip) connections</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ REVISION ============ -->
+    <section id="terms">
+      <div class="sec-head"><h2>Key terms</h2></div>
+      <dl class="terms">
+        <div><dt>Convolution</dt><dd>Sliding a filter over the input and taking, at each position, the sum of entry-wise products with the window under it.</dd></div>
+        <div><dt>Filter (kernel)</dt><dd>The small array of weights that is slid over the input; in a CNN its values are learned.</dd></div>
+        <div><dt>Feature map</dt><dd>The 2-D output of one filter over the whole input; \(K\) filters give \(K\) maps.</dd></div>
+        <div><dt>Volume filter</dt><dd>A filter of size \(F \times F \times D_1\) spanning the input's full depth, so it slides over width and height only.</dd></div>
+        <div><dt>Stride \(S\)</dt><dd>The step between successive placements of the filter; larger strides shrink the output.</dd></div>
+        <div><dt>Padding \(P\)</dt><dd>Rings of zeros around the input so the filter can also be placed on border pixels.</dd></div>
+        <div><dt>Output size</dt><dd>\(W_2 = (W_1 - F + 2P)/S + 1\), same for \(H_2\), and \(D_2 = K\).</dd></div>
+        <div><dt>Sparse connectivity</dt><dd>Each output depends only on a small local window of the input, not on every input.</dd></div>
+        <div><dt>Weight sharing</dt><dd>The same kernel weights are used at every location of the input.</dd></div>
+        <div><dt>Max / average pooling</dt><dd>A parameter-free layer that replaces each window of a feature map by its maximum or mean, map by map.</dd></div>
+        <div><dt>Fully connected layer</dt><dd>A dense layer on the flattened volume; in AlexNet and VGGNet it holds most of the parameters.</dd></div>
+        <div><dt>1×1 convolution</dt><dd>A \(1 \times 1 \times D\) filter that combines values across depth; \(D_1 < D\) of them reduce the depth.</dd></div>
+        <div><dt>Inception module</dt><dd>Parallel 1×1, 3×3, 5×5 convolutions and max pooling, with 1×1 reductions, concatenated along depth.</dd></div>
+        <div><dt>Residual connection</dt><dd>A skip connection that adds a block's input to its output: \(H(\mathbf{x}) = F(\mathbf{x}) + \mathbf{x}\).</dd></div>
+      </dl>
+    </section>
+
+    <section id="test">
+      <div class="sec-head"><h2>Test yourself</h2></div>
+      <div class="quiz">
+        <details><summary><span class="q">Q1</span><span>A \(64 \times 64 \times 3\) input goes through 16 filters of size \(5 \times 5\) with stride 1 and padding 2. What is the output volume, and how many weights does the layer have (ignoring biases)?</span><span class="tog"></span></summary>
+          <p>\(W_2 = H_2 = (64 - 5 + 4)/1 + 1 = 64\) and \(D_2 = K = 16\), so \(64 \times 64 \times 16\). Each filter is \(5 \times 5 \times 3 = 75\) weights, so \(16 \times 75 = 1200\) in all.</p></details>
+        <details><summary><span class="q">Q2</span><span>With stride 1, how much padding keeps the output the same size as the input for a \(7 \times 7\) filter?</span><span class="tog"></span></summary>
+          <p>We need \(W_1 - 7 + 2P + 1 = W_1\), so \(2P = 6\) and \(P = 3\). In general \(P = (F - 1)/2\) for odd \(F\).</p></details>
+        <details><summary><span class="q">Q3</span><span>Apply \(2 \times 2\) max pooling with stride 2 to the map with rows \((2, 0, 1, 3)\), \((4, 6, 5, 1)\), \((0, 1, 2, 2)\), \((3, 7, 1, 0)\). How many parameters does the layer have?</span><span class="tog"></span></summary>
+          <p>The four blocks are \(\{2, 0, 4, 6\}\), \(\{1, 3, 5, 1\}\), \(\{0, 1, 3, 7\}\), \(\{2, 2, 1, 0\}\), so the output is \(\begin{bmatrix} 6 & 5 \\ 7 & 2 \end{bmatrix}\). Pooling applies a fixed max, so it has no parameters.</p></details>
+        <details><summary><span class="q">Q4</span><span>In LeNet-5, the second convolution layer has 16 filters of size \(5 \times 5\). Why does it have 2,400 weights and not 400?</span><span class="tog"></span></summary>
+          <p>Its input is the \(14 \times 14 \times 6\) output of the first pooling layer, and every filter spans the full depth. So each filter is \(5 \times 5 \times 6 = 150\) weights, and \(16 \times 150 = 2400\).</p></details>
+        <details><summary><span class="q">Q5</span><span>Each unit sees 3 adjacent units in the layer below. Do inputs \(x_1\) and \(x_5\) ever influence the same unit, and if so, where?</span><span class="tog"></span></summary>
+          <p>Not in layer 1: a unit there covers 3 consecutive inputs, and \(x_1\) to \(x_5\) span 5. In layer 2, \(g_3\) sees \(h_2, h_3, h_4\), which together cover \(x_1, \dots, x_5\). Sparse connections lose nothing once the network is deep enough.</p></details>
+        <details><summary><span class="q">Q6</span><span>Why does VGGNet's first fully connected layer have about 102M parameters, while AlexNet's has about 4M?</span><span class="tog"></span></summary>
+          <p>VGGNet's last pooled volume is \(7 \times 7 \times 512 = 25{,}088\) values, against AlexNet's \(2 \times 2 \times 256 = 1024\). Each value connects to 4096 units: \(25{,}088 \times 4096 \approx 102.8\)M versus \(1024 \times 4096 \approx 4.2\)M.</p></details>
+        <details><summary><span class="q">Q7</span><span>What does a layer of 16 \(1 \times 1\) convolutions do to a \(28 \times 28 \times 192\) volume, and how many weights does it have?</span><span class="tog"></span></summary>
+          <p>Each filter is \(1 \times 1 \times 192\) and combines the 192 values at one location into one number. The output is \(28 \times 28 \times 16\): same width and height, depth cut from 192 to 16. It has \(16 \times 192 = 3072\) weights. A following \(5 \times 5\) convolution then costs \(5 \times 5 \times 16\) instead of \(5 \times 5 \times 192\) per output.</p></details>
+        <details><summary><span class="q">Q8</span><span>Deeper plain networks got higher training error than shallower ones. How does a residual block address this?</span><span class="tog"></span></summary>
+          <p>A deeper network could in principle copy a shallower one by making its extra layers the identity, but training rarely finds that solution. A residual block computes \(F(\mathbf{x}) + \mathbf{x}\), so the identity is built in through the skip connection, and the layers only learn a correction. This let ResNet train 152 layers and reach 3.57% on ImageNet.</p></details>
+      </div>
+    </section>
+
+    <!-- PAGER:START --><nav class="pager" aria-label="Previous and next lecture"><a href="index.html"><span class="dir">← All lectures</span><span class="nm">Course map</span></a><a class="next" href="lecture-09.html"><span class="dir">Lecture 9 →</span><span class="nm">Visualizing and fooling CNNs</span></a></nav><!-- PAGER:END -->
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the official lecture slides and the module videos' NPTEL captions (the short M1 introduction has only YouTube auto-generated captions). Timestamp links open the video at that moment. Charts marked synthetic use data generated for these notes. Not an official IIT Madras resource.</div>
+</footer>
+
+<script src="notes.js"></script>
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- Convolution sliding over a grid ---------- */
+  (() => {
+    const svg = document.getElementById('l08-cv-svg'); if (!svg) return;
+    const IMG = [
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 6, 6, 6, 0, 0, 0],
+      [0, 6, 6, 6, 0, 0, 0],
+      [0, 6, 6, 6, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0],
+      [2, 2, 2, 2, 2, 2, 2],
+      [2, 2, 2, 2, 2, 2, 2]
+    ];
+    const ones = n => Array.from({ length: n }, () => Array(n).fill(1));
+    const FILTERS = {
+      blur: ones(3),
+      sharpen: [[0, -1, 0], [-1, 5, -1], [0, -1, 0]],
+      edge: [[1, 1, 1], [1, -8, 1], [1, 1, 1]],
+      box5: ones(5)
+    };
+    const W1 = 7, C = 34, KC = 28, VW = 860, TOP = 40;
+    const sel = document.getElementById('cv-filter');
+    const sS = document.getElementById('cv-stride'), sP = document.getElementById('cv-pad');
+    const oS = document.getElementById('cv-stride-out'), oP = document.getElementById('cv-pad-out');
+    const rSize = document.getElementById('cv-size'), rForm = document.getElementById('cv-formula');
+    const rCur = document.getElementById('cv-cur'), rDone = document.getElementById('cv-done');
+    const status = document.getElementById('cv-status');
+    const bStep = document.getElementById('cv-step'), bPlay = document.getElementById('cv-play'), bReset = document.getElementById('cv-reset');
+    const fmt = v => (v < 0 ? '−' + (-v) : String(v));
+    let K, F, S, P, N, W2, out, maxAbs, k = 0, timer = null;
+
+    const px = (r, c) => { const i = r - P, j = c - P; return (i >= 0 && i < W1 && j >= 0 && j < W1) ? IMG[i][j] : 0; };
+    const compute = () => {
+      K = FILTERS[sel.value]; F = K.length; S = +sS.value; P = +sP.value; N = W1 + 2 * P;
+      W2 = Math.floor((W1 - F + 2 * P) / S) + 1;
+      out = []; maxAbs = 1;
+      for (let i = 0; i < W2; i++) for (let j = 0; j < W2; j++) {
+        let s = 0;
+        for (let a = 0; a < F; a++) for (let b = 0; b < F; b++) s += K[a][b] * px(i * S + a, j * S + b);
+        out.push(s); maxAbs = Math.max(maxAbs, Math.abs(s));
+      }
+      oS.textContent = S; oP.textContent = P;
+    };
+    const cellText = (x, y, v, cls, g) => { const t = mk('text', { x: x + C / 2, y: y + C / 2 + 4, 'text-anchor': 'middle', class: cls }, g); t.textContent = fmt(v); };
+
+    const draw = () => {
+      svg.textContent = '';
+      const AREA = N * C;
+      svg.setAttribute('viewBox', `0 0 ${VW} ${AREA + TOP + 16}`);
+      const total = N * C + 44 + F * KC + 44 + W2 * C;
+      const ix = (VW - total) / 2, kx = ix + N * C + 44, ox = kx + F * KC + 44;
+      const iy = TOP + (AREA - N * C) / 2, ky = TOP + (AREA - F * KC) / 2, oy = TOP + (AREA - W2 * C) / 2;
+      const i = Math.floor(k / W2), j = k % W2, r0 = i * S, c0 = j * S;
+      mk('text', { x: ix, y: iy - 10, class: 'cv-title' }, svg).textContent = P ? `input with padding P = ${P} (${N} × ${N})` : 'input (7 × 7)';
+      mk('text', { x: kx, y: ky - 10, class: 'cv-title' }, svg).textContent = `kernel ${F} × ${F}`;
+      mk('text', { x: ox, y: oy - 10, class: 'cv-title' }, svg).textContent = `output ${W2} × ${W2}`;
+      mk('text', { x: kx - 22, y: TOP + AREA / 2 + 8, 'text-anchor': 'middle', class: 'cv-op' }, svg).textContent = '∗';
+      mk('text', { x: ox - 22, y: TOP + AREA / 2 + 8, 'text-anchor': 'middle', class: 'cv-op' }, svg).textContent = '=';
+      // input
+      const gi = mk('g', {}, svg);
+      for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+        const x = ix + c * C, y = iy + r * C, pad = r < P || r >= P + W1 || c < P || c >= P + W1, v = px(r, c);
+        mk('rect', { x, y, width: C, height: C, class: pad ? 'cv-pad' : 'cv-cell' }, gi);
+        if (!pad && v > 0) mk('rect', { x: x + 1, y: y + 1, width: C - 2, height: C - 2, class: 'cv-pos', 'fill-opacity': (0.08 + 0.26 * v / 6).toFixed(3) }, gi);
+        cellText(x, y, v, pad ? 'cv-vp' : 'cv-v', gi);
+      }
+      mk('rect', { x: ix + c0 * C, y: iy + r0 * C, width: F * C, height: F * C, class: 'cv-win' }, svg);
+      // kernel
+      const gk = mk('g', {}, svg);
+      for (let a = 0; a < F; a++) for (let b = 0; b < F; b++) {
+        const x = kx + b * KC, y = ky + a * KC;
+        mk('rect', { x, y, width: KC, height: KC, class: 'cv-cell' }, gk);
+        const t = mk('text', { x: x + KC / 2, y: y + KC / 2 + 4, 'text-anchor': 'middle', class: 'cv-v' }, gk); t.textContent = fmt(K[a][b]);
+      }
+      mk('rect', { x: kx, y: ky, width: F * KC, height: F * KC, class: 'cv-win' }, gk);
+      // output
+      const go = mk('g', {}, svg);
+      out.forEach((v, idx) => {
+        const x = ox + (idx % W2) * C, y = oy + Math.floor(idx / W2) * C;
+        if (idx <= k) {
+          mk('rect', { x, y, width: C, height: C, class: 'cv-cell' }, go);
+          if (v !== 0) mk('rect', { x: x + 1, y: y + 1, width: C - 2, height: C - 2, class: v > 0 ? 'cv-pos' : 'cv-neg', 'fill-opacity': (0.06 + 0.28 * Math.abs(v) / maxAbs).toFixed(3) }, go);
+          cellText(x, y, v, 'cv-v', go);
+        } else mk('rect', { x, y, width: C, height: C, class: 'cv-empty' }, go);
+        const hit = mk('rect', { x, y, width: C, height: C, class: 'cv-hit' }, go);
+        hit.addEventListener('click', () => { stop(); k = idx; draw(); });
+      });
+      mk('rect', { x: ox + j * C, y: oy + i * C, width: C, height: C, class: 'cv-cur' }, svg);
+      // readouts
+      const num = W1 - F + 2 * P, exact = num / S, whole = num % S === 0;
+      rSize.textContent = `${W2} × ${W2}`;
+      rForm.textContent = whole ? `(7 − ${F} + ${2 * P})/${S} + 1 = ${W2}` : `⌊(7 − ${F} + ${2 * P})/${S}⌋ + 1 = ${W2}`;
+      rCur.textContent = `s(${i}, ${j}) = ${fmt(out[k])}`;
+      rDone.textContent = `${k + 1} of ${out.length}`;
+      let msg;
+      if (K.every(row => row.every(w => w === 1))) {
+        msg = `Every weight is 1, so s(${i}, ${j}) is the sum of the ${F * F} inputs under the window: ${fmt(out[k])}.`;
+      } else {
+        let terms = '';
+        for (let a = 0; a < F; a++) for (let b = 0; b < F; b++) {
+          const w = K[a][b]; if (w === 0) continue;
+          const x = px(r0 + a, c0 + b), t = `${Math.abs(w)}·${x}`;
+          terms += terms ? (w < 0 ? ' − ' : ' + ') + t : (w < 0 ? '−' : '') + t;
+        }
+        msg = `s(${i}, ${j}) = ${terms} = ${fmt(out[k])}.`;
+      }
+      if (!whole) msg += ` (${num}/${S} = ${exact.toFixed(2)} is not whole, so the last partial step is dropped.)`;
+      status.textContent = msg;
+    };
+
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } bPlay.textContent = 'Play'; };
+    const reset = () => { stop(); compute(); k = 0; draw(); };
+    bStep.addEventListener('click', () => { stop(); k = (k + 1) % out.length; draw(); });
+    bReset.addEventListener('click', () => { stop(); k = 0; draw(); });
+    bPlay.addEventListener('click', () => {
+      if (timer) { stop(); return; }
+      if (reduce) { k = out.length - 1; draw(); return; }
+      if (k >= out.length - 1) k = -1;
+      bPlay.textContent = 'Pause';
+      timer = setInterval(() => { if (k >= out.length - 1) { stop(); return; } k++; draw(); }, 420);
+    });
+    [sel, sS, sP].forEach(el => el.addEventListener('input', reset));
+    sel.addEventListener('change', reset);
+    reset();
+  })();
+})();
+</script>
+</body>
+</html>
