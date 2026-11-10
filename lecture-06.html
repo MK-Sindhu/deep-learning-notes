@@ -1,0 +1,1304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lecture 6 · Regularization · DL Notes</title>
+<meta name="description" content="CS6910 Deep Learning (IIT Madras) notes, Lecture 6: bias and variance, why training error underestimates the true error, L2 regularization, augmentation, parameter sharing, noise injection, early stopping, ensembles and dropout.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<style>
+.c-fit { fill: none; stroke: var(--muted); stroke-width: 1; opacity: .5; }
+.c-mean { fill: none; stroke: var(--accent); stroke-width: 2.6; }
+.c-true { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-dasharray: 6 4; }
+.c-samp { fill: var(--ink-2); stroke: var(--surface); stroke-width: 1; }
+.c-e-test { fill: none; stroke: var(--accent); stroke-width: 2.2; }
+.c-e-train { fill: none; stroke: var(--ink-2); stroke-width: 1.6; }
+.c-e-bias { fill: none; stroke: var(--ok); stroke-width: 1.8; stroke-dasharray: 7 3; }
+.c-e-var { fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-dasharray: 2 3; }
+.c-mark { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 3 3; }
+.do-edge { stroke: var(--ink-2); stroke-width: 1.1; opacity: .45; }
+.do-edge.off { opacity: .1; stroke-dasharray: 3 4; }
+.do-edge.hl { stroke: var(--accent); stroke-width: 2.8; opacity: 1; }
+.do-edge.hl.off { opacity: .35; }
+.do-x { stroke: var(--muted); stroke-width: 1.6; }
+.dg .d-shade { fill: var(--accent-soft); }
+.dg .d-halo { paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <!-- PARTNAV:START --><nav class="partnav" aria-label="Lectures"><a href="index.html">DL Notes</a><span class="sep">/</span><span>Lecture 6</span><span class="sep">·</span><a href="lecture-05.html">← Lecture 5</a><span class="sep">·</span><a href="lecture-07.html">Lecture 7 →</a></nav><!-- PARTNAV:END -->
+    <div class="eyebrow">CS6910 · Deep Learning · IIT Madras</div>
+    <h1>Regularization: from bias and variance to dropout</h1>
+    <p class="lede">Deep networks have more parameters than training points, so they can drive the training error to zero and still do badly on new data. This lecture shows that the training error underestimates the true error by a term that grows with model complexity, then studies the methods that keep that term in check: L2 weight decay, data augmentation, parameter sharing, noise at the inputs and outputs, early stopping, ensembles and dropout.</p>
+    <div class="meta">
+      <span><b>Lecture 6</b></span>
+      <span>Instructor <b>Prof. Mitesh M. Khapra</b></span>
+      <span>About <b>197 min</b> of video</span>
+      <span><b>12</b> modules</span>
+    </div>
+    <div class="watch">
+      <a class="btn solid" href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-8/fullscreen" target="_blank" rel="noopener">Slides</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=Wrscc4tVmVs" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 27:48</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=RKo-jONCjjU" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 9:49</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=nu6x-L04CG4" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 18:09</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=YNAq1X8b-r4" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 18:46</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=eqATcLh_X64" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 38:14</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=in9ZdGxGhW8" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 6:52</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=S1KKaCrg0G8" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 12:20</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=sUnsawJ5-zw" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 4:48</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=CrO__rzk9hU" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 23:44</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=Njytanc4oHY" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 12:44</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=WzScUPDGFVA" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 17:43</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=_wK-MOylRtw" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 5:42</a>
+    </div>
+  </div>
+</header>
+
+<div class="page gutter">
+  <nav class="toc" aria-label="Contents">
+    <div>
+      <h4>Module 6.1 · Bias and variance</h4>
+      <ul>
+        <li><a href="#bias-variance">Bias and variance</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 6.2 · Train vs test error</h4>
+      <ul>
+        <li><a href="#test-error">Bias² + variance + σ²</a></li>
+        <li><a href="#true-error">Estimating the true error</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 6.3 · Model complexity</h4>
+      <ul>
+        <li><a href="#complexity">Sensitivity and complexity</a></li>
+        <li><a href="#objective">Train error + Ω(θ)</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 6.4 · L2 regularization</h4>
+      <ul>
+        <li><a href="#l2">Weight decay</a></li>
+        <li><a href="#l2-hessian">In the Hessian's eigenbasis</a></li>
+        <li><a href="#l2-geometry">Which weights shrink</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Modules 6.5–6.8 · Data and noise</h4>
+      <ul>
+        <li><a href="#augmentation">Dataset augmentation</a></li>
+        <li><a href="#sharing">Sharing and tying</a></li>
+        <li><a href="#input-noise">Noise at the inputs</a></li>
+        <li><a href="#label-smoothing">Noise at the outputs</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 6.9 · Early stopping</h4>
+      <ul>
+        <li><a href="#early-stopping">Patience and stopping</a></li>
+        <li><a href="#early-stopping-l2">Early stopping as L2</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Modules 6.10–6.11 · Ensembles, dropout</h4>
+      <ul>
+        <li><a href="#ensembles">Ensembles and bagging</a></li>
+        <li><a href="#dropout">Dropout in training</a></li>
+        <li><a href="#dropout-test">Dropout at test time</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Wrap-up</h4>
+      <ul>
+        <li><a href="#landscape">Loss landscape, taxonomy</a></li>
+        <li><a href="#random-labels">Random labels</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Revision</h4>
+      <ul>
+        <li><a href="#terms">Key terms</a></li>
+        <li><a href="#test">Test yourself</a></li>
+        <li><a href="index.html">All lectures</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="glance" id="glance">
+      <h2>At a glance</h2>
+      <ul>
+        <li>Deep networks are <b>over-parameterized</b> and overfit easily. Over repeated training samples, a simple model has high <dfn>bias</dfn> \(E[\hat f(x)] - f(x)\) and low <dfn>variance</dfn>; a complex model has the reverse. The expected test error is \(\text{bias}^2 + \text{variance} + \sigma^2\).</li>
+        <li>The error on held-out data equals the true error up to the constant \(\sigma^2\). The <b>training</b> error misses a term \(2E[\varepsilon(\hat f - f)]\), which by Stein's lemma is \(\frac{2\sigma^2}{n}\sum_i \partial\hat f(x_i)/\partial y_i\): large for models that are sensitive to their data. So minimize \(\mathscr L_{train}(\theta) + \Omega(\theta)\).</li>
+        <li><b>L2</b> adds \(\alpha\mathbf w\) to the gradient. Near the optimum, \(\tilde{\mathbf w} = Q(\Lambda + \alpha I)^{-1}\Lambda Q^\top\mathbf w^*\): each eigen-direction of the Hessian is scaled by \(\lambda_i/(\lambda_i + \alpha)\), so flat directions shrink the most.</li>
+        <li><b>Early stopping</b> (patience \(p\), return the model from step \(k - p\)) gives \(\mathbf w_t = Q[I - (I - \eta\Lambda)^t]Q^\top\mathbf w^*\), the same shape as L2. Gaussian <b>input noise</b> on a linear model adds \(\sigma^2\sum_i w_i^2\) to the loss. <b>Soft targets</b> replace 1 and 0 by \(1 - \varepsilon\) and \(\varepsilon/9\).</li>
+        <li>Averaging \(k\) models gives \(\text{mse} = \frac1kV + \frac{k-1}{k}C\), which helps unless their errors are perfectly correlated. <b>Dropout</b> trains \(2^n\) weight-sharing thinned networks (keep \(p = 0.5\) for hidden units, 0.8 for inputs) and scales weights by \(p\) at test time.</li>
+        <li>Augmentation, parameter sharing and tying, and an explicit/implicit taxonomy complete the list. Random-label experiments suggest regularizers alone do not explain why deep networks generalize.</li>
+      </ul>
+    </div>
+
+    <!-- ============ MODULE 6.1 ============ -->
+    <section id="bias-variance">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=Wrscc4tVmVs&amp;t=95s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 1:35</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Wrscc4tVmVs&amp;t=218s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 3:38 two models</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Wrscc4tVmVs&amp;t=1106s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 18:26 bias</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Wrscc4tVmVs&amp;t=1291s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 21:31 variance</a>
+        </div>
+        <h2>Bias and variance of a model</h2>
+      </div>
+      <p>Until now (<a href="lecture-05.html">Lecture 5</a>) the focus was on minimizing the objective quickly and reliably. The new problem is what a well-minimized objective can hide. Deep learning models often have far more parameters than the training data has samples; the slide's picture is billions of parameters against millions of samples. Such <dfn>over-parameterized</dfn> models are prone to <dfn>overfitting</dfn>: they can drive the training error to zero on the points they were given and still predict badly on points they have not seen. To understand why, the lecture looks at the bias and variance of a model as its capacity changes.</p>
+
+      <h3>The curve-fitting experiment</h3>
+      <p>The data points were drawn from a sinusoid, so for once the true relation \(f(x)\) is known. We pretend not to know it and fit two models to the 500 training points:</p>
+      <div class="eq">\[ \text{Simple (degree 1):}\quad y = \hat f(x) = w_1x + w_0 \qquad\qquad \text{Complex (degree 25):}\quad y = \hat f(x) = \sum_{i=1}^{25} w_ix^i + w_0 \]</div>
+      <p>The simple model has 2 parameters and the complex one 26, so the complex one has much more capacity. Both make an assumption about how \(y\) depends on \(x\), and neither knows the true \(f\). Each is trained by minimizing the squared error \(\sum_i (y_i - \hat f(x_i))^2\) with gradient descent. The experiment is repeated \(k\) times, each time on a different random sample of the training data (in the video, about 400 of the 500 points, 30 times). Each repetition gives one line and one degree-25 curve.</p>
+      <p>The plots show two things <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=Wrscc4tVmVs&amp;t=801s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>13:21</a>.</p>
+      <ul>
+        <li>Simple models trained on different samples barely differ from each other, but all of them are far from the sinusoid. They <dfn>underfit</dfn>: even their training error is large.</li>
+        <li>Complex models trained on different samples are very different from each other, but on average they follow the sinusoid, and many of them reach close to zero training error.</li>
+      </ul>
+
+      <h3>Definitions</h3>
+      <p>The randomness comes from which sample of the training data a model happened to see. Averaging the 30 fitted curves at each \(x\) estimates \(E[\hat f(x)]\), the expected (average) model. On the slide the green line is this average for the simple model, the blue curve the average for the complex model, and the red curve the true \(f\).</p>
+      <div class="eq">\[ \text{Bias}\big(\hat f(x)\big) = E\big[\hat f(x)\big] - f(x), \qquad \text{Variance}\big(\hat f(x)\big) = E\Big[\big(\hat f(x) - E[\hat f(x)]\big)^2\Big] \]</div>
+      <p>Bias measures how far the average model is from the truth. Variance is the standard statistical variance of the random variable \(\hat f(x)\): roughly, how much models trained on different samples differ from each other. The simple model's average line is far from the sinusoid, so its bias is high; the complex model's average is close, so its bias is low. The simple lines all hug their average (low variance), while some complex curves sit far from theirs (high variance).</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Model</th><th>Bias</th><th>Variance</th><th>Typical failure</th></tr></thead>
+          <tbody>
+            <tr><td>Simple (degree 1)</td><td>High</td><td>Low</td><td>Underfits: wrong even on the training data</td></tr>
+            <tr><td>Complex (degree 25)</td><td>Low</td><td>High</td><td>Overfits: depends heavily on the sample it saw</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>There is always a trade-off between the two <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=Wrscc4tVmVs&amp;t=1472s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>24:32</a>. High variance is bad because the model you end up with depends on the training sample you happened to get, so a test point that resembles a different sample can be predicted badly. Low variance is no use if it comes with high bias, because then all the models agree with each other and are all far from the truth. The aim is a moderate amount of each. Both contribute to the mean squared error, as the next module shows.</p>
+
+      <figure id="bv-fig">
+        <div class="controls">
+          <label for="bv-deg">Polynomial degree</label>
+          <input type="range" id="bv-deg" min="1" max="12" step="1" value="1">
+          <output id="bv-deg-out" for="bv-deg">1</output>
+          <button class="btn" id="bv-redraw" type="button">Redraw the 30 training samples</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">Bias² (avg over x)</span><span class="v mine" id="bv-bias">–</span></div>
+          <div><span class="k">Variance (avg over x)</span><span class="v" id="bv-var">–</span></div>
+          <div><span class="k">Train MSE</span><span class="v" id="bv-train">–</span></div>
+          <div><span class="k">Test MSE</span><span class="v" id="bv-test">–</span></div>
+        </div>
+        <div class="status" id="bv-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="l06-bv-svg" viewBox="0 0 640 580" role="img" aria-label="Top: thirty polynomial fits of the chosen degree, each trained on a different sample of noisy points from a sine curve, with their average and the true sine. Bottom: squared bias, variance, training error and test error against polynomial degree from 1 to 12 on a log scale, with the current degree marked."></svg></div>
+        <figcaption><b>Synthetic: 30 fits from 30 training samples.</b> A pool of 500 points from \(y = \sin 2\pi x + \varepsilon\) with \(\sigma = 0.3\), generated for these notes. Each fit sees 20 points of the pool (one from each twentieth of the \(x\)-range), fewer than the lecture's 400 so that variance shows up at modest degrees. Top: the 30 fits (grey), their average, which estimates \(E[\hat f(x)]\) (violet), and the true \(f\) (dashed). Bottom: bias², variance, training MSE and test MSE (on 300 fresh points) at every degree for the same samples, on a log scale. Training error only falls; test error falls and then rises, and it stays close to bias² + variance + σ².</figcaption>
+      </figure>
+    </section>
+
+    <!-- ============ MODULE 6.2 ============ -->
+    <section id="test-error">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=RKo-jONCjjU&amp;t=31s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 0:31</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=RKo-jONCjjU&amp;t=122s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 2:02 decomposition</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=RKo-jONCjjU&amp;t=337s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 5:37 the two curves</a>
+        </div>
+        <h2>Test error = bias² + variance + σ²</h2>
+      </div>
+      <p>Take a new point \((x, y)\) that was not seen during training. If \(\hat f\) predicts \(y\), its mean squared error is \(E[(y - \hat f(x))^2]\), the average squared error over many such unseen points (think of every image uploaded after an image classifier was trained). It can be shown to split into three parts.</p>
+      <div class="result">
+        <span class="lbl">Bias–variance decomposition</span>
+        \[ E\big[(y - \hat f(x))^2\big] = \text{Bias}^2 + \text{Variance} + \sigma^2 \]
+        <p>\(\sigma^2\) is the <dfn>irreducible error</dfn>, the variance of the noise in \(y\) itself. No model can remove it.</p>
+      </div>
+      <p>The slide links to a proof elsewhere. Not in the lecture, but short: write \(y = f + \varepsilon\) with \(E[\varepsilon] = 0\), \(E[\varepsilon^2] = \sigma^2\), and let \(\bar f = E[\hat f(x)]\). For an unseen point the noise \(\varepsilon\) is independent of \(\hat f\), and \(f - \bar f\) is a constant, so in each expansion the cross term has expectation zero:</p>
+      <div class="eq">\[ E\big[(f + \varepsilon - \hat f)^2\big] = E\big[(f - \hat f)^2\big] + \sigma^2, \qquad E\big[(f - \bar f + \bar f - \hat f)^2\big] = \underbrace{(\bar f - f)^2}_{\text{Bias}^2} + \underbrace{E\big[(\hat f - \bar f)^2\big]}_{\text{Variance}} \]</div>
+      <p>So the error on unseen data depends on both bias and variance. A high-bias model like the line has a high test error; so does a high-variance model like the degree-25 polynomial. For the test error to be small both must be small, and the experiment showed that they pull against each other. The minimum sits somewhere in the middle, at medium bias and medium variance.</p>
+
+      <h3>Training error and test error <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=RKo-jONCjjU&amp;t=462s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 7:42</a></h3>
+      <p>The parameters of \(\hat f\) (all the \(w_i\)) are estimated from a training set of \(n\) points. What we care about is performance on a validation (unseen) set of \(m\) points that was not used for training. That gives two quantities:</p>
+      <div class="eq">\[ \text{train}_{err} = \frac1n\sum_{i=1}^{n}\big(y_i - \hat f(x_i)\big)^2, \qquad \text{test}_{err} = \frac1m\sum_{i=n+1}^{n+m}\big(y_i - \hat f(x_i)\big)^2 \]</div>
+      <p>Typically, as model complexity grows the training error keeps falling toward zero, while the test error falls at first and then rises. The left end of the curve is the high-bias region: the simple line is bad even on its own training data. The right end is the high-variance region: fits that are excellent on their own sample and poor on new points. Between them lies the sweet spot, the ideal model complexity. The lower panel of the interactive figure above shows this shape on synthetic data.</p>
+      <p class="rule-of-thumb">As model complexity increases, the training error becomes overly optimistic. The validation error gives the real picture of how close \(\hat f\) is to \(f\).</p>
+      <p>The next two modules make this intuition precise and show how to account for the optimism in the training error.</p>
+    </section>
+
+    <section id="true-error">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=nu6x-L04CG4&amp;t=31s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 0:31</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=nu6x-L04CG4&amp;t=250s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 4:10 the expansion</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=nu6x-L04CG4&amp;t=586s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 9:46 test data</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=YNAq1X8b-r4&amp;t=31s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 0:31 training data</a>
+        </div>
+        <h2>Estimating the true error from data</h2>
+      </div>
+      <p>Let \(D = \{x_i, y_i\}_{i=1}^{m+n}\). Some true function relates \(y\) to \(x\), with noise:</p>
+      <div class="eq">\[ y = f(x) + \varepsilon, \qquad \varepsilon \sim \mathcal N(0, \sigma^2) \]</div>
+      <p>We do not know \(f\). We approximate it by \(\hat f\), estimate its parameters from a training set \(T \subset D\), and predict \(\hat y = \hat f(x)\). The quantity we want is the <dfn>true error</dfn> \(E[(\hat f(x) - f(x))^2]\), but it contains the unknown \(f\), so it cannot be computed directly. What we do have are observations \(y_i\) and predictions \(\hat y_i\). Rewrite their squared difference using \(y = f(x) + \varepsilon\), and expand it as \((a - b)^2\) with \(a = \hat f(x) - f(x)\) and \(b = \varepsilon\):</p>
+      <div class="eq">\[ \begin{aligned} E\big[(\hat y - y)^2\big] &= E\big[(\hat f(x) - f(x) - \varepsilon)^2\big] \\ &= E\big[(\hat f(x) - f(x))^2 - 2\varepsilon(\hat f(x) - f(x)) + \varepsilon^2\big] \\ &= E\big[(\hat f(x) - f(x))^2\big] - 2E\big[\varepsilon(\hat f(x) - f(x))\big] + E[\varepsilon^2] \end{aligned} \]</div>
+      <div class="eq">\[ \therefore\quad E\big[(\hat f(x) - f(x))^2\big] = E\big[(\hat y - y)^2\big] - E[\varepsilon^2] + 2E\big[\varepsilon(\hat f(x) - f(x))\big] \]</div>
+      <p>The quantity we want is now written with three terms. The first can be estimated from data, the second is \(\sigma^2\), and the third still contains \(f\) and needs an argument.</p>
+
+      <h3>Detour: estimating an expectation <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=nu6x-L04CG4&amp;t=373s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 6:13</a></h3>
+      <p>Suppose a team scored \(z_1 = 2\), \(z_2 = 1\), \(z_3 = 0\), …, \(z_k = 2\) goals in \(k\) matches. The empirical estimate of the expected number of goals is the average, \(E[z] \approx \frac1k\sum_{i=1}^k z_i\). In the same way, from \(m\) observations and predictions,</p>
+      <div class="eq">\[ E\big[(\hat y - y)^2\big] \approx \frac1m\sum_{i=1}^{m}(\hat y_i - y_i)^2 \]</div>
+      <p>The right-hand side of the true-error equation can be evaluated with test observations or with training observations, and the two behave very differently.</p>
+
+      <h3>Case 1: test observations</h3>
+      <div class="eq">\[ \underbrace{E\big[(\hat f(x) - f(x))^2\big]}_{\text{true error}} = \underbrace{\frac1m\sum_{i=n+1}^{n+m}(\hat y_i - y_i)^2}_{\text{empirical estimate of error}} - \underbrace{\sigma^2}_{\text{small constant}} + \underbrace{2E\big[\varepsilon(\hat f(x) - f(x))\big]}_{=\ 2\,\text{covariance}(\varepsilon,\ \hat f(x) - f(x))} \]</div>
+      <p>The last expectation is a covariance because \(\varepsilon\) has mean zero <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=nu6x-L04CG4&amp;t=677s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>11:17</a>. For any \(X\) with \(\mu_X = E[X] = 0\):</p>
+      <div class="eq">\[ \text{cov}(X, Y) = E[(X - \mu_X)(Y - \mu_Y)] = E[X(Y - \mu_Y)] = E[XY] - E[X\mu_Y] = E[XY] - \mu_YE[X] = E[XY] \]</div>
+      <p>None of the test observations took part in estimating \(\hat f\); its parameters came from the training data only <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=nu6x-L04CG4&amp;t=863s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>14:23</a>. So at a test point, \(\varepsilon = y - f(x)\) is independent of \(\hat f(x) - f(x)\), and the expectation of the product splits into a product of expectations:</p>
+      <div class="eq">\[ E\big[\varepsilon\,(\hat f(x) - f(x))\big] = E[\varepsilon]\cdot E\big[\hat f(x) - f(x)\big] = 0\cdot E\big[\hat f(x) - f(x)\big] = 0 \]</div>
+      <div class="result">
+        <span class="lbl">Case 1 result</span>
+        <p>True error = empirical test error − σ². Up to a small constant, the error measured on held-out data is the true error. So always estimate a model's error on a validation set that is independent of the training set.</p>
+      </div>
+
+      <h3>Case 2: training observations</h3>
+      <div class="eq">\[ \underbrace{E\big[(\hat f(x) - f(x))^2\big]}_{\text{true error}} = \underbrace{\frac1n\sum_{i=1}^{n}(\hat y_i - y_i)^2}_{\text{empirical train error}} - \underbrace{\sigma^2}_{\text{small constant}} + 2E\big[\varepsilon(\hat f(x) - f(x))\big] \]</div>
+      <p>Now the argument fails. The training observations were used to estimate the parameters of \(\hat f\), so \(y - f(x)\) is not independent of \(\hat f(x) - f(x)\). The expectation no longer splits into \(E[\varepsilon]\cdot E[\hat f(x) - f(x)]\), and the covariance term is not zero. Reporting the training error alone leaves this term out, so the empirical training error is smaller than the true error and gives a false picture of it. How does this term depend on model complexity?</p>
+    </section>
+
+    <!-- ============ MODULE 6.3 ============ -->
+    <section id="complexity">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=YNAq1X8b-r4&amp;t=338s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 5:38 Stein's lemma</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=YNAq1X8b-r4&amp;t=428s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 7:08 sensitivity</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=YNAq1X8b-r4&amp;t=704s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 11:44 one point moved</a>
+        </div>
+        <h2>The extra term measures sensitivity, which grows with complexity</h2>
+      </div>
+      <p>Estimate the troublesome expectation empirically over the \(n\) training points. Using Stein's lemma (and, as the slide says, some trickery) one can show</p>
+      <div class="eq">\[ \frac1n\sum_{i=1}^{n}\varepsilon_i\big(\hat f(x_i) - f(x_i)\big) = \frac{\sigma^2}{n}\sum_{i=1}^{n}\frac{\partial\hat f(x_i)}{\partial y_i} \]</div>
+      <p>The lecture takes the lemma on trust, and so can we. When is \(\partial\hat f(x_i)/\partial y_i\) high? When a small change in one observation causes a large change in the estimate. Say \(x_i = 10\) and \(y_i\) changes from 20 to 20.1: ideally the fitted parameters should barely move. A complex model is more sensitive to such changes than a simple one, which is what the 30 repeated fits already showed. Linking the two:</p>
+      <div class="result">
+        <span class="lbl">True error and model complexity</span>
+        \[ \text{true error} = \text{empirical train error} + \text{small constant} + \Omega(\text{model complexity}) \]
+        <p>The more complex the model, the further its training error lies from its true error. A training error near zero means little until this term is accounted for.</p>
+      </div>
+      <p>The slides then check the claim directly: fit a simple and a complex model to some data, change one data point, and refit. The simple model hardly changes compared with the complex one.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 290" role="img" aria-label="Two panels with the same twelve noisy points from a sine curve. One point is raised by 0.8 and both models are refitted. Left, a straight line barely moves. Right, a degree-9 polynomial bends up to follow the moved point and also changes shape near the left edge.">
+            <defs><marker id="l06-sens-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="40" y="20">Simple: degree 1 (2 parameters)</text>
+            <text class="d-h" x="380" y="20">Complex: degree 9 (10 parameters)</text>
+            <rect class="d-plot" x="40" y="31" width="260" height="198"/>
+            <rect class="d-plot" x="380" y="31" width="260" height="198"/>
+            <line class="d-rule" x1="40" y1="130" x2="300" y2="130"/>
+            <line class="d-rule" x1="380" y1="130" x2="640" y2="130"/>
+            <text class="d-al" x="36" y="134" text-anchor="end">0</text>
+            <text class="d-al" x="36" y="44" text-anchor="end">2</text>
+            <text class="d-al" x="36" y="224" text-anchor="end">−2</text>
+            <!-- simple model -->
+            <path class="d-ln d-dash" d="M47.9 96.3 L51.8 97.6 L55.8 98.9 L59.7 100.2 L63.7 101.5 L67.6 102.7 L71.6 104 L75.5 105.3 L79.5 106.6 L83.4 107.9 L87.4 109.2 L91.3 110.4 L95.3 111.7 L99.2 113 L103.2 114.3 L107.1 115.6 L111.1 116.9 L115 118.1 L119 119.4 L122.9 120.7 L126.9 122 L130.8 123.3 L134.8 124.6 L138.7 125.8 L142.7 127.1 L146.6 128.4 L150.6 129.7 L154.5 131 L158.5 132.3 L162.4 133.5 L166.4 134.8 L170.3 136.1 L174.3 137.4 L178.2 138.7 L182.2 140 L186.1 141.2 L190.1 142.5 L194 143.8 L198 145.1 L201.9 146.4 L205.9 147.7 L209.8 148.9 L213.8 150.2 L217.7 151.5 L221.7 152.8 L225.6 154.1 L229.6 155.4 L233.5 156.6 L237.5 157.9 L241.4 159.2 L245.4 160.5 L249.3 161.8 L253.3 163.1 L257.2 164.3 L261.2 165.6 L265.1 166.9 L269.1 168.2 L273 169.5 L277 170.8 L280.9 172 L284.9 173.3"/>
+            <path class="d-ln-acc" d="M47.9 94.1 L51.8 95.4 L55.8 96.6 L59.7 97.9 L63.7 99.2 L67.6 100.4 L71.6 101.7 L75.5 102.9 L79.5 104.2 L83.4 105.4 L87.4 106.7 L91.3 108 L95.3 109.2 L99.2 110.5 L103.2 111.7 L107.1 113 L111.1 114.2 L115 115.5 L119 116.8 L122.9 118 L126.9 119.3 L130.8 120.5 L134.8 121.8 L138.7 123 L142.7 124.3 L146.6 125.6 L150.6 126.8 L154.5 128.1 L158.5 129.3 L162.4 130.6 L166.4 131.9 L170.3 133.1 L174.3 134.4 L178.2 135.6 L182.2 136.9 L186.1 138.1 L190.1 139.4 L194 140.7 L198 141.9 L201.9 143.2 L205.9 144.4 L209.8 145.7 L213.8 146.9 L217.7 148.2 L221.7 149.5 L225.6 150.7 L229.6 152 L233.5 153.2 L237.5 154.5 L241.4 155.7 L245.4 157 L249.3 158.3 L253.3 159.5 L257.2 160.8 L261.2 162 L265.1 163.3 L269.1 164.5 L273 165.8 L277 167.1 L280.9 168.3 L284.9 169.6"/>
+            <circle class="pt-plain" cx="47.9" cy="120.2" r="3.6"/><circle class="pt-plain" cx="71.6" cy="100.4" r="3.6"/><circle class="pt-plain" cx="93.9" cy="107" r="3.6"/><circle class="pt-plain" cx="116.2" cy="91" r="3.6"/><circle class="pt-plain" cx="142.5" cy="102.7" r="3.6"/><circle class="pt-plain" cx="162.2" cy="120.6" r="3.6"/><circle class="pt-plain" cx="207.7" cy="169.4" r="3.6"/><circle class="pt-plain" cx="221.4" cy="180.5" r="3.6"/><circle class="pt-plain" cx="242.6" cy="180.8" r="3.6"/><circle class="pt-plain" cx="269" cy="152" r="3.6"/><circle class="pt-plain" cx="284.9" cy="152.6" r="3.6"/>
+            <circle class="pt-no" cx="182.1" cy="155.4" r="4"/>
+            <line class="d-ln-acc d-dash" x1="182.1" y1="150" x2="182.1" y2="125.5" marker-end="url(#l06-sens-ah)"/>
+            <circle class="pt-new" cx="182.1" cy="119.4" r="5"/>
+            <!-- complex model -->
+            <path class="d-ln d-dash" d="M387.9 120.2 L391.8 102.4 L395.8 94 L399.7 91.8 L403.7 93.3 L407.6 96.6 L411.6 100.5 L415.5 104 L419.5 106.7 L423.4 108.1 L427.4 108.4 L431.3 107.6 L435.3 105.8 L439.2 103.4 L443.2 100.6 L447.1 97.7 L451.1 95.1 L455 92.8 L459 91.2 L462.9 90.4 L466.9 90.5 L470.8 91.5 L474.8 93.4 L478.7 96.2 L482.7 99.8 L486.6 104.1 L490.6 109 L494.5 114.2 L498.5 119.8 L502.4 125.5 L506.4 131.2 L510.3 136.7 L514.3 142 L518.2 147 L522.2 151.6 L526.1 155.8 L530.1 159.6 L534 163 L538 166.1 L541.9 168.8 L545.9 171.3 L549.8 173.5 L553.8 175.5 L557.7 177.3 L561.7 178.9 L565.6 180.2 L569.6 181.3 L573.5 181.9 L577.5 182 L581.4 181.4 L585.4 180 L589.3 177.6 L593.3 174.2 L597.2 169.7 L601.2 164.2 L605.1 158.1 L609.1 152 L613 146.6 L617 143.5 L620.9 144.6 L624.9 152.6"/>
+            <path class="d-ln-acc" d="M387.9 120.2 L391.8 78 L395.8 64.3 L399.7 66.8 L403.7 77 L407.6 89.2 L411.6 100.3 L415.5 108.5 L419.5 113.2 L423.4 114.6 L427.4 113.3 L431.3 110.1 L435.3 105.8 L439.2 101.2 L443.2 96.9 L447.1 93.5 L451.1 91.2 L455 90.1 L459 90.3 L462.9 91.6 L466.9 93.7 L470.8 96.4 L474.8 99.5 L478.7 102.7 L482.7 105.7 L486.6 108.3 L490.6 110.6 L494.5 112.5 L498.5 114.1 L502.4 115.4 L506.4 116.6 L510.3 118 L514.3 119.7 L518.2 122 L522.2 125 L526.1 128.9 L530.1 133.7 L534 139.4 L538 145.8 L541.9 152.9 L545.9 160.2 L549.8 167.5 L553.8 174.3 L557.7 180.3 L561.7 185 L565.6 188.1 L569.6 189.3 L573.5 188.6 L577.5 185.9 L581.4 181.4 L585.4 175.6 L589.3 169 L593.3 162.5 L597.2 156.8 L601.2 152.9 L605.1 151.3 L609.1 152.2 L613 155.3 L617 158.8 L620.9 159.8 L624.9 152.6"/>
+            <circle class="pt-plain" cx="387.9" cy="120.2" r="3.6"/><circle class="pt-plain" cx="411.6" cy="100.4" r="3.6"/><circle class="pt-plain" cx="433.9" cy="107" r="3.6"/><circle class="pt-plain" cx="456.2" cy="91" r="3.6"/><circle class="pt-plain" cx="482.5" cy="102.7" r="3.6"/><circle class="pt-plain" cx="502.2" cy="120.6" r="3.6"/><circle class="pt-plain" cx="547.7" cy="169.4" r="3.6"/><circle class="pt-plain" cx="561.4" cy="180.5" r="3.6"/><circle class="pt-plain" cx="582.6" cy="180.8" r="3.6"/><circle class="pt-plain" cx="609" cy="152" r="3.6"/><circle class="pt-plain" cx="624.9" cy="152.6" r="3.6"/>
+            <circle class="pt-no" cx="522.1" cy="155.4" r="4"/>
+            <line class="d-ln-acc d-dash" x1="522.1" y1="150" x2="522.1" y2="125.5" marker-end="url(#l06-sens-ah)"/>
+            <circle class="pt-new" cx="522.1" cy="119.4" r="5"/>
+            <text class="d-s" x="170" y="249" text-anchor="middle">prediction at the moved point rises 0.07 · ∂f̂/∂y ≈ 0.09</text>
+            <text class="d-s" x="510" y="249" text-anchor="middle">prediction at the moved point rises 0.59 · ∂f̂/∂y ≈ 0.74</text>
+            <line class="d-ln d-dash" x1="40" y1="276" x2="64" y2="276"/><text class="d-s" x="70" y="280">fit before</text>
+            <line class="d-ln-acc" x1="150" y1="276" x2="174" y2="276"/><text class="d-s" x="180" y="280">fit after the hollow point moves up by 0.8 (to the filled one)</text>
+          </svg>
+        </div>
+        <figcaption><b>One point moved, two models refitted.</b> Synthetic data generated for these notes: 12 noisy points from a sinusoid. The line hardly notices the change. The degree-9 polynomial bends to follow the moved point, and its shape also changes near \(x = 0\), far from the change. That is a large \(\partial\hat f(x_i)/\partial y_i\).</figcaption>
+      </figure>
+      <p class="note">Not in the lecture: for a least-squares fit the predictions are linear in the observations, \(\hat{\mathbf y} = S\mathbf y\) with \(S = X(X^\top X)^{-1}X^\top\). Then \(\partial\hat f(x_i)/\partial y_i = S_{ii}\) (the 0.09 and 0.74 above), and \(\sum_i\partial\hat f(x_i)/\partial y_i = \operatorname{tr}(S)\) equals the number of parameters: 2 for the line, 10 for the degree-9 polynomial. In this simple case the complexity term literally counts parameters.</p>
+    </section>
+
+    <section id="objective">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=YNAq1X8b-r4&amp;t=796s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 13:16</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=YNAq1X8b-r4&amp;t=976s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 16:16 the picture</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=YNAq1X8b-r4&amp;t=1037s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 17:17 why deep learning</a>
+        </div>
+        <h2>Minimize training error plus Ω(θ)</h2>
+      </div>
+      <p>Driving \(\mathscr L_{train}(\theta)\) to zero can raise the complexity term so much that the true error goes up. So while training, instead of the training error alone, minimize</p>
+      <div class="eq">\[ \min_{\text{w.r.t. }\theta}\ \mathscr L_{train}(\theta) + \Omega(\theta) = \mathscr L(\theta) \]</div>
+      <p>where \(\Omega(\theta)\) is high for complex models and small for simple ones. \(\Omega\) acts as an approximation of \(\frac{\sigma^2}{n}\sum_i\partial\hat f(x_i)/\partial y_i\), which cannot be handled directly. If minimizing \(\Omega\) reduces model complexity, it also reduces the term that made the training error optimistic.</p>
+      <p class="rule-of-thumb">This is the basis for all regularization methods. L1 regularization, L2 regularization, early stopping and injecting noise at the input can all be shown to be instances of it.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 290" role="img" aria-label="Error against model complexity. The training error falls steadily toward zero. The true error falls, reaches a minimum at the sweet spot, then rises. A bracket marks the growing gap between them as the complexity term.">
+            <defs><marker id="l06-cx-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <line class="d-ln" x1="60" y1="250" x2="585" y2="250" marker-end="url(#l06-cx-ah)"/>
+            <line class="d-ln" x1="60" y1="250" x2="60" y2="16" marker-end="url(#l06-cx-ah)"/>
+            <text class="d-s" x="585" y="272" text-anchor="end">model complexity</text>
+            <text class="d-s" x="68" y="22">error</text>
+            <text class="d-s" x="80" y="48">high bias (underfitting)</text>
+            <text class="d-s" x="520" y="30" text-anchor="end">high variance (overfitting)</text>
+            <line class="d-ln d-dash" x1="234.5" y1="186" x2="234.5" y2="250"/>
+            <path class="d-ln" style="stroke-width:2" d="M60 96.4 L70 108.9 L80 120.3 L90 130.8 L100 140.3 L110 149 L120 156.9 L130 164.2 L140 170.8 L150 176.9 L160 182.4 L170 187.4 L180 192 L190 196.2 L200 200.1 L210 203.6 L220 206.8 L230 209.7 L240 212.4 L250 214.8 L260 217 L270 219.1 L280 220.9 L290 222.6 L300 224.2 L310 225.6 L320 226.9 L330 228 L340 229.1 L350 230.1 L360 231 L370 231.8 L380 232.5 L390 233.2 L400 233.9 L410 234.4 L420 234.9 L430 235.4 L440 235.8 L450 236.2 L460 236.6 L470 236.9 L480 237.2 L490 237.5 L500 237.8 L510 238 L520 238.2 L530 238.4 L540 238.6 L550 238.7 L560 238.9"/>
+            <path class="d-ln-acc" style="stroke-width:2.4" d="M60 88.4 L70 100.8 L80 112 L90 122.1 L100 131.1 L110 139.1 L120 146.2 L130 152.4 L140 157.9 L150 162.6 L160 166.7 L170 170.1 L180 173 L190 175.3 L200 177 L210 178.3 L220 179.1 L230 179.5 L240 179.5 L250 179.1 L260 178.3 L270 177.2 L280 175.7 L290 174 L300 171.9 L310 169.6 L320 166.9 L330 164 L340 160.9 L350 157.5 L360 153.9 L370 150 L380 145.9 L390 141.6 L400 137.1 L410 132.3 L420 127.4 L430 122.3 L440 117 L450 111.4 L460 105.7 L470 99.8 L480 93.8 L490 87.5 L500 81.1 L510 74.5 L520 67.7 L530 60.7 L540 53.6 L550 46.3 L560 38.9"/>
+            <circle class="pt-new" cx="234.5" cy="179.5" r="5"/>
+            <text class="d-t" x="234.5" y="166" text-anchor="middle">sweet spot</text>
+            <text class="d-t" x="566" y="42" style="fill: var(--accent)">true error</text>
+            <text class="d-t" x="566" y="243">training error</text>
+            <path class="d-ln" d="M462 106 L470 106 L470 236 L462 236"/>
+            <text class="d-t" x="478" y="166">Ω(model</text>
+            <text class="d-t" x="478" y="182">complexity)</text>
+          </svg>
+        </div>
+        <figcaption><b>Where Ω sits.</b> Illustrative curves. As complexity grows, the training error falls toward zero while the true (test) error falls and then rises. The gap between them is the complexity term, and it widens with complexity. \(\Omega(\theta)\) should keep the model at a reasonable complexity, near the sweet spot.</figcaption>
+      </figure>
+
+      <h3>Why deep learning needs this</h3>
+      <p>Deep neural networks are highly complex models, with many parameters and many non-linearities. By the representation-power results of <a href="lecture-03.html">Lecture 3</a>, adding layers or neurons lets a network get arbitrarily close to its training data. So it is easy for a deep network to overfit and drive the training error to 0, and some form of regularization is needed. The lecture covers these forms:</p>
+      <ol>
+        <li><a href="#l2">\(l_2\) regularization</a></li>
+        <li><a href="#augmentation">Dataset augmentation</a></li>
+        <li><a href="#sharing">Parameter sharing and tying</a></li>
+        <li><a href="#input-noise">Adding noise to the inputs</a></li>
+        <li><a href="#label-smoothing">Adding noise to the outputs</a></li>
+        <li><a href="#early-stopping">Early stopping</a></li>
+        <li><a href="#ensembles">Ensemble methods</a></li>
+        <li><a href="#dropout">Dropout</a></li>
+      </ol>
+    </section>
+
+    <!-- ============ MODULE 6.4 ============ -->
+    <section id="l2">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=eqATcLh_X64&amp;t=134s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 2:14</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=eqATcLh_X64&amp;t=237s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 3:57 why it regularizes</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=eqATcLh_X64&amp;t=375s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 6:15 update rule</a>
+        </div>
+        <h2>L2 regularization: weight decay</h2>
+      </div>
+      <p>For \(l_2\) regularization the regularizer is the squared norm of the weights:</p>
+      <div class="eq">\[ \tilde{\mathscr L}(\mathbf w) = \mathscr L(\mathbf w) + \frac{\alpha}{2}\lVert\mathbf w\rVert^2 \]</div>
+      <p>\(\alpha\) decides how much weight the penalty gets in the total loss. With \(\alpha = 0\) there is no regularization and we are back to the unregularized loss.</p>
+      <p>Why does a penalty on the size of the weights control model complexity? Without it, any point of weight space is open to the optimizer. With it, moving far from the origin makes \(\lVert\mathbf w\rVert^2\), and so the total loss, large. You may add as many parameters as you like, a million or a billion, but none of them is given the freedom to take very large values. The model keeps its capacity but cannot use all of it.</p>
+      <p>For SGD and its variants we need the gradient. The derivative of \(\frac\alpha2\mathbf w^\top\mathbf w\) is \(\alpha\mathbf w\), so</p>
+      <div class="eq">\[ \nabla\tilde{\mathscr L}(\mathbf w) = \nabla\mathscr L(\mathbf w) + \alpha\mathbf w, \qquad \mathbf w_{t+1} = \mathbf w_t - \eta\nabla\mathscr L(\mathbf w_t) - \eta\alpha\mathbf w_t \]</div>
+      <p>This requires a very small modification to gradient descent code: subtract one extra term. (The lecture notes that the change is more involved for optimizers like Adam, and does not go into it.) Grouping the \(\mathbf w_t\) terms gives \(\mathbf w_{t+1} = (1 - \eta\alpha)\mathbf w_t - \eta\nabla\mathscr L(\mathbf w_t)\): every step first shrinks the weights by a constant factor, which is why the L2 penalty is also called <dfn>weight decay</dfn>.</p>
+    </section>
+
+    <section id="l2-hessian">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=eqATcLh_X64&amp;t=503s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 8:23</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=eqATcLh_X64&amp;t=831s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 13:51 the regularized optimum</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=eqATcLh_X64&amp;t=1030s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 17:10 eigendecomposition</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=eqATcLh_X64&amp;t=1478s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 24:38 what D looks like</a>
+        </div>
+        <h2>What L2 does to the optimum, in the Hessian's eigenbasis</h2>
+      </div>
+      <p>Let \(\mathbf w^*\) be the optimal solution of \(\mathscr L(\mathbf w)\), the loss without regularization (not of \(\tilde{\mathscr L}\)). Because it is optimal, \(\nabla\mathscr L(\mathbf w^*) = \mathbf 0\). For a point near it write \(\mathbf u = \mathbf w - \mathbf w^*\) and use the Taylor series up to second order <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=eqATcLh_X64&amp;t=601s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>10:01</a> (gradient descent in <a href="lecture-03.html">Lecture 3</a> used only the first-order term). \(H\) is the Hessian, the matrix of second-order partial derivatives:</p>
+      <div class="eq">\[ \begin{aligned} \mathscr L(\mathbf w^* + \mathbf u) &= \mathscr L(\mathbf w^*) + \mathbf u^\top\nabla\mathscr L(\mathbf w^*) + \tfrac12\mathbf u^\top H\mathbf u \\ \mathscr L(\mathbf w) &= \mathscr L(\mathbf w^*) + (\mathbf w - \mathbf w^*)^\top\nabla\mathscr L(\mathbf w^*) + \tfrac12(\mathbf w - \mathbf w^*)^\top H(\mathbf w - \mathbf w^*) \\ &= \mathscr L(\mathbf w^*) + \tfrac12(\mathbf w - \mathbf w^*)^\top H(\mathbf w - \mathbf w^*) && (\because \nabla\mathscr L(\mathbf w^*) = \mathbf 0) \\ \nabla\mathscr L(\mathbf w) &= \nabla\mathscr L(\mathbf w^*) + H(\mathbf w - \mathbf w^*) = H(\mathbf w - \mathbf w^*) \end{aligned} \]</div>
+      <p>Adding the gradient of the penalty, \(\nabla\tilde{\mathscr L}(\mathbf w) = \nabla\mathscr L(\mathbf w) + \alpha\mathbf w\), which here is \(H(\mathbf w - \mathbf w^*) + \alpha\mathbf w\). Let \(\tilde{\mathbf w}\) be the optimal solution of the regularized loss. Its gradient is zero:</p>
+      <div class="eq">\[ H(\tilde{\mathbf w} - \mathbf w^*) + \alpha\tilde{\mathbf w} = \mathbf 0 \;\;\therefore\;\; (H + \alpha I)\tilde{\mathbf w} = H\mathbf w^* \;\;\therefore\;\; \tilde{\mathbf w} = (H + \alpha I)^{-1}H\mathbf w^* \]</div>
+      <p>\(H\) is symmetric positive semi-definite, so for \(\alpha > 0\) the matrix \(H + \alpha I\) is positive definite and the inverse exists. If \(\alpha \to 0\) then \(\tilde{\mathbf w} \to \mathbf w^*\), as it should with no regularization. The case of interest is \(\alpha \ne 0\).</p>
+      <p>Since \(H\) is symmetric PSD, it has an eigendecomposition \(H = Q\Lambda Q^\top\) with \(Q\) orthogonal (\(QQ^\top = Q^\top Q = I\)) and the eigenvalues \(\lambda_i \ge 0\) on the diagonal of \(\Lambda\). Substitute it, write \(\alpha I = Q(\alpha I)Q^\top\), and use the rule \((ABC)^{-1} = C^{-1}B^{-1}A^{-1}\):</p>
+      <div class="eq">\[ \begin{aligned} \tilde{\mathbf w} &= (Q\Lambda Q^\top + \alpha I)^{-1}Q\Lambda Q^\top\mathbf w^* = (Q\Lambda Q^\top + \alpha QIQ^\top)^{-1}Q\Lambda Q^\top\mathbf w^* \\ &= \big[Q(\Lambda + \alpha I)Q^\top\big]^{-1}Q\Lambda Q^\top\mathbf w^* = (Q^\top)^{-1}(\Lambda + \alpha I)^{-1}Q^{-1}\,Q\Lambda Q^\top\mathbf w^* \\ &= Q(\Lambda + \alpha I)^{-1}\Lambda Q^\top\mathbf w^* && (\because (Q^\top)^{-1} = Q,\ Q^{-1}Q = I) \end{aligned} \]</div>
+      <div class="result">
+        <span class="lbl">L2-regularized optimum</span>
+        \[ \tilde{\mathbf w} = QDQ^\top\mathbf w^*, \qquad D = (\Lambda + \alpha I)^{-1}\Lambda = \begin{bmatrix} \frac{\lambda_1}{\lambda_1 + \alpha} & & \\ & \ddots & \\ & & \frac{\lambda_n}{\lambda_n + \alpha} \end{bmatrix} \]
+        <p>\(D\) is diagonal: \(\Lambda + \alpha I\) has \(\lambda_i + \alpha\) on its diagonal, its inverse has \(1/(\lambda_i + \alpha)\), and multiplying by \(\Lambda\) multiplies each entry by \(\lambda_i\).</p>
+      </div>
+      <p>Read the product from right to left <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=eqATcLh_X64&amp;t=1317s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>21:57</a>:</p>
+      <ol>
+        <li>\(Q^\top\) rotates \(\mathbf w^*\) into the eigenbasis of \(H\), giving \(Q^\top\mathbf w^*\).</li>
+        <li>\(D\) scales element \(i\) of \(Q^\top\mathbf w^*\) by \(\lambda_i/(\lambda_i + \alpha)\).</li>
+        <li>\(Q\) rotates the result back.</li>
+      </ol>
+      <p>If \(\alpha = 0\), \(D = I\) and \(Q\) simply rotates \(Q^\top\mathbf w^*\) back to \(\mathbf w^*\). If \(\alpha \ne 0\) <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=eqATcLh_X64&amp;t=1649s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>27:29</a>:</p>
+      <ul>
+        <li>if \(\lambda_i \gg \alpha\), then \(\frac{\lambda_i}{\lambda_i + \alpha} \approx 1\) and that component is kept;</li>
+        <li>if \(\lambda_i \ll \alpha\), then \(\frac{\lambda_i}{\lambda_i + \alpha} \approx 0\) and that component is driven toward zero.</li>
+      </ul>
+      <p>Only the significant directions, those with larger eigenvalues, are retained. Counting each direction by the fraction of it that survives gives the <dfn>effective number of parameters</dfn> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=eqATcLh_X64&amp;t=1816s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>30:16</a>:</p>
+      <div class="eq">\[ \text{effective parameters} = \sum_{i=1}^{n}\frac{\lambda_i}{\lambda_i + \alpha} \lt n \]</div>
+      <p>The network still has \(n\) parameters, but because many are scaled down, fewer of them are fully effective. That is how L2 regularization reduces model complexity.</p>
+    </section>
+
+    <section id="l2-geometry">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=eqATcLh_X64&amp;t=1847s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 30:47</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=eqATcLh_X64&amp;t=2007s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 33:27 uneven shrinking</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=eqATcLh_X64&amp;t=2102s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 35:02 why</a>
+        </div>
+        <h2>The picture: all weights shrink, some more than others</h2>
+      </div>
+      <p>Draw the contours of the unregularized loss \(\mathscr L(\mathbf w)\), ellipses around \(\mathbf w^*\), and the contours of the penalty \(\lVert\mathbf w\rVert^2\), circles around the origin. The regularized optimum \(\tilde{\mathbf w}\) lies where the two families touch: a compromise between a small loss and small weights.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 300" role="img" aria-label="Weight space with axes w1 and w2. Elliptical loss contours around w star at (3, 2) are stretched along w1. Dashed circles around the origin are the penalty contours. The regularized optimum w tilde at (1, 1.5) is where an ellipse touches a circle. A dotted curve runs from w star to the origin through w tilde. Arrows show w1 shrinking from 3 to 1 and w2 from 2 to 1.5.">
+            <defs>
+              <clipPath id="l06-l2-clip"><rect x="64" y="24" width="326" height="258"/></clipPath>
+              <marker id="l06-l2-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="l06-l2-ahk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <g clip-path="url(#l06-l2-clip)">
+              <ellipse class="d-ln" cx="302" cy="100" rx="49.5" ry="20.2"/>
+              <ellipse class="d-ln" cx="302" cy="100" rx="99" ry="40.4"/>
+              <ellipse class="d-ln" cx="302" cy="100" rx="164.2" ry="67"/>
+              <circle class="d-ln-acc d-dash" cx="92" cy="240" r="42"/>
+              <circle class="d-ln-acc d-dash" cx="92" cy="240" r="84"/>
+              <circle class="d-ln-acc d-dash" cx="92" cy="240" r="126.2"/>
+              <path class="d-ln" style="stroke-dasharray: 1.5 4; stroke-linecap: round; stroke-width: 1.8" d="M302 100 L297.9 100.5 L294.4 100.9 L291.1 101.3 L288.3 101.6 L284.7 102.1 L280.2 102.6 L274.8 103.4 L268.3 104.3 L260.6 105.5 L251.7 107 L241.4 108.9 L230.1 111.2 L217.8 114 L204.9 117.5 L191.8 121.8 L178.8 126.8 L166.4 132.6 L154.8 139.3 L144.4 146.8 L135.1 154.9 L127.2 163.4 L120.4 172.2 L114.8 180.9 L110.2 189.2 L106.4 197 L103.4 204.1 L101 210.4 L99.1 215.8 L97.5 220.4 L96.3 224.3 L95.4 227.5 L94.6 230 L94.1 232.1 L93.6 233.8 L93.3 235.1 L93 236.2 L92.8 237 L92.6 237.7 L92 240"/>
+            </g>
+            <line class="d-ln" x1="50" y1="240" x2="392" y2="240" marker-end="url(#l06-l2-ahk)"/>
+            <line class="d-ln" x1="92" y1="282" x2="92" y2="22" marker-end="url(#l06-l2-ahk)"/>
+            <text class="d-t" x="392" y="232" text-anchor="end">w₁</text>
+            <text class="d-t" x="100" y="30">w₂</text>
+            <line class="d-rule d-dash" x1="302" y1="100" x2="302" y2="240"/>
+            <line class="d-rule d-dash" x1="302" y1="100" x2="92" y2="100"/>
+            <line class="d-rule d-dash" x1="162" y1="135" x2="162" y2="240"/>
+            <line class="d-rule d-dash" x1="162" y1="135" x2="92" y2="135"/>
+            <text class="d-al" x="162" y="254" text-anchor="middle">1</text>
+            <text class="d-al" x="232" y="254" text-anchor="middle">2</text>
+            <text class="d-al" x="302" y="254" text-anchor="middle">3</text>
+            <text class="d-al" x="86" y="104" text-anchor="end">2</text>
+            <text class="d-al" x="86" y="139" text-anchor="end">1.5</text>
+            <text class="d-al" x="86" y="174" text-anchor="end">1</text>
+            <line class="d-ln-acc" x1="298" y1="272" x2="166" y2="272" marker-end="url(#l06-l2-ah)"/>
+            <text class="d-s" x="232" y="290" text-anchor="middle" style="fill: var(--accent)">w₁: 3 → 1</text>
+            <line class="d-ln-acc" x1="30" y1="100" x2="30" y2="131" marker-end="url(#l06-l2-ah)"/>
+            <text class="d-s" x="30" y="150" text-anchor="middle" style="fill: var(--accent)">w₂:</text>
+            <text class="d-s" x="30" y="165" text-anchor="middle" style="fill: var(--accent)">2 → 1.5</text>
+            <circle class="pt-plain" cx="302" cy="100" r="5"/>
+            <text class="d-t" x="310" y="92">w*</text>
+            <circle class="pt-new" cx="162" cy="135" r="5.5"/>
+            <text class="d-t d-halo" x="160" y="121" text-anchor="middle">w̃</text>
+
+            <text class="d-h" x="420" y="44">Shrink factor λᵢ / (λᵢ + α), α = 2</text>
+            <text class="d-t" x="420" y="78">w₁ direction: flat, λ₁ = 1</text>
+            <text class="d-s" x="420" y="97">1 / (1 + 2) = 1/3, so 3 becomes 1</text>
+            <text class="d-t" x="420" y="128">w₂ direction: steep, λ₂ = 6</text>
+            <text class="d-s" x="420" y="147">6 / (6 + 2) = 3/4, so 2 becomes 1.5</text>
+            <line class="d-ln" x1="420" y1="184" x2="446" y2="184"/><text class="d-s" x="452" y="188">contours of 𝓛(w)</text>
+            <line class="d-ln-acc d-dash" x1="420" y1="206" x2="446" y2="206"/><text class="d-s" x="452" y="210">contours of ‖w‖²</text>
+            <line class="d-ln" style="stroke-dasharray: 1.5 4; stroke-linecap: round; stroke-width: 1.8" x1="420" y1="228" x2="446" y2="228"/><text class="d-s" x="452" y="232">w̃ as α goes from 0 to ∞</text>
+            <text class="d-s" x="420" y="266">effective parameters: 1/3 + 3/4 ≈ 1.08 of 2</text>
+          </svg>
+        </div>
+        <figcaption><b>L2 regularization, drawn to scale.</b> Values chosen for illustration: \(H = \operatorname{diag}(1, 6)\), so \(Q = I\) and the eigen-directions are the axes; \(\mathbf w^* = (3, 2)\); \(\alpha = 2\). The factors \(\lambda_i/(\lambda_i + \alpha)\) are \(1/3\) and \(3/4\), so \(\tilde{\mathbf w} = (1, 1.5)\): the flat direction \(w_1\) loses two thirds of its value, the steep direction \(w_2\) only a quarter. At \(\tilde{\mathbf w}\) a loss ellipse touches the circle \(\lVert\mathbf w\rVert \approx 1.80\). The dotted curve traces \(\tilde{\mathbf w}\) for every \(\alpha\), from \(\mathbf w^*\) at \(\alpha = 0\) to the origin as \(\alpha \to \infty\).</figcaption>
+      </figure>
+
+      <p>Two things happen as \(\mathbf w^*\) moves to \(\tilde{\mathbf w}\). First, the weights shrink. Second, they do not shrink uniformly: each shrinks by its own factor, set by the eigenvalues. Along \(w_1\) the loss contours are far apart, so the loss changes slowly in that direction; shrinking \(w_1\) costs little loss, so it is shrunk a lot. Along \(w_2\) the contours are close together, so even a small shrink raises the loss quickly, and \(w_2\) is shrunk only a little. The spacing of the contours is the curvature, which the Hessian's eigenvalues measure. Directions in which the loss is sensitive count as important and keep most of their weight; the others are suppressed. This ensures that only important features are given high weights.</p>
+    </section>
+
+    <!-- ============ MODULES 6.5-6.8 ============ -->
+    <section id="augmentation">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=in9ZdGxGhW8&amp;t=30s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 0:30</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=in9ZdGxGhW8&amp;t=183s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 3:03 where it works</a>
+        </div>
+        <h2>Dataset augmentation</h2>
+      </div>
+      <p>This method changes the data instead of the loss. Take an MNIST training image of the digit 2. Some transformations of the image do not change its label, so each of them yields a new labelled training example at no labelling cost. The slide's examples: the image rotated by 20° or by 65°, shifted vertically, shifted horizontally, blurred, or with some pixels changed. Every one of them still has label 2.</p>
+      <p>The augmented data is created using knowledge of the task: we know these transformations leave the label alone. Not every transformation is safe for every class; rotating a 6 by 180° gives a 9.</p>
+      <p>Why it regularizes: the network must now map many variants of the same digit to the same label, so memorizing one particular combination of pixels no longer works. There is more to learn, and overfitting becomes harder, although modern networks can still overfit. Typically, more data means better learning.</p>
+      <ul>
+        <li>Works well for image classification and object recognition, and has also been shown to work well for speech.</li>
+        <li>For some tasks it is not clear how to generate such data. The lecturer's example is text: words are discrete, unlike the continuous signals of images and speech, so meaningful augmentations are harder to design, although libraries for it now exist.</li>
+      </ul>
+    </section>
+
+    <section id="sharing">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=in9ZdGxGhW8&amp;t=243s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 4:03 sharing</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=in9ZdGxGhW8&amp;t=274s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 4:34 tying</a>
+        </div>
+        <h2>Parameter sharing and tying</h2>
+      </div>
+      <p><b>Parameter sharing</b> is used in convolutional neural networks (<a href="lecture-08.html">Lecture 8</a>). A convolutional filter is a small matrix of weights, and the same filter is applied at different positions of the image instead of a separate matrix for each part. Put another way, the same weight matrix acts on different input neurons.</p>
+      <p><b>Parameter tying</b> is typically used in autoencoders, which map an input \(\mathbf x \in \mathbb R^n\) to a code \(\mathbf h(\mathbf x) \in \mathbb R^d\) and then to a reconstruction \(\hat{\mathbf x} \in \mathbb R^n\) (autoencoders come up again in <a href="lecture-07.html">Lecture 7</a>). The encoder needs a \(d \times n\) weight matrix and the decoder an \(n \times d\) one. Tying the encoder and decoder weights means the decoder uses the transpose of the encoder's matrix, so one matrix does both jobs. The lecturer adds that some transformer-based models (<a href="lecture-14.html">Lecture 14</a>) similarly reuse one set of weights across layers.</p>
+      <p>In both cases the regularization effect is plain: fewer separate weights means a smaller model, and a smaller model has lower complexity.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 280" role="img" aria-label="Left: a 6 by 6 input grid with the same 3 by 3 filter K highlighted at two positions, each producing one cell of a 4 by 4 output grid. Right: an autoencoder with four inputs, two code units and four outputs; the encoder weights are W and the decoder weights are W transpose.">
+            <defs><marker id="l06-sh-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="30" y="20">Parameter sharing (CNN)</text>
+            <g>
+              <rect class="d-box" x="30" y="50" width="132" height="132"/>
+              <line class="d-rule" x1="52" y1="50" x2="52" y2="182"/><line class="d-rule" x1="74" y1="50" x2="74" y2="182"/><line class="d-rule" x1="96" y1="50" x2="96" y2="182"/><line class="d-rule" x1="118" y1="50" x2="118" y2="182"/><line class="d-rule" x1="140" y1="50" x2="140" y2="182"/>
+              <line class="d-rule" x1="30" y1="72" x2="162" y2="72"/><line class="d-rule" x1="30" y1="94" x2="162" y2="94"/><line class="d-rule" x1="30" y1="116" x2="162" y2="116"/><line class="d-rule" x1="30" y1="138" x2="162" y2="138"/><line class="d-rule" x1="30" y1="160" x2="162" y2="160"/>
+            </g>
+            <rect class="d-box-acc" style="fill-opacity:.55" x="30" y="50" width="66" height="66"/>
+            <rect class="d-box-acc" style="fill-opacity:.55" x="96" y="94" width="66" height="66"/>
+            <text class="d-t" x="63" y="88" text-anchor="middle" style="fill: var(--accent)">K</text>
+            <text class="d-t" x="129" y="132" text-anchor="middle" style="fill: var(--accent)">K</text>
+            <g>
+              <rect class="d-box" x="230" y="72" width="88" height="88"/>
+              <line class="d-rule" x1="252" y1="72" x2="252" y2="160"/><line class="d-rule" x1="274" y1="72" x2="274" y2="160"/><line class="d-rule" x1="296" y1="72" x2="296" y2="160"/>
+              <line class="d-rule" x1="230" y1="94" x2="318" y2="94"/><line class="d-rule" x1="230" y1="116" x2="318" y2="116"/><line class="d-rule" x1="230" y1="138" x2="318" y2="138"/>
+            </g>
+            <rect class="pill" x="231" y="73" width="20" height="20"/>
+            <rect class="pill" x="297" y="117" width="20" height="20"/>
+            <path class="d-ln-acc" d="M90 70 C150 40 200 60 228 80" marker-end="url(#l06-sh-ah)"/>
+            <path class="d-ln-acc" d="M156 130 C200 150 260 150 294 130" marker-end="url(#l06-sh-ah)"/>
+            <text class="d-s" x="96" y="202" text-anchor="middle">input 6 × 6</text>
+            <text class="d-s" x="274" y="180" text-anchor="middle">output 4 × 4</text>
+            <text class="d-s" x="30" y="232">the same 9 weights of K compute</text>
+            <text class="d-s" x="30" y="248">every output cell</text>
+
+            <line class="d-rule" x1="360" y1="10" x2="360" y2="266"/>
+
+            <text class="d-h" x="384" y="20">Parameter tying (autoencoder)</text>
+            <g>
+              <line class="d-ln" x1="412" y1="70" x2="488" y2="115"/><line class="d-ln" x1="412" y1="70" x2="488" y2="160"/>
+              <line class="d-ln" x1="412" y1="115" x2="488" y2="115"/><line class="d-ln" x1="412" y1="115" x2="488" y2="160"/>
+              <line class="d-ln" x1="412" y1="160" x2="488" y2="115"/><line class="d-ln" x1="412" y1="160" x2="488" y2="160"/>
+              <line class="d-ln" x1="412" y1="205" x2="488" y2="115"/><line class="d-ln" x1="412" y1="205" x2="488" y2="160"/>
+              <line class="d-ln-acc" x1="512" y1="115" x2="588" y2="70"/><line class="d-ln-acc" x1="512" y1="115" x2="588" y2="115"/><line class="d-ln-acc" x1="512" y1="115" x2="588" y2="160"/><line class="d-ln-acc" x1="512" y1="115" x2="588" y2="205"/>
+              <line class="d-ln-acc" x1="512" y1="160" x2="588" y2="70"/><line class="d-ln-acc" x1="512" y1="160" x2="588" y2="115"/><line class="d-ln-acc" x1="512" y1="160" x2="588" y2="160"/><line class="d-ln-acc" x1="512" y1="160" x2="588" y2="205"/>
+            </g>
+            <circle class="node" cx="400" cy="70" r="12"/><circle class="node" cx="400" cy="115" r="12"/><circle class="node" cx="400" cy="160" r="12"/><circle class="node" cx="400" cy="205" r="12"/>
+            <circle class="node-acc" cx="500" cy="115" r="12"/><circle class="node-acc" cx="500" cy="160" r="12"/>
+            <circle class="node" cx="600" cy="70" r="12"/><circle class="node" cx="600" cy="115" r="12"/><circle class="node" cx="600" cy="160" r="12"/><circle class="node" cx="600" cy="205" r="12"/>
+            <text class="d-t" x="444" y="52" text-anchor="middle">W</text>
+            <text class="d-t" x="556" y="52" text-anchor="middle" style="fill: var(--accent)">Wᵀ</text>
+            <text class="d-s" x="400" y="236" text-anchor="middle">x ∈ ℝⁿ</text>
+            <text class="d-s" x="500" y="236" text-anchor="middle">h(x) ∈ ℝᵈ</text>
+            <text class="d-s" x="600" y="236" text-anchor="middle">x̂ ∈ ℝⁿ</text>
+            <text class="d-s" x="384" y="262">decoder reuses Wᵀ: one matrix instead of two</text>
+          </svg>
+        </div>
+        <figcaption><b>Fewer separate weights.</b> Left: one 3 × 3 filter \(K\) slides over a 6 × 6 input, and every cell of the 4 × 4 output is computed with the same 9 weights (two positions shown). Right: an autoencoder with tied weights, where the decoder uses \(W^\top\), the transpose of the encoder's \(W\), instead of a second matrix.</figcaption>
+      </figure>
+    </section>
+
+    <section id="input-noise">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=S1KKaCrg0G8&amp;t=63s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 1:03 a noise process</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=S1KKaCrg0G8&amp;t=216s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 3:36 equivalent to L2</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=S1KKaCrg0G8&amp;t=403s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 6:43 the derivation</a>
+        </div>
+        <h2>Adding noise to the inputs</h2>
+      </div>
+      <p>Pass each input through a noise process \(P(\tilde{\mathbf x} \mid \mathbf x)\) and train the network to map the corrupted \(\tilde{\mathbf x}\) to the original target. (The slide draws this on an autoencoder, where the same idea appears.) For binary inputs, a simple noise process keeps each bit with probability 0.8 and flips it with probability 0.2, so about 20% of every input is corrupted. Each epoch sees a different corruption of the same example, and all of them must be mapped to the same \(y\). Memorizing the inputs becomes harder, much as with augmentation, and the slide notes it can be viewed as data augmentation.</p>
+      <p>For a simple input–output network, with no hidden layer and no non-linearity, adding Gaussian noise to the input can be shown to be equivalent to weight decay. Let the model be \(\hat y = \sum_{i=1}^{n}w_ix_i\) and corrupt each input independently <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=S1KKaCrg0G8&amp;t=278s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:38</a>:</p>
+      <div class="eq">\[ \tilde x_i = x_i + \varepsilon_i,\quad \varepsilon_i \sim \mathcal N(0, \sigma^2), \qquad \tilde y = \sum_{i=1}^{n}w_i\tilde x_i = \sum_{i=1}^{n}w_ix_i + \sum_{i=1}^{n}w_i\varepsilon_i = \hat y + \sum_{i=1}^{n}w_i\varepsilon_i \]</div>
+      <p>We are interested in the expected squared error of the noisy prediction \(\tilde y\) against the true target \(y\). Group it as \((\hat y - y) + \sum_i w_i\varepsilon_i\) and expand the square:</p>
+      <div class="eq">\[ \begin{aligned} E\big[(\tilde y - y)^2\big] &= E\Big[\Big(\hat y + \sum_{i=1}^{n}w_i\varepsilon_i - y\Big)^2\Big] = E\Big[\Big((\hat y - y) + \sum_{i=1}^{n}w_i\varepsilon_i\Big)^2\Big] \\ &= E\big[(\hat y - y)^2\big] + E\Big[2(\hat y - y)\sum_{i=1}^{n}w_i\varepsilon_i\Big] + E\Big[\Big(\sum_{i=1}^{n}w_i\varepsilon_i\Big)^2\Big] \\ &= E\big[(\hat y - y)^2\big] + 0 + E\Big[\sum_{i=1}^{n}w_i^2\varepsilon_i^2\Big] \\ &= E\big[(\hat y - y)^2\big] + \sigma^2\sum_{i=1}^{n}w_i^2 \end{aligned} \]</div>
+      <p>Two independence facts remove terms. The noise is independent of the clean error \(\hat y - y\) and has mean zero, so the middle term vanishes. Expanding \((\sum_i w_i\varepsilon_i)^2\) gives squares \(w_i^2\varepsilon_i^2\) and cross terms \(w_iw_j\varepsilon_i\varepsilon_j\); since \(\varepsilon_i\) is independent of \(\varepsilon_j\), each cross term has expectation \(w_iw_jE[\varepsilon_i]E[\varepsilon_j] = 0\). Finally \(E[\varepsilon_i^2] = \sigma^2\).</p>
+      <div class="result">
+        <span class="lbl">Input noise = weight decay (linear model)</span>
+        <p>Training on noisy inputs minimizes \(\mathscr L(\theta) + \Omega(\theta)\) with \(\Omega(\theta) = \sigma^2\sum_i w_i^2\), the same as the L2 norm penalty (\(\alpha = 2\sigma^2\) in the form \(\frac\alpha2\lVert\mathbf w\rVert^2\)) <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=S1KKaCrg0G8&amp;t=686s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>11:26</a>. More noise means stronger weight decay.</p>
+      </div>
+    </section>
+
+    <section id="label-smoothing">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=sUnsawJ5-zw&amp;t=30s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 0:30 hard targets</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=sUnsawJ5-zw&amp;t=91s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 1:31 soft targets</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=sUnsawJ5-zw&amp;t=183s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 3:03 as a regularizer</a>
+        </div>
+        <h2>Adding noise to the outputs: soft targets</h2>
+      </div>
+      <p>Noise can also go into the targets. In 10-class digit classification, the true distribution for an image of a 2 puts all its mass on class 2: \(\mathbf p = (0, 0, 1, 0, 0, 0, 0, 0, 0, 0)\). These are <dfn>hard targets</dfn>. Training minimizes the cross-entropy between \(\mathbf p\) and the estimated distribution \(\mathbf q\) (<a href="lecture-04.html">Lecture 4</a>), \(-\sum_{i=0}^{9}p_i\log q_i\); the slide writes the sum without its minus sign. With many parameters this loss can be driven to zero, mapping each input exactly to its label, which is what overfitting is.</p>
+      <p>The intuition: do not trust the true labels, as they may be noisy. Take a small probability mass \(\varepsilon\) (a small positive constant) away from the correct class and share it equally among the other nine. These are <dfn>soft targets</dfn>:</p>
+      <div class="eq">\[ \mathbf p = \Big(\frac{\varepsilon}{9},\ \frac{\varepsilon}{9},\ 1 - \varepsilon,\ \frac{\varepsilon}{9},\ \dots,\ \frac{\varepsilon}{9}\Big) \]</div>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Class</th><th class="num">0</th><th class="num">1</th><th class="num">2</th><th class="num">3</th><th class="num">…</th><th class="num">9</th></tr></thead>
+          <tbody>
+            <tr><td>Hard target</td><td class="num">0</td><td class="num">0</td><td class="num">1</td><td class="num">0</td><td class="num">…</td><td class="num">0</td></tr>
+            <tr><td>Soft target, \(\varepsilon = 0.1\)</td><td class="num">0.011</td><td class="num">0.011</td><td class="num">0.9</td><td class="num">0.011</td><td class="num">…</td><td class="num">0.011</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>With hard targets only one term of the sum survives, the one with \(p_i = 1\). With soft targets every class contributes, and the loss becomes a weighted version of the original loss plus an extra term (\(\varepsilon = 0.1\) above is only an example value):</p>
+      <div class="eq">\[ -\sum_{i=0}^{9}p_i\log q_i = (1 - \varepsilon)\underbrace{\big(-\log q_2\big)}_{\mathscr L(\theta)} + \varepsilon\underbrace{\Big(-\frac19\sum_{i \ne 2}\log q_i\Big)}_{\Omega(\theta)} \]</div>
+      <p>The outputs have been corrupted a little, the majority of the mass is still on the correct label, and the objective again has the form loss plus regularizer, which helps avoid overfitting. Standard name: <dfn>label smoothing</dfn>.</p>
+    </section>
+
+    <!-- ============ MODULE 6.9 ============ -->
+    <section id="early-stopping">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=CrO__rzk9hU&amp;t=31s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 0:31</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=CrO__rzk9hU&amp;t=123s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 2:03 patience</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=CrO__rzk9hU&amp;t=247s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 4:07 why it is popular</a>
+        </div>
+        <h2>Early stopping</h2>
+      </div>
+      <p>Put training steps on the \(x\)-axis instead of model complexity and the familiar picture returns. The longer training runs, the more the parameters adapt to the training data: the training error heads toward zero, while the validation error falls, bottoms out and starts to rise. The goal is the sweet spot where both are low.</p>
+      <ol class="algo">
+        <li class="algo-title">Early stopping with patience p</li>
+        <li>Train as usual and track the validation error.</li>
+        <li>Fix a patience parameter \(p\), counted in steps or epochs.</li>
+        <li>If at step \(k\) there was no improvement in validation error in the previous \(p\) steps, stop training.</li>
+        <li>Return the model stored at step \(k - p\).</li>
+      </ol>
+      <p>In short, stop training before it drives the training error to 0 and blows up the validation error.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 280" role="img" aria-label="Error against training steps. Training error falls toward zero. Validation error falls to a minimum at step 43, then rises. A shaded window of twenty steps runs from step 43 to step 63, where training stops; the model from step 43 is returned.">
+            <defs><marker id="l06-es-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <rect class="d-shade" x="247.8" y="40" width="92" height="196"/>
+            <line class="d-ln" x1="50" y1="236" x2="530" y2="236" marker-end="url(#l06-es-ah)"/>
+            <line class="d-ln" x1="50" y1="236" x2="50" y2="14" marker-end="url(#l06-es-ah)"/>
+            <text class="d-s" x="530" y="258" text-anchor="end">training steps</text>
+            <text class="d-s" x="58" y="20">error</text>
+            <path class="d-ln" style="stroke-width:2" d="M50 56 L61.5 78 L73 97.2 L84.5 113.9 L96 128.5 L107.5 141.1 L119 152.1 L130.5 161.7 L142 170 L153.5 177.3 L165 183.6 L176.5 189.1 L188 193.9 L199.5 198.1 L211 201.7 L222.5 204.8 L234 207.6 L245.5 210 L257 212 L268.5 213.9 L280 215.4 L291.5 216.8 L303 218 L314.5 219 L326 219.9 L337.5 220.7 L349 221.4 L360.5 222 L372 222.5 L383.5 223 L395 223.4 L406.5 223.7 L418 224 L429.5 224.3 L441 224.5 L452.5 224.7 L464 224.9 L475.5 225 L487 225.1 L498.5 225.2 L510 225.3"/>
+            <path class="d-ln-acc" style="stroke-width:2.4" d="M50 36 L61.5 53.6 L73 68.9 L84.5 82.3 L96 94 L107.5 104.1 L119 112.9 L130.5 120.4 L142 126.8 L153.5 132.2 L165 136.8 L176.5 140.5 L188 143.5 L199.5 145.9 L211 147.7 L222.5 148.9 L234 149.7 L245.5 150 L257 149.9 L268.5 149.5 L280 148.7 L291.5 147.6 L303 146.2 L314.5 144.5 L326 142.5 L337.5 140.3 L349 137.9 L360.5 135.3 L372 132.5 L383.5 129.4 L395 126.2 L406.5 122.8 L418 119.3 L429.5 115.5 L441 111.6 L452.5 107.5 L464 103.3 L475.5 99 L487 94.5 L498.5 89.8 L510 85"/>
+            <line class="d-ln d-dash" x1="247.8" y1="40" x2="247.8" y2="236"/>
+            <line class="d-ln d-dash" x1="339.8" y1="40" x2="339.8" y2="236"/>
+            <circle class="pt-new" cx="247.8" cy="150" r="5"/>
+            <circle class="pt-no" cx="339.8" cy="139.9" r="4.5"/>
+            <text class="d-t" x="243" y="34" text-anchor="end">k − p: return this model</text>
+            <text class="d-t" x="344" y="34">k: stop</text>
+            <text class="d-s" x="293.8" y="60" text-anchor="middle">p = 20 steps</text>
+            <text class="d-s" x="293.8" y="75" text-anchor="middle">no new best</text>
+            <text class="d-t" x="516" y="89" style="fill: var(--accent)">validation error</text>
+            <text class="d-t" x="516" y="229">training error</text>
+            <text class="d-al" x="247.8" y="252" text-anchor="middle">43</text>
+            <text class="d-al" x="339.8" y="252" text-anchor="middle">63</text>
+          </svg>
+        </div>
+        <figcaption><b>Early stopping with patience \(p = 20\).</b> Illustrative curves. The validation error is lowest at step 43. Steps 44 to 63 bring no improvement, so at \(k = 63\) training stops and the model saved at \(k - p = 43\) is returned, even though the training error was still falling.</figcaption>
+      </figure>
+
+      <p>Early stopping is very effective and the most widely used form of regularization. It needs no change to the loss function, it is easy to automate, and it can be used together with other regularizers such as \(l_2\). How does it act as a regularizer? First an intuition, then a mathematical analysis.</p>
+      <h3>Intuition: a limited number of steps limits how far the weights travel <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=CrO__rzk9hU&amp;t=309s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 5:09</a></h3>
+      <p>Unroll the SGD update \(\mathbf w_{t+1} = \mathbf w_t - \eta\nabla\mathbf w_t\) (writing \(\nabla\mathbf w_t\) for the gradient at step \(t\)) back to the initial weights:</p>
+      <div class="eq">\[ \mathbf w_t = \mathbf w_0 - \eta\sum_{i=0}^{t-1}\nabla\mathbf w_i \]</div>
+      <p>Let \(\tau\) be the largest of these gradients. The sum has \(t\) terms, each no larger than \(\tau\), so</p>
+      <div class="eq">\[ \lvert\mathbf w_t - \mathbf w_0\rvert \le \eta\,t\,\lvert\tau\rvert \]</div>
+      <p>The number of steps \(t\) controls how far \(\mathbf w_t\) can go from the initial \(\mathbf w_0\); in other words, it controls the space of exploration <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=CrO__rzk9hU&amp;t=524s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>8:44</a>. Stopping early caps that distance, much as the circles of the L2 penalty cap how far the weights may grow.</p>
+    </section>
+
+    <section id="early-stopping-l2">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=CrO__rzk9hU&amp;t=617s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 10:17</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=CrO__rzk9hU&amp;t=892s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 14:52 starting from 0</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=CrO__rzk9hU&amp;t=1136s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 18:56 the condition</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=CrO__rzk9hU&amp;t=1229s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 20:29 what to remember</a>
+        </div>
+        <h2>Early stopping behaves like L2</h2>
+      </div>
+      <p>Use the same second-order Taylor approximation around the unregularized optimum \(\mathbf w^*\) as in the L2 analysis, which gave \(\nabla\mathscr L(\mathbf w) = H(\mathbf w - \mathbf w^*)\). The SGD update rule then becomes</p>
+      <div class="eq">\[ \mathbf w_t = \mathbf w_{t-1} - \eta\nabla\mathscr L(\mathbf w_{t-1}) = \mathbf w_{t-1} - \eta H(\mathbf w_{t-1} - \mathbf w^*) = (I - \eta H)\mathbf w_{t-1} + \eta H\mathbf w^* \]</div>
+      <p>Substitute the eigendecomposition \(H = Q\Lambda Q^\top\):</p>
+      <div class="eq">\[ \mathbf w_t = (I - \eta Q\Lambda Q^\top)\mathbf w_{t-1} + \eta Q\Lambda Q^\top\mathbf w^* \]</div>
+      <p>If we start with \(\mathbf w_0 = \mathbf 0\), this recursion has a closed form (proof below; the slides write \(\varepsilon\) for the learning rate here):</p>
+      <div class="eq">\[ \mathbf w_t = Q\big[I - (I - \eta\Lambda)^t\big]Q^\top\mathbf w^* \]</div>
+      <p>Compare it with the L2 optimum. Since</p>
+      <div class="eq">\[ (\Lambda + \alpha I)^{-1}\Lambda = (\Lambda + \alpha I)^{-1}(\Lambda + \alpha I - \alpha I) = I - (\Lambda + \alpha I)^{-1}\alpha, \]</div>
+      <p>the L2 solution can be written in the same shape:</p>
+      <div class="eq">\[ \tilde{\mathbf w} = Q\big[I - (\Lambda + \alpha I)^{-1}\alpha\big]Q^\top\mathbf w^* \]</div>
+      <div class="result">
+        <span class="lbl">Early stopping ≈ L2</span>
+        <p>Both have the form \(Q\,(\text{diagonal})\,Q^\top\mathbf w^*\). They coincide, \(\mathbf w_t = \tilde{\mathbf w}\), if \(\eta\), \(t\) and \(\alpha\) are chosen so that</p>
+        \[ (I - \eta\Lambda)^t = (\Lambda + \alpha I)^{-1}\alpha, \quad\text{that is,}\quad (1 - \eta\lambda_i)^t = \frac{\alpha}{\lambda_i + \alpha}\ \text{ for each } i \]
+      </div>
+      <p class="note">Not in the lecture: matching every eigen-direction exactly is a strong condition. The standard reading (Deep Learning book, §7.8) is an approximate equivalence. Taking logs, \(t\log(1 - \eta\lambda_i) \approx -t\eta\lambda_i\) and \(\log\frac{\alpha}{\lambda_i + \alpha} \approx -\lambda_i/\alpha\) when \(\eta\lambda_i\) and \(\lambda_i/\alpha\) are small, so \(\alpha \approx 1/(\eta t)\). Training for longer is like using weaker L2.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 300" role="img" aria-label="The same loss contours as the L2 figure. Gradient descent from the origin with learning rate 0.1 takes steps that rise almost straight up along w2 first and then run along w1 toward w star. The dotted L2 path from the origin to w star bends the same way. Points are marked at t equals 2, 4, 10 and 20, and at alpha equals 8, 2 and 0.5.">
+            <defs>
+              <clipPath id="l06-path-clip"><rect x="50" y="24" width="340" height="258"/></clipPath>
+              <marker id="l06-path-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <g clip-path="url(#l06-path-clip)">
+              <ellipse class="d-ln-mut" cx="302" cy="100" rx="49.5" ry="20.2"/>
+              <ellipse class="d-ln-mut" cx="302" cy="100" rx="99" ry="40.4"/>
+              <ellipse class="d-ln-mut" cx="302" cy="100" rx="164.2" ry="67"/>
+              <path class="d-ln" style="stroke-dasharray: 1.5 4; stroke-linecap: round; stroke-width: 1.8" d="M302 100 L297.9 100.5 L294.4 100.9 L291.1 101.3 L288.3 101.6 L284.7 102.1 L280.2 102.6 L274.8 103.4 L268.3 104.3 L260.6 105.5 L251.7 107 L241.4 108.9 L230.1 111.2 L217.8 114 L204.9 117.5 L191.8 121.8 L178.8 126.8 L166.4 132.6 L154.8 139.3 L144.4 146.8 L135.1 154.9 L127.2 163.4 L120.4 172.2 L114.8 180.9 L110.2 189.2 L106.4 197 L103.4 204.1 L101 210.4 L99.1 215.8 L97.5 220.4 L96.3 224.3 L95.4 227.5 L94.6 230 L94.1 232.1 L93.6 233.8 L93.3 235.1 L93 236.2 L92.8 237 L92.6 237.7 L92 240"/>
+              <path class="d-ln-acc" d="M92 240 L113 156 L131.9 122.4 L148.9 109 L164.2 103.6 L178 101.4 L190.4 100.6 L201.6 100.2 L211.6 100.1 L220.6 100 L228.8 100 L258.8 100 L276.5 100 L293.1 100 L302 100"/>
+            </g>
+            <line class="d-ln" x1="50" y1="240" x2="392" y2="240" marker-end="url(#l06-path-ah)"/>
+            <line class="d-ln" x1="92" y1="282" x2="92" y2="22" marker-end="url(#l06-path-ah)"/>
+            <text class="d-t" x="392" y="232" text-anchor="end">w₁</text>
+            <text class="d-t" x="100" y="30">w₂</text>
+            <text class="d-al" x="162" y="254" text-anchor="middle">1</text>
+            <text class="d-al" x="232" y="254" text-anchor="middle">2</text>
+            <text class="d-al" x="302" y="254" text-anchor="middle">3</text>
+            <text class="d-al" x="86" y="104" text-anchor="end">2</text>
+            <text class="d-al" x="86" y="174" text-anchor="end">1</text>
+            <circle class="pt-tree" cx="113" cy="156" r="3.8"/><circle class="pt-tree" cx="131.9" cy="122.4" r="3.8"/><circle class="pt-tree" cx="148.9" cy="109" r="3.8"/><circle class="pt-tree" cx="164.2" cy="103.6" r="3.8"/><circle class="pt-tree" cx="178" cy="101.4" r="3.8"/><circle class="pt-tree" cx="190.4" cy="100.6" r="3.8"/><circle class="pt-tree" cx="201.6" cy="100.2" r="3.8"/><circle class="pt-tree" cx="211.6" cy="100.1" r="3.8"/><circle class="pt-tree" cx="220.6" cy="100" r="3.8"/><circle class="pt-tree" cx="228.8" cy="100" r="3.8"/><circle class="pt-tree" cx="258.8" cy="100" r="3.8"/><circle class="pt-tree" cx="276.5" cy="100" r="3.8"/>
+            <text class="d-s d-halo" x="126" y="118" text-anchor="end" style="fill: var(--accent)">t = 2</text>
+            <text class="d-s d-halo" x="164.2" y="92" text-anchor="middle" style="fill: var(--accent)">t = 4</text>
+            <text class="d-s d-halo" x="228.8" y="90" text-anchor="middle" style="fill: var(--accent)">t = 10</text>
+            <text class="d-s d-halo" x="276.5" y="90" text-anchor="middle" style="fill: var(--accent)">t = 20</text>
+            <circle class="pt-no" cx="115.3" cy="180" r="4"/><circle class="pt-no" cx="162" cy="135" r="4"/><circle class="pt-no" cx="232" cy="110.8" r="4"/>
+            <text class="d-s d-halo" x="122" y="186">α = 8</text>
+            <text class="d-s d-halo" x="168" y="150">α = 2</text>
+            <text class="d-s d-halo" x="232" y="128" text-anchor="middle">α = 0.5</text>
+            <circle class="pt-plain" cx="302" cy="100" r="5"/>
+            <text class="d-t" x="312" y="92">w*</text>
+
+            <line class="d-ln-acc" x1="420" y1="44" x2="446" y2="44"/><circle class="pt-tree" cx="433" cy="44" r="3.8"/>
+            <text class="d-t" x="452" y="48">gradient descent</text>
+            <text class="d-s" x="452" y="66">from w₀ = 0 with η = 0.1</text>
+            <text class="d-s" x="452" y="83">wₜ = (3(1 − 0.9ᵗ), 2(1 − 0.4ᵗ))</text>
+            <line class="d-ln" style="stroke-dasharray: 1.5 4; stroke-linecap: round; stroke-width: 1.8" x1="420" y1="116" x2="446" y2="116"/><circle class="pt-no" cx="433" cy="116" r="4"/>
+            <text class="d-t" x="452" y="120">L2 optimum w̃(α)</text>
+            <text class="d-s" x="452" y="138">w̃ = (3/(1 + α), 12/(6 + α))</text>
+            <text class="d-s" x="420" y="176">stop at t = 4: (1.03, 1.95)</text>
+            <text class="d-s" x="420" y="194">use α = 2: (1, 1.5)</text>
+            <text class="d-s" x="420" y="228">both leave 0 along Hw* = (3, 12),</text>
+            <text class="d-s" x="420" y="246">reach the steep w₂ first and</text>
+            <text class="d-s" x="420" y="264">the flat w₁ last</text>
+          </svg>
+        </div>
+        <figcaption><b>Two routes to a shrunken solution, drawn to scale.</b> The loss of the L2 figure: \(H = \operatorname{diag}(1, 6)\), \(\mathbf w^* = (3, 2)\). Violet: gradient descent from \(\mathbf w_0 = \mathbf 0\) with \(\eta = 0.1\), one dot per step, so stopping after \(t\) steps means taking the \(t\)-th dot. Dotted: the L2 optimum \(\tilde{\mathbf w}\) for every \(\alpha\). Both shrink the flat direction \(w_1\) much more than the steep \(w_2\): stopping at \(t = 4\) keeps 34% of \(w^*_1\) and 97% of \(w^*_2\), while \(\alpha = 2\) keeps 33% and 75%. No choice of \(t\) and \(\alpha\) makes the two curves meet exactly here, because the matching condition cannot hold for both eigenvalues at once.</figcaption>
+      </figure>
+
+      <h3>Proof of the closed form (the slides' appendix)</h3>
+      <p>By induction on \(t\), starting from \(\mathbf w_0 = \mathbf 0\). <b>Base case</b>, \(t = 1\): the recursion (first line) and the closed form (second line) agree.</p>
+      <div class="eq">\[ \begin{aligned} \mathbf w_1 &= (I - \eta Q\Lambda Q^\top)\mathbf w_0 + \eta Q\Lambda Q^\top\mathbf w^* = \eta Q\Lambda Q^\top\mathbf w^* \\ \mathbf w_1 &= Q\big[I - (I - \eta\Lambda)^1\big]Q^\top\mathbf w^* = \eta Q\Lambda Q^\top\mathbf w^* \end{aligned} \]</div>
+      <p><b>Induction step.</b> Assume the closed form holds at step \(t\), substitute it into the recursion for step \(t + 1\), open the bracket, and use \(Q^\top Q = I\):</p>
+      <div class="eq">\[ \begin{aligned} \mathbf w_{t+1} &= (I - \eta Q\Lambda Q^\top)\,Q\big[I - (I - \eta\Lambda)^t\big]Q^\top\mathbf w^* + \eta Q\Lambda Q^\top\mathbf w^* \\ &= Q\big[I - (I - \eta\Lambda)^t\big]Q^\top\mathbf w^* - \eta Q\Lambda Q^\top Q\big[I - (I - \eta\Lambda)^t\big]Q^\top\mathbf w^* + \eta Q\Lambda Q^\top\mathbf w^* \\ &= Q\Big[\big(I - (I - \eta\Lambda)^t\big) - \eta\Lambda\big(I - (I - \eta\Lambda)^t\big) + \eta\Lambda\Big]Q^\top\mathbf w^* \\ &= Q\big[I - (I - \eta\Lambda)^t + \eta\Lambda(I - \eta\Lambda)^t\big]Q^\top\mathbf w^* \\ &= Q\big[I - (I - \eta\Lambda)^t(I - \eta\Lambda)\big]Q^\top\mathbf w^* = Q\big[I - (I - \eta\Lambda)^{t+1}\big]Q^\top\mathbf w^* \end{aligned} \]</div>
+
+      <h3>Things to remember</h3>
+      <p>Early stopping only allows \(t\) updates to the parameters. If a parameter \(w\) belongs to a direction that is important for the loss \(\mathscr L(\theta)\), then \(\partial\mathscr L(\theta)/\partial w\) is large and the parameter can grow a lot within \(t\) steps. If it is not important, \(\partial\mathscr L(\theta)/\partial w\) is small, its updates are small, and it cannot grow large in \(t\) steps. Early stopping therefore effectively shrinks the parameters of the less important directions, the same thing weight decay does.</p>
+    </section>
+
+    <!-- ============ MODULES 6.10-6.11 ============ -->
+    <section id="ensembles">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=Njytanc4oHY&amp;t=30s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 0:30</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Njytanc4oHY&amp;t=181s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 3:01 bagging</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Njytanc4oHY&amp;t=274s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 4:34 when it works</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Njytanc4oHY&amp;t=552s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 9:12 the two extremes</a>
+        </div>
+        <h2>Ensembles and bagging</h2>
+      </div>
+      <p>An <dfn>ensemble</dfn> combines the outputs of different models to reduce generalization error, for example by voting, or by averaging the class distributions the models predict. The models can correspond to:</p>
+      <ul>
+        <li>different classifiers trained on the same data (the slide's example: logistic regression, an SVM and naive Bayes);</li>
+        <li>different instances of the same classifier trained with different hyperparameters (say, networks with different numbers of layers or neurons per layer);</li>
+        <li>instances trained with different features (each on a different subset of \(m \lt n\) of the \(n\) input features);</li>
+        <li>instances trained on different samples of the training data.</li>
+      </ul>
+      <p><dfn>Bagging</dfn> is an ensemble of different instances of the same classifier. From the given dataset, construct training sets \(T_1, T_2, \dots, T_k\) by sampling with replacement: each sample is drawn from the full dataset, and the points taken for one set are put back before drawing the next. Train the \(i\)-th instance on \(T_i\). Each model overfits to a different sample, so their combination can generalize better.</p>
+
+      <h3>When would bagging work? <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=Njytanc4oHY&amp;t=396s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 6:36</a></h3>
+      <p>Consider \(k\) logistic regression models. On a test example, model \(i\) makes an error \(\varepsilon_i\), so the average prediction of all the models makes the error \(\frac1k\sum_i\varepsilon_i\). Let the \(\varepsilon_i\) be drawn from a zero-mean multivariate normal distribution with</p>
+      <div class="eq">\[ \text{Variance} = E[\varepsilon_i^2] = V, \qquad \text{Covariance} = E[\varepsilon_i\varepsilon_j] = C \quad (i \ne j) \]</div>
+      <p>Expand the square of the sum into the \(k\) terms with \(i = j\) and the \(k(k-1)\) terms with \(i \ne j\), then use linearity of expectation:</p>
+      <div class="eq">\[ \begin{aligned} \text{mse} &= E\Big[\Big(\frac1k\sum_i\varepsilon_i\Big)^2\Big] = \frac1{k^2}E\Big[\sum_i\sum_{j = i}\varepsilon_i\varepsilon_j + \sum_i\sum_{j \ne i}\varepsilon_i\varepsilon_j\Big] = \frac1{k^2}E\Big[\sum_i\varepsilon_i^2 + \sum_i\sum_{j \ne i}\varepsilon_i\varepsilon_j\Big] \\ &= \frac1{k^2}\Big(\sum_i E[\varepsilon_i^2] + \sum_i\sum_{j \ne i}E[\varepsilon_i\varepsilon_j]\Big) = \frac1{k^2}\big(kV + k(k-1)C\big) = \frac1kV + \frac{k-1}{k}C \end{aligned} \]</div>
+      <div class="result">
+        <span class="lbl">Error of the averaged ensemble</span>
+        \[ \text{mse} = \frac1kV + \frac{k-1}{k}C \]
+        <ul>
+          <li>Perfectly correlated errors, \(V = C\): mse \(= V\). Bagging does not help; the ensemble is as bad as each individual model.</li>
+          <li>Independent or uncorrelated errors, \(C = 0\): mse \(= \frac1kV\).</li>
+        </ul>
+        <p>On average, the ensemble performs at least as well as its individual members.</p>
+      </div>
+      <p>Real models sit between the extremes <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=Njytanc4oHY&amp;t=642s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>10:42</a>. The smaller the correlation between the models, the larger the benefit; a hundred models that make the same mistakes are no better than one.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 400" role="img" aria-label="Top: a training set D is sampled with replacement into three training sets, each training one model; their predictions are averaged into the final output. Bottom: ensemble mean squared error divided by V against the number of models k from 1 to 20, for covariance C equal to V, 0.5 V, 0.25 V and 0. The C equal V line stays at 1; the C equal 0 curve falls as 1 over k.">
+            <defs><marker id="l06-bag-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <rect class="d-box" x="20" y="60" width="90" height="50" rx="6"/>
+            <text class="d-t" x="65" y="82" text-anchor="middle">D</text>
+            <text class="d-s" x="65" y="100" text-anchor="middle">training set</text>
+            <text class="d-s" x="65" y="132" text-anchor="middle">sample with</text>
+            <text class="d-s" x="65" y="147" text-anchor="middle">replacement</text>
+            <rect class="d-box" x="170" y="18" width="70" height="36" rx="6"/><text class="d-t" x="205" y="41" text-anchor="middle">T₁</text>
+            <rect class="d-box" x="170" y="67" width="70" height="36" rx="6"/><text class="d-t" x="205" y="90" text-anchor="middle">T₂</text>
+            <rect class="d-box" x="170" y="116" width="70" height="36" rx="6"/><text class="d-t" x="205" y="139" text-anchor="middle">Tₖ</text>
+            <line class="d-ln" x1="110" y1="80" x2="168" y2="36" marker-end="url(#l06-bag-ah)"/>
+            <line class="d-ln" x1="110" y1="85" x2="168" y2="85" marker-end="url(#l06-bag-ah)"/>
+            <line class="d-ln" x1="110" y1="90" x2="168" y2="134" marker-end="url(#l06-bag-ah)"/>
+            <rect class="d-box-acc" x="280" y="18" width="120" height="36" rx="6"/><text class="d-t" x="340" y="41" text-anchor="middle">model 1</text>
+            <rect class="d-box-acc" x="280" y="67" width="120" height="36" rx="6"/><text class="d-t" x="340" y="90" text-anchor="middle">model 2</text>
+            <rect class="d-box-acc" x="280" y="116" width="120" height="36" rx="6"/><text class="d-t" x="340" y="139" text-anchor="middle">model k</text>
+            <line class="d-ln" x1="240" y1="36" x2="278" y2="36" marker-end="url(#l06-bag-ah)"/>
+            <line class="d-ln" x1="240" y1="85" x2="278" y2="85" marker-end="url(#l06-bag-ah)"/>
+            <line class="d-ln" x1="240" y1="134" x2="278" y2="134" marker-end="url(#l06-bag-ah)"/>
+            <text class="d-s" x="259" y="170" text-anchor="middle">train</text>
+            <circle class="node-acc" cx="472" cy="85" r="34"/>
+            <text class="d-t" x="472" y="89" text-anchor="middle">average</text>
+            <line class="d-ln" x1="400" y1="36" x2="442" y2="65" marker-end="url(#l06-bag-ah)"/>
+            <line class="d-ln" x1="400" y1="85" x2="436" y2="85" marker-end="url(#l06-bag-ah)"/>
+            <line class="d-ln" x1="400" y1="134" x2="442" y2="105" marker-end="url(#l06-bag-ah)"/>
+            <line class="d-ln" x1="506" y1="85" x2="548" y2="85" marker-end="url(#l06-bag-ah)"/>
+            <text class="d-t" x="554" y="89">y_final</text>
+
+            <line class="d-rule" x1="20" y1="188" x2="640" y2="188"/>
+
+            <line class="d-ln" x1="60" y1="360" x2="570" y2="360" marker-end="url(#l06-bag-ah)"/>
+            <line class="d-ln" x1="60" y1="360" x2="60" y2="208" marker-end="url(#l06-bag-ah)"/>
+            <text class="d-s" x="68" y="214">ensemble mse / V</text>
+            <text class="d-s" x="570" y="390" text-anchor="end">number of models k</text>
+            <line class="d-rule" x1="60" y1="295" x2="554" y2="295"/>
+            <text class="d-al" x="54" y="364" text-anchor="end">0</text>
+            <text class="d-al" x="54" y="299" text-anchor="end">0.5</text>
+            <text class="d-al" x="54" y="234" text-anchor="end">1</text>
+            <text class="d-al" x="60" y="376" text-anchor="middle">1</text>
+            <text class="d-al" x="164" y="376" text-anchor="middle">5</text>
+            <text class="d-al" x="294" y="376" text-anchor="middle">10</text>
+            <text class="d-al" x="424" y="376" text-anchor="middle">15</text>
+            <text class="d-al" x="554" y="376" text-anchor="middle">20</text>
+            <path class="d-ln d-dash" style="stroke-width:1.8" d="M60 230 L554 230"/>
+            <path class="d-ln" style="stroke-width:1.6" d="M60 230 L86 262.5 L112 273.3 L138 278.8 L164 282 L190 284.2 L216 285.7 L242 286.9 L268 287.8 L294 288.5 L320 289.1 L346 289.6 L372 290 L398 290.4 L424 290.7 L450 290.9 L476 291.2 L502 291.4 L528 291.6 L554 291.8"/>
+            <path class="d-ln" style="stroke-width:1.6" d="M60 230 L86 278.8 L112 295 L138 303.1 L164 308 L190 311.2 L216 313.6 L242 315.3 L268 316.7 L294 317.8 L320 318.6 L346 319.4 L372 320 L398 320.5 L424 321 L450 321.4 L476 321.8 L502 322.1 L528 322.4 L554 322.6"/>
+            <path class="d-ln-acc" style="stroke-width:2.2" d="M60 230 L86 295 L112 316.7 L138 327.5 L164 334 L190 338.3 L216 341.4 L242 343.8 L268 345.6 L294 347 L320 348.2 L346 349.2 L372 350 L398 350.7 L424 351.3 L450 351.9 L476 352.4 L502 352.8 L528 353.2 L554 353.5"/>
+            <text class="d-s" x="560" y="234">C = V</text>
+            <text class="d-s" x="560" y="296">C = 0.5V</text>
+            <text class="d-s" x="560" y="326">C = 0.25V</text>
+            <text class="d-s" x="560" y="350" style="fill: var(--accent)">C = 0</text>
+          </svg>
+        </div>
+        <figcaption><b>Bagging and its payoff.</b> Top: \(k\) training sets drawn with replacement from \(D\), one model per set, predictions averaged. Bottom, drawn to scale from the formula: ensemble mse as a fraction of one model's \(V\), for \(k = 1\) to 20 models and four levels of correlation. With \(C = 0\) the error falls as \(1/k\); with \(C = V\) it stays at 1; in between it levels off at \(C/V\).</figcaption>
+      </figure>
+    </section>
+
+    <section id="dropout">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=WzScUPDGFVA&amp;t=30s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 0:30 cost of ensembles</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=WzScUPDGFVA&amp;t=152s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 2:32 dropping units</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=WzScUPDGFVA&amp;t=213s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 3:33 2ⁿ networks</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=WzScUPDGFVA&amp;t=368s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 6:08 training</a>
+        </div>
+        <h2>Dropout: an ensemble of thinned networks</h2>
+      </div>
+      <p>Model averaging (a bagging ensemble) typically helps, but for large neural networks it is prohibitively expensive. Option 1, training several networks with different architectures, is obviously expensive. Option 2, training several instances of the same network on different samples of the data, is expensive too. Even if either could be done, combining several models at test time is infeasible in real-time applications, because every test input would have to pass through all of them.</p>
+      <p><dfn>Dropout</dfn> addresses both issues. It effectively trains several neural networks without significant computational overhead, and it gives an efficient approximate way of combining exponentially many different networks.</p>
+      <ul>
+        <li><b>Dropping units.</b> Temporarily remove a node and all its incoming and outgoing connections, which gives a <dfn>thinned network</dfn>. Each node is retained with a fixed probability, typically \(p = 0.5\) for hidden nodes and \(p = 0.8\) for visible (input) nodes.</li>
+        <li><b>How many networks?</b> With \(n\) nodes, each either retained or dropped, there are \(2^n\) thinned networks. That is far too many to train separately.</li>
+      </ul>
+      <p>Two tricks make it workable <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=WzScUPDGFVA&amp;t=276s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:36</a>:</p>
+      <ol>
+        <li><b>Share the weights across all the networks.</b> There is one set of weight matrices, and each thinned network uses the part of it that survives.</li>
+        <li><b>Sample a different network for each training instance</b> (or mini-batch).</li>
+      </ol>
+      <ol class="algo">
+        <li class="algo-title">Training with dropout</li>
+        <li>Initialize all the parameters (weights) of the network.</li>
+        <li>For the next training instance or mini-batch, apply dropout: keep each node with its probability \(p\). This gives a thinned network.</li>
+        <li>Compute the loss with a forward pass through the thinned network.</li>
+        <li>Backpropagate. Only the parameters that were active get updated; a weight attached to a dropped node took no part in the forward pass and receives no update.</li>
+        <li>Repeat from step 2 with a fresh sample, so each mini-batch trains a different thinned network.</li>
+      </ol>
+      <p>Because the weights are shared, a weight that was active for two mini-batches has received two updates by then, the second starting from the value the first left behind, while a weight active for only one of them has received one <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=WzScUPDGFVA&amp;t=615s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>10:15</a>. Each thinned network gets trained rarely, or even never; with a million nodes there are \(2^{1{,}000{,}000}\) of them, far more than the number of training steps. But parameter sharing ensures that no model has untrained or poorly trained parameters. In the lecturer's example, with nodes kept with probability 0.8, a weight between two nodes is active only when both are kept, with probability \(0.8 \times 0.8 = 0.64\), so over 1,000 steps it receives about 640 updates.</p>
+      <p>In practice nodes are not visited one by one. A layer's output vector is multiplied element-wise by a random 0/1 mask vector (for example with 20% zeros), so the dropped units output zero and take no part in the computation.</p>
+    </section>
+
+    <section id="dropout-test">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=WzScUPDGFVA&amp;t=741s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 12:21 test time</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=WzScUPDGFVA&amp;t=802s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 13:22 masking noise</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=WzScUPDGFVA&amp;t=893s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 14:53 co-adaptation</a>
+        </div>
+        <h2>Dropout at test time, and why it regularizes</h2>
+      </div>
+      <p>At test time it is impossible to aggregate the outputs of \(2^n\) thinned networks. Instead, use the full network with every node present, and scale the output of each node by the fraction of times it was on during training. A node that was present with probability \(p\) during training, with outgoing weights \(w_1, w_2, w_3, w_4\), is always present at test time with weights \(pw_1, pw_2, pw_3, pw_4\). The lecturer's way of putting it: a node that took part in only 80% of the discussions has its say trusted only 80%.</p>
+      <div class="result">
+        <span class="lbl">Why the factor is p</span>
+        <p>A one-line check (not on the slides). During training a node with output \(h\) sends \(m\,w\,h\) along a weight \(w\), where the mask \(m\) is 1 with probability \(p\) and 0 otherwise. On average that is \(E[m]\,w\,h = p\,w\,h\). Using the weight \(pw\) at test time gives the next layer the input it received on average during training.</p>
+      </div>
+      <p class="note">Not in the lecture: most libraries implement <dfn>inverted dropout</dfn>, which divides the kept outputs by \(p\) during training so that the test-time network needs no change. It is the same correction applied at the other end.</p>
+
+      <h3>Why dropout regularizes</h3>
+      <p>Dropout essentially applies a masking noise to the hidden units. This prevents hidden units from <dfn>co-adapting</dfn>. A unit cannot rely too much on other units, because they may be dropped at any time, so each hidden unit has to learn to be robust to these random dropouts.</p>
+      <p>An example of how this builds redundancy <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=WzScUPDGFVA&amp;t=953s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>15:53</a>. Suppose \(h_i\) learns to detect a face by firing when it detects a nose. Dropping \(h_i\) then erases the information that a nose exists. The model must either learn another unit that redundantly encodes the presence of a nose, or learn to detect the face from other features, such as the eyes or eyebrows. Either way the network becomes more robust.</p>
+
+      <figure id="do-fig">
+        <div class="controls">
+          <label for="do-p">Keep probability p for hidden units</label>
+          <input type="range" id="do-p" min="0.2" max="1" step="0.05" value="0.5">
+          <output id="do-p-out" for="do-p">0.50</output>
+          <button class="btn" id="do-one" type="button">Next mini-batch</button>
+          <button class="btn" id="do-many" type="button">Sample 1,000 masks</button>
+          <button class="btn" id="do-test" type="button">Test-time network</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">This thinned net's output</span><span class="v" id="do-y">–</span></div>
+          <div><span class="k">Mean over sampled masks</span><span class="v mine" id="do-mean">–</span></div>
+          <div><span class="k">Full net, weights × p</span><span class="v" id="do-scaled">–</span></div>
+          <div><span class="k">Full net, no scaling</span><span class="v" id="do-full">–</span></div>
+        </div>
+        <div class="status" id="do-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="l06-do-svg" class="dg" viewBox="0 0 640 340" role="img" aria-label="A network with four inputs, two hidden layers of five units and one output. Sampling a mask drops some units, drawn dashed and crossed out, together with their weights. One weight between the hidden layers is highlighted. The test-time view shows every unit with outgoing weights scaled by the keep probability."></svg></div>
+        <figcaption><b>Synthetic network with weights generated for these notes.</b> Four inputs, two hidden layers of five sigmoid units, one linear output, and a fixed input \(\mathbf x = (1, -0.5, 0.8, 1.5)\). Inputs are kept with probability 0.8 and hidden units with the chosen \(p\); the 14 droppable units give \(2^{14} = 16{,}384\) thinned networks, all sharing these weights. Each mini-batch samples one mask: dashed, crossed-out units are dropped, and only the solid weights are used and updated. The test-time network keeps every unit and multiplies each unit's outgoing weights by its keep probability. Its output lands close to the average over many masks, though not exactly on it because the sigmoid is not linear; without the scaling the output is too large whenever \(p \lt 1\).</figcaption>
+      </figure>
+    </section>
+
+    <!-- ============ WRAP-UP ============ -->
+    <section id="landscape">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=_wK-MOylRtw&amp;t=31s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 0:31</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=_wK-MOylRtw&amp;t=123s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 2:03 grouping</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=_wK-MOylRtw&amp;t=275s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 4:35 explicit and implicit</a>
+        </div>
+        <h2>Regularization and the loss landscape</h2>
+      </div>
+      <p>There are computationally intensive techniques for visualizing the loss landscape of a deep network in 1-D or 2-D, and the slide points to an interactive explorer at losslandscape.com. Real landscapes are bumpy, with many plateaus, valleys and sharp slopes, unlike the smooth bowls used so far in the course. Researchers have correlated the local flatness (curvature) of the loss surface with the generalization of a model, using different measures of curvature:</p>
+      <ul>
+        <li>flat surface → better generalization;</li>
+        <li>sharp surface → poor generalization.</li>
+      </ul>
+      <p>The lecturer's reasoning: in a flat region a whole neighbourhood of weights gives about the same loss, so small changes do not matter. In a sharp valley surrounded by hills, a small change of the weights changes the loss a lot, and the model is very sensitive. It has been shown that explicit regularization techniques smooth the loss surface; the lecture's example is a paper that studies skip connections (a CNN technique) as a regularizer.</p>
+
+      <h3>Grouping the techniques</h3>
+      <p>Each technique acts on some part of the training objective \(\mathscr L(\theta) = \frac1N\sum_{i=1}^{N}l\big(f(x_i, \theta), y_i\big)\):</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Acts on</th><th>Techniques</th></tr></thead>
+          <tbody>
+            <tr><td>Data \(x_i\)</td><td>data augmentation, noise injection</td></tr>
+            <tr><td>Architecture choice \(f(\cdot)\)</td><td>dropout, skip connections (CNN), weight sharing, pooling</td></tr>
+            <tr><td>Penalized cost \(\mathscr L(\cdot)\)</td><td>\(L_1\), \(L_2\)</td></tr>
+            <tr><td>Optimizer \(\nabla\)</td><td>SGD, early stopping</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>A second grouping splits them into explicit and implicit regularization:</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Kind</th><th>Techniques</th></tr></thead>
+          <tbody>
+            <tr><td>Explicit</td><td>data augmentation, noise injection, dropout, skip connections (CNN), weight sharing, pooling, \(L_1\) and \(L_2\)</td></tr>
+            <tr><td>Implicit</td><td>SGD, large initial learning rate, small initial learning rate, early stopping</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Skip connections, weight sharing and pooling come with CNNs in <a href="lecture-08.html">Lecture 8</a>; at least weight sharing and pooling regularize by reducing the number of parameters. On the implicit side, some papers show that gradient descent itself prefers less complex solutions <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=_wK-MOylRtw&amp;t=214s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:34</a>, and the initial learning rate also shapes how training proceeds. The lecture mentions these without going into detail.</p>
+    </section>
+
+    <section id="random-labels">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-8/fullscreen" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>Slides</a>
+        </div>
+        <h2>Do regularizers explain generalization?</h2>
+      </div>
+      <p>The slides close with a question the videos do not cover: is regularization, a technique adopted from statistical learning theory, really the fundamental reason deep learning models generalize well? The test is <b>random labelling</b>, from a paper the slides cite (standard reference: Zhang et al., 2017, <i>Understanding deep learning requires rethinking generalization</i>).</p>
+      <ol>
+        <li>Take a deep network that performed well on some task, say classification, and fix its complexity (its size, and so its number of parameters), the optimizer used to train it, its initialization, and so on.</li>
+        <li>Replace the true labels of the training data with random labels. This removes the relation (regularity) between the inputs and the corresponding outputs. The random labels are fixed and consistent across epochs.</li>
+      </ol>
+      <p><b>A toy version first.</b> Points are sampled from a noisy sinusoid, the example from the start of the lecture, and fitted with a model of complexity 19 (19 parameters). After training, the model fits the data points and closely represents the true function. Now randomly shuffle \(y\). With its fixed capacity the model cannot fit the shuffled data, and the training error remains high. This is expected: shuffling removed the regularity the model was exploiting.</p>
+      <p><b>Deep networks behave differently.</b> Surprisingly, they drive the training error to zero even with random labels. What the slides conclude:</p>
+      <ul>
+        <li>Observations on both explicit and implicit regularizers consistently suggest that regularizers, when properly tuned, can improve generalization. It is unlikely, though, that they are the fundamental reason for it, since the networks continue to perform well after all the regularizers are removed.</li>
+        <li>Experimental evidence suggests that the value of the objective may imply nothing about generalization (with respect to the Rademacher complexity measure).</li>
+        <li>This implies that vastly over-parameterized deep models regularize implicitly while their parameters are optimized with SGD or GD: the discrete steps of gradient descent themselves act as a regularizer.</li>
+      </ul>
+      <p>The lecture's recap lists the explicit methods (\(l_2\) regularization, dataset augmentation, parameter sharing and tying, noise at the inputs, noise at the outputs, early stopping, ensembles, dropout) together with this implicit regularization by the optimizer. <a href="lecture-07.html">Lecture 7</a> moves on to pre-training, better activation functions, weight initialization and batch normalization.</p>
+    </section>
+
+    <!-- ============ REVISION ============ -->
+    <section id="terms">
+      <div class="sec-head"><h2>Key terms</h2></div>
+      <dl class="terms">
+        <div><dt>Over-parameterized model</dt><dd>More parameters than training samples; can drive the training error to zero and overfit.</dd></div>
+        <div><dt>Bias</dt><dd>\(E[\hat f(x)] - f(x)\): how far the average model over training samples is from the truth. High for simple models.</dd></div>
+        <div><dt>Variance</dt><dd>\(E[(\hat f(x) - E[\hat f(x)])^2]\): how much models trained on different samples disagree. High for complex models.</dd></div>
+        <div><dt>Irreducible error \(\sigma^2\)</dt><dd>The noise variance in \(y\); part of every model's expected test error, bias² + variance + σ².</dd></div>
+        <div><dt>True error</dt><dd>\(E[(\hat f(x) - f(x))^2]\). Equals the test error minus σ², but exceeds what the training error suggests by a complexity term.</dd></div>
+        <div><dt>Regularizer \(\Omega(\theta)\)</dt><dd>Term added to the training loss that is large for complex models; a stand-in for \(\frac{\sigma^2}{n}\sum_i\partial\hat f(x_i)/\partial y_i\).</dd></div>
+        <div><dt>Weight decay (L2)</dt><dd>Penalty \(\frac\alpha2\lVert\mathbf w\rVert^2\). Adds \(\alpha\mathbf w\) to the gradient and scales eigen-direction \(i\) of \(\mathbf w^*\) by \(\lambda_i/(\lambda_i + \alpha)\).</dd></div>
+        <div><dt>Effective number of parameters</dt><dd>\(\sum_i\lambda_i/(\lambda_i + \alpha) \lt n\): how many directions survive L2 regularization.</dd></div>
+        <div><dt>Dataset augmentation</dt><dd>New training examples from label-preserving transformations such as rotations, shifts and blurring.</dd></div>
+        <div><dt>Parameter sharing and tying</dt><dd>Reusing one set of weights: a CNN filter at every position; the encoder's \(W\) and decoder's \(W^\top\) in an autoencoder.</dd></div>
+        <div><dt>Soft targets (label smoothing)</dt><dd>Target \(1 - \varepsilon\) for the true class and \(\varepsilon/9\) for each of the other nine classes.</dd></div>
+        <div><dt>Early stopping, patience \(p\)</dt><dd>Stop when the validation error has not improved for \(p\) steps and return the model from step \(k - p\).</dd></div>
+        <div><dt>Bagging</dt><dd>Ensemble of one classifier trained on samples drawn with replacement; \(\text{mse} = \frac1kV + \frac{k-1}{k}C\).</dd></div>
+        <div><dt>Dropout, thinned network</dt><dd>Keep each unit with probability \(p\) per mini-batch, sharing weights across the \(2^n\) thinned networks; at test time keep all units and scale weights by \(p\).</dd></div>
+      </dl>
+    </section>
+
+    <section id="test">
+      <div class="sec-head"><h2>Test yourself</h2></div>
+      <div class="quiz">
+        <details><summary><span class="q">Q1</span><span>In the curve-fitting experiment the 30 degree-1 fits are nearly identical, while the 30 degree-25 fits differ wildly. Which model has high bias and which high variance, and which part of the test error hurts each?</span><span class="tog"></span></summary>
+          <p>Degree 1: high bias (its average line is far from the sinusoid) and low variance. Degree 25: low bias (its average follows the sinusoid) and high variance. Since test error = bias² + variance + σ², the line is hurt by the bias² term and the polynomial by the variance term; σ² affects both equally.</p></details>
+        <details><summary><span class="q">Q2</span><span>True error = empirical error − σ² + 2E[ε(f̂(x) − f(x))]. Why is the last term zero when the empirical error is computed on test data, but not on training data?</span><span class="tog"></span></summary>
+          <p>A test point's \(y\), and so its \(\varepsilon = y - f(x)\), played no part in estimating \(\hat f\). So \(\varepsilon\) is independent of \(\hat f(x) - f(x)\) and \(E[\varepsilon(\hat f - f)] = E[\varepsilon]E[\hat f - f] = 0\). The training \(y_i\) were used to fit \(\hat f\), so the two are dependent and the term survives. By Stein's lemma it equals \(\frac{2\sigma^2}{n}\sum_i\partial\hat f(x_i)/\partial y_i\), which is larger for more sensitive, more complex models.</p></details>
+        <details><summary><span class="q">Q3</span><span>The Hessian at \(\mathbf w^*\) has eigenvalues 10 and 0.1, and you use L2 regularization with \(\alpha = 1\). By what factor is each eigen-component of \(\mathbf w^*\) scaled, and what is the effective number of parameters?</span><span class="tog"></span></summary>
+          <p>\(10/11 \approx 0.91\) and \(0.1/1.1 \approx 0.09\). The steep direction is almost fully kept and the flat one almost removed. Effective parameters \(= 0.909 + 0.091 = 1.0\) out of 2.</p></details>
+        <details><summary><span class="q">Q4</span><span>A linear model \(\hat y = \sum_i w_ix_i\) with \(\mathbf w = (2, -1, 0.5)\) is trained on inputs corrupted by independent Gaussian noise of variance \(\sigma^2 = 0.01\). What does the noise add to the expected squared error?</span><span class="tog"></span></summary>
+          <p>\(\sigma^2\sum_i w_i^2\) \(= 0.01 \times (4 + 1 + 0.25)\) \(= 0.0525\). It is an L2 penalty, \(\frac\alpha2\lVert\mathbf w\rVert^2\) with \(\alpha = 2\sigma^2 = 0.02\).</p></details>
+        <details><summary><span class="q">Q5</span><span>With \(\varepsilon = 0.1\) and 10 classes, what is the soft target for an image of a 3, and how does it change the loss?</span><span class="tog"></span></summary>
+          <p>0.9 for class 3 and \(0.1/9 \approx 0.011\) for each of the other nine classes. The cross-entropy becomes \(0.9 \times\) the usual loss \(-\log q_3\) plus \(0.1 \times\) the average of \(-\log q_i\) over the other classes, a loss-plus-regularizer form that stops the network from putting probability 1 on a label that may be wrong.</p></details>
+        <details><summary><span class="q">Q6</span><span>The validation error is lowest at step 37 and never improves afterwards. With patience \(p = 5\), at which step does training stop, and which model is returned?</span><span class="tog"></span></summary>
+          <p>Steps 38 to 42 bring no improvement, so at \(k = 42\) the previous 5 steps show none and training stops. The model returned is the one stored at step \(k - p = 37\).</p></details>
+        <details><summary><span class="q">Q7</span><span>An ensemble averages 10 models whose errors have variance \(V = 1\) and pairwise covariance \(C = 0.2\). What is the ensemble's mse, and what would it be with \(C = 1\)?</span><span class="tog"></span></summary>
+          <p>\(\frac1kV + \frac{k-1}{k}C\) \(= 0.1 + 0.9 \times 0.2 = 0.28\), against 1 for a single model. With \(C = 1 = V\) the errors are perfectly correlated and the mse stays at 1: no gain.</p></details>
+        <details><summary><span class="q">Q8</span><span>A network has 20 droppable nodes, and a hidden unit kept with \(p = 0.5\) has an outgoing weight of 1.2. How many thinned networks are there, and what weight is used at test time?</span><span class="tog"></span></summary>
+          <p>\(2^{20} = 1{,}048{,}576\) thinned networks, all sharing one set of weights; each mini-batch trains one of them. At test time the unit is always present and its outgoing weight is \(p \times 1.2 = 0.6\), the input the next layer received on average during training.</p></details>
+      </div>
+    </section>
+
+    <!-- PAGER:START --><nav class="pager" aria-label="Previous and next lecture"><a href="lecture-05.html"><span class="dir">← Lecture 5</span><span class="nm">Optimization: from gradient descent to Adam</span></a><a class="next" href="lecture-07.html"><span class="dir">Lecture 7 →</span><span class="nm">Pre-training, activations, initialization, batch norm</span></a></nav><!-- PAGER:END -->
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the official lecture slides and the module videos' YouTube auto-generated captions. Timestamp links open the video at that moment. Charts marked synthetic use data generated for these notes. Not an official IIT Madras resource.</div>
+</footer>
+
+<script src="notes.js"></script>
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const mkRand = s0 => { let seed = s0; return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
+  const mkNormal = rand => () => { let u = 0; while (u === 0) u = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rand()); };
+  const num = (v, d) => (Math.abs(v) < 0.5 * Math.pow(10, -d) ? 0 : v).toFixed(d).replace('-', '−');
+
+  /* ---------- Bias and variance of polynomial fits ---------- */
+  (() => {
+    const svg = document.getElementById('l06-bv-svg'); if (!svg) return;
+    const SIG = 0.3, NPOOL = 500, M = 20, K = 30, DMAX = 12, NG = 121, NTEST = 300;
+    const f = x => Math.sin(2 * Math.PI * x);
+    const r0 = mkRand(606), n0 = mkNormal(r0);
+    const pool = [];
+    for (let i = 0; i < NPOOL; i++) { const x = r0(); pool.push([x, f(x) + SIG * n0()]); }
+    pool.sort((a, b) => a[0] - b[0]);
+    const bins = [];
+    for (let b = 0; b < M; b++) bins.push(pool.slice(b * NPOOL / M, (b + 1) * NPOOL / M));
+    const r1 = mkRand(707), n1 = mkNormal(r1);
+    const test = [];
+    for (let i = 0; i < NTEST; i++) { const x = r1(); test.push([x, f(x) + SIG * n1()]); }
+    const grid = [];
+    for (let i = 0; i < NG; i++) grid.push(i / (NG - 1));
+    /* Legendre basis on [0, 1] mapped to [-1, 1], fitted by Householder least squares */
+    const leg = (x, d) => { const t = 2 * x - 1, P = [1, t]; for (let k = 1; k < d; k++) P.push(((2 * k + 1) * t * P[k] - k * P[k - 1]) / (k + 1)); return P.slice(0, d + 1); };
+    const lstsq = (A, b) => {
+      const m = A.length, n = A[0].length, R = A.map(r => r.slice()), y = b.slice();
+      for (let k = 0; k < n; k++) {
+        let nrm = 0; for (let i = k; i < m; i++) nrm += R[i][k] * R[i][k]; nrm = Math.sqrt(nrm);
+        if (nrm === 0) continue;
+        const al = R[k][k] > 0 ? -nrm : nrm, v = new Array(m).fill(0);
+        for (let i = k; i < m; i++) v[i] = R[i][k]; v[k] -= al;
+        let vv = 0; for (let i = k; i < m; i++) vv += v[i] * v[i];
+        if (vv === 0) continue;
+        for (let j = k; j < n; j++) { let s = 0; for (let i = k; i < m; i++) s += v[i] * R[i][j]; s = 2 * s / vv; for (let i = k; i < m; i++) R[i][j] -= s * v[i]; }
+        let s = 0; for (let i = k; i < m; i++) s += v[i] * y[i]; s = 2 * s / vv; for (let i = k; i < m; i++) y[i] -= s * v[i];
+      }
+      const c = new Array(n).fill(0);
+      for (let k = n - 1; k >= 0; k--) { let s = y[k]; for (let j = k + 1; j < n; j++) s -= R[k][j] * c[j]; c[k] = Math.abs(R[k][k]) > 1e-12 ? s / R[k][k] : 0; }
+      return c;
+    };
+    const evalc = (c, x) => { const P = leg(x, c.length - 1); let s = 0; for (let i = 0; i < c.length; i++) s += c[i] * P[i]; return s; };
+
+    let draw = 0, samples = [], res = [];
+    const compute = () => {
+      const r = mkRand(9001 + 7919 * draw);
+      samples = [];
+      for (let k = 0; k < K; k++) samples.push(bins.map(b => b[Math.floor(r() * b.length)]));
+      res = [];
+      for (let d = 1; d <= DMAX; d++) {
+        const fits = [], tr = [], te = [];
+        for (const s of samples) {
+          const c = lstsq(s.map(p => leg(p[0], d)), s.map(p => p[1]));
+          fits.push(grid.map(x => evalc(c, x)));
+          tr.push(s.reduce((a, p) => a + (evalc(c, p[0]) - p[1]) ** 2, 0) / s.length);
+          te.push(test.reduce((a, p) => a + (evalc(c, p[0]) - p[1]) ** 2, 0) / test.length);
+        }
+        const mean = grid.map((_, i) => fits.reduce((a, F) => a + F[i], 0) / K);
+        let b2 = 0, v = 0;
+        grid.forEach((x, i) => { b2 += (mean[i] - f(x)) ** 2; v += fits.reduce((a, F) => a + (F[i] - mean[i]) ** 2, 0) / K; });
+        res.push({ d, fits, mean, bias2: b2 / NG, vari: v / NG, train: tr.reduce((a, b) => a + b, 0) / K, test: te.reduce((a, b) => a + b, 0) / K });
+      }
+    };
+
+    const X0 = 56, X1 = 624, T0 = 22, T1 = 282, B0 = 366, B1 = 526;
+    const sx = x => X0 + x * (X1 - X0);
+    const sy = y => T0 + (2 - Math.max(-2.6, Math.min(2.6, y))) / 4 * (T1 - T0);
+    const ly = v => B1 - (Math.log10(Math.max(1e-3, Math.min(1e2, v))) + 3) / 5 * (B1 - B0);
+    const dx = d => X0 + (d - 1) / (DMAX - 1) * (X1 - X0);
+    const defs = mk('defs', {}, svg);
+    const cp = mk('clipPath', { id: 'l06-bv-clip' }, defs); mk('rect', { x: X0, y: T0, width: X1 - X0, height: T1 - T0 }, cp);
+    const cp2 = mk('clipPath', { id: 'l06-bv-clip2' }, defs); mk('rect', { x: X0, y: B0, width: X1 - X0, height: B1 - B0 }, cp2);
+    /* top panel axes */
+    const g1 = mk('g', { class: 'c-grid' }, svg);
+    [-2, -1, 0, 1, 2].forEach(v => { mk('line', { x1: X0, x2: X1, y1: sy(v), y2: sy(v) }, g1); mk('text', { x: X0 - 6, y: sy(v) + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = String(v).replace('-', '−'); });
+    [0, 0.25, 0.5, 0.75, 1].forEach(v => { mk('line', { x1: sx(v), x2: sx(v), y1: T0, y2: T1 }, g1); mk('text', { x: sx(v), y: T1 + 14, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = v; });
+    mk('line', { x1: X0, x2: X1, y1: sy(0), y2: sy(0), class: 'c-axis' }, svg);
+    mk('text', { x: X0 - 40, y: T0 + 10, class: 'c-title' }, svg).textContent = 'y';
+    mk('text', { x: X1 + 10, y: T1 + 4, class: 'c-title' }, svg).textContent = 'x';
+    const gTop = mk('g', { 'clip-path': 'url(#l06-bv-clip)' }, svg);
+    const fitPaths = []; for (let k = 0; k < K; k++) fitPaths.push(mk('path', { class: 'c-fit' }, gTop));
+    mk('path', { class: 'c-true', d: 'M' + grid.map(x => sx(x).toFixed(1) + ' ' + sy(f(x)).toFixed(1)).join(' L') }, gTop);
+    const meanPath = mk('path', { class: 'c-mean' }, gTop);
+    const gDots = mk('g', {}, gTop);
+    /* legend for top panel */
+    const leg1 = (x, cls, label, dot) => { if (dot) mk('circle', { cx: x + 12, cy: 318, r: 3.2, class: 'c-samp' }, svg); else mk('line', { x1: x, x2: x + 24, y1: 318, y2: 318, class: cls, style: cls === 'c-fit' ? 'opacity: 1' : '' }, svg); mk('text', { x: x + 30, y: 322, class: 'c-note' }, svg).textContent = label; };
+    leg1(56, 'c-true', 'true f(x) = sin 2πx'); leg1(208, 'c-mean', 'average of the 30 fits'); leg1(376, 'c-fit', 'the 30 fits'); leg1(476, '', 'training points of fit 1', true);
+    /* bottom panel axes */
+    mk('text', { x: X0, y: 352, class: 'c-title' }, svg).textContent = 'Error against degree, same 30 samples (log scale)';
+    const g2 = mk('g', { class: 'c-grid' }, svg);
+    [1e-3, 1e-2, 1e-1, 1, 10, 100].forEach(v => { mk('line', { x1: X0, x2: X1, y1: ly(v), y2: ly(v) }, g2); mk('text', { x: X0 - 6, y: ly(v) + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = v >= 1 ? String(v) : String(v); });
+    for (let d = 1; d <= DMAX; d++) mk('text', { x: dx(d), y: B1 + 14, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = d;
+    mk('text', { x: X1, y: B1 + 28, 'text-anchor': 'end', class: 'c-title' }, svg).textContent = 'degree';
+    mk('line', { x1: X0, x2: X1, y1: ly(SIG * SIG), y2: ly(SIG * SIG), class: 'c-faint', style: 'stroke-dasharray: 4 3' }, svg);
+    mk('text', { x: X1 - 4, y: ly(SIG * SIG) - 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = 'σ² = 0.09';
+    const gBot = mk('g', { 'clip-path': 'url(#l06-bv-clip2)' }, svg);
+    const keys = [['test', 'c-e-test', 'test MSE', '--accent'], ['train', 'c-e-train', 'train MSE', '--ink-2'], ['bias2', 'c-e-bias', 'bias²', '--ok'], ['vari', 'c-e-var', 'variance', '--muted']];
+    const lines = {}, dots = {};
+    const marker = mk('line', { y1: B0, y2: B1, class: 'c-mark' }, svg);
+    keys.forEach(([k, cls]) => { lines[k] = mk('path', { class: cls }, gBot); });
+    keys.forEach(([k, , , tok]) => { dots[k] = mk('circle', { r: 4, style: 'fill: var(' + tok + '); stroke: var(--surface); stroke-width: 1.5' }, svg); });
+    keys.forEach(([, cls, label], i) => { const x = 56 + i * 122; mk('line', { x1: x, x2: x + 24, y1: 566, y2: 566, class: cls }, svg); mk('text', { x: x + 30, y: 570, class: 'c-note' }, svg).textContent = label; });
+
+    const slider = document.getElementById('bv-deg'), out = document.getElementById('bv-deg-out');
+    const oB = document.getElementById('bv-bias'), oV = document.getElementById('bv-var'), oTr = document.getElementById('bv-train'), oTe = document.getElementById('bv-test'), status = document.getElementById('bv-status');
+    const nf = v => v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(3);
+    const path = (xs, ys) => 'M' + xs.map((x, i) => x.toFixed(1) + ' ' + ys[i].toFixed(1)).join(' L');
+    const drawCurves = () => { keys.forEach(([k]) => { lines[k].setAttribute('d', path(res.map(r => dx(r.d)), res.map(r => ly(r[k])))); }); };
+    const render = () => {
+      const d = parseInt(slider.value, 10), R = res[d - 1];
+      out.textContent = String(d);
+      R.fits.forEach((F, k) => fitPaths[k].setAttribute('d', path(grid.map(sx), F.map(sy))));
+      meanPath.setAttribute('d', path(grid.map(sx), R.mean.map(sy)));
+      marker.setAttribute('x1', dx(d)); marker.setAttribute('x2', dx(d));
+      keys.forEach(([k]) => { dots[k].setAttribute('cx', dx(d)); dots[k].setAttribute('cy', ly(R[k])); });
+      oB.textContent = nf(R.bias2); oV.textContent = nf(R.vari); oTr.textContent = nf(R.train); oTe.textContent = nf(R.test);
+      const best = res.reduce((b, r) => r.test < b.test ? r : b, res[0]);
+      let s;
+      if (d === best.d) s = 'Degree ' + d + ' has the lowest test MSE for these samples: the sweet spot between bias and variance.';
+      else if (R.test <= best.test * 1.08) s = 'Degree ' + d + ' is within a few percent of the lowest test MSE (degree ' + best.d + '): close to the sweet spot.';
+      else if (d < best.d) s = 'Degree ' + d + ' underfits: the fits stay close together, but their average misses the sine (bias² ' + nf(R.bias2) + ', variance ' + nf(R.vari) + ').';
+      else s = 'Degree ' + d + ' overfits: the average still follows the sine, but single fits swing from sample to sample (variance ' + nf(R.vari) + '). Training MSE keeps falling while test MSE rises.';
+      status.textContent = s + ' Bias² + variance + σ² = ' + nf(R.bias2 + R.vari + SIG * SIG) + '; measured test MSE ' + nf(R.test) + '.';
+    };
+    const redraw = () => {
+      compute(); drawCurves();
+      while (gDots.firstChild) gDots.removeChild(gDots.firstChild);
+      samples[0].forEach(p => mk('circle', { cx: sx(p[0]), cy: sy(p[1]), r: 3.2, class: 'c-samp' }, gDots));
+      render();
+    };
+    redraw();
+    slider.addEventListener('input', render);
+    document.getElementById('bv-redraw').addEventListener('click', () => { draw++; redraw(); });
+  })();
+
+  /* ---------- Dropout masks and test-time scaling ---------- */
+  (() => {
+    const svg = document.getElementById('l06-do-svg'); if (!svg) return;
+    const rand = mkRand(61), normal = mkNormal(rand);
+    const W1 = [...Array(5)].map(() => [...Array(4)].map(() => normal() * 0.9));
+    const W2 = [...Array(5)].map(() => [...Array(5)].map(() => normal() * 0.9));
+    const V = [...Array(5)].map(() => normal() * 1.2 + 0.6);
+    const X = [1.0, -0.5, 0.8, 1.5], QIN = 0.8;
+    const sig = z => 1 / (1 + Math.exp(-z));
+    const fwd = (s0, s1, s2) => {
+      const a0 = X.map((x, i) => x * s0[i]);
+      const h1 = W1.map((r, j) => sig(r.reduce((s, w, i) => s + w * a0[i], 0)) * s1[j]);
+      const h2 = W2.map((r, j) => sig(r.reduce((s, w, i) => s + w * h1[i], 0)) * s2[j]);
+      return V.reduce((s, w, j) => s + w * h2[j], 0);
+    };
+    const SIZES = [4, 5, 5, 1], LX = [90, 250, 410, 560], R = 15;
+    const ys = n => [...Array(n)].map((_, i) => 178 + (i - (n - 1) / 2) * (n === 4 ? 62 : 56));
+    const pos = SIZES.map((n, l) => ys(n).map(y => [LX[l], y]));
+    const HL = { l: 1, i: 0, j: 1 }, wHL = W2[1][0];
+    const titles = ['inputs · keep 0.8', 'hidden 1 · keep p', 'hidden 2 · keep p', 'output'];
+    titles.forEach((t, l) => { mk('text', { x: LX[l], y: 26, 'text-anchor': 'middle', class: 'd-s' }, svg).textContent = t; });
+    const edges = [];
+    for (let l = 0; l < 3; l++) for (let i = 0; i < SIZES[l]; i++) for (let j = 0; j < SIZES[l + 1]; j++) {
+      const a = pos[l][i], b = pos[l + 1][j];
+      const hl = l === HL.l && i === HL.i && j === HL.j;
+      edges.push({ l, i, j, hl, el: mk('line', { x1: a[0] + R, y1: a[1], x2: b[0] - R, y2: b[1], class: 'do-edge' + (hl ? ' hl' : '') }, svg) });
+    }
+    edges.sort((a, b) => a.hl - b.hl).forEach(e => svg.appendChild(e.el));
+    const nodes = [];
+    const sub = ['₁', '₂', '₃', '₄'];
+    pos.forEach((layer, l) => layer.forEach((p, i) => {
+      const c = mk('circle', { cx: p[0], cy: p[1], r: R, class: 'node' }, svg);
+      const x1 = mk('line', { x1: p[0] - 9, y1: p[1] - 9, x2: p[0] + 9, y2: p[1] + 9, class: 'do-x', visibility: 'hidden' }, svg);
+      const x2 = mk('line', { x1: p[0] - 9, y1: p[1] + 9, x2: p[0] + 9, y2: p[1] - 9, class: 'do-x', visibility: 'hidden' }, svg);
+      let t = null;
+      if (l === 0) { t = mk('text', { x: p[0], y: p[1] + 4.5, 'text-anchor': 'middle', class: 'd-t' }, svg); t.textContent = 'x' + sub[i]; }
+      if (l === 3) { t = mk('text', { x: p[0], y: p[1] + 4.5, 'text-anchor': 'middle', class: 'd-t' }, svg); t.textContent = 'ŷ'; }
+      nodes.push({ l, i, c, x1, x2, t });
+    }));
+    const a = pos[1][HL.i], b = pos[2][HL.j];
+    const wLbl = mk('text', { x: (a[0] + b[0]) / 2 + 6, y: (a[1] + b[1]) / 2 - 17, 'text-anchor': 'middle', class: 'c-lbl d-halo' }, svg);
+    const scaleLbls = [[170, 'weights × 0.8'], [330, 'weights × p'], [485, 'weights × p']].map(([x, t]) => { const e = mk('text', { x, y: 328, 'text-anchor': 'middle', class: 'd-s', style: 'fill: var(--accent)', visibility: 'hidden' }, svg); e.textContent = t; return e; });
+
+    const slider = document.getElementById('do-p'), out = document.getElementById('do-p-out');
+    const oY = document.getElementById('do-y'), oMean = document.getElementById('do-mean'), oScaled = document.getElementById('do-scaled'), oFull = document.getElementById('do-full'), status = document.getElementById('do-status');
+    const mr = mkRand(4321);
+    let p = parseFloat(slider.value), mode = 'full', last = null, N = 0, sum = 0, act = 0, timer = null, left = 0;
+    const scaled = () => fwd(X.map(() => QIN), Array(5).fill(p), Array(5).fill(p));
+    const full = fwd(Array(4).fill(1), Array(5).fill(1), Array(5).fill(1));
+    const sample = () => {
+      const m0 = X.map(() => mr() < QIN ? 1 : 0), m1 = [...Array(5)].map(() => mr() < p ? 1 : 0), m2 = [...Array(5)].map(() => mr() < p ? 1 : 0);
+      const y = fwd(m0, m1, m2);
+      N++; sum += y; if (m1[HL.i] && m2[HL.j]) act++;
+      last = { m: [m0, m1, m2, [1]], y };
+    };
+    const kept = (l, i) => mode !== 'train' || !last ? true : last.m[l][i] === 1;
+    const render = () => {
+      out.textContent = p.toFixed(2);
+      nodes.forEach(n => {
+        const k = kept(n.l, n.i);
+        n.c.setAttribute('class', k ? 'node' : 'd-off');
+        n.x1.setAttribute('visibility', k ? 'hidden' : 'visible'); n.x2.setAttribute('visibility', k ? 'hidden' : 'visible');
+        if (n.t) n.t.setAttribute('visibility', k ? 'visible' : 'hidden');
+      });
+      edges.forEach(e => { const on = kept(e.l, e.i) && kept(e.l + 1, e.j); e.el.setAttribute('class', 'do-edge' + (e.hl ? ' hl' : '') + (on ? '' : ' off')); });
+      wLbl.textContent = mode === 'test' ? 'p·w = ' + num(p * wHL, 2) : 'w = ' + num(wHL, 2);
+      scaleLbls.forEach(e => e.setAttribute('visibility', mode === 'test' ? 'visible' : 'hidden'));
+      const sc = scaled();
+      oY.textContent = last ? num(last.y, 3) : '–';
+      oMean.textContent = N ? num(sum / N, 3) : '–';
+      oScaled.textContent = num(sc, 3); oFull.textContent = num(full, 3);
+      if (mode === 'full') status.textContent = 'Full network: 14 droppable units, so 2¹⁴ = 16,384 thinned networks share these weights. Press Next mini-batch to sample one.';
+      else if (mode === 'train') {
+        const dropped = last.m.slice(0, 3).reduce((s, m) => s + m.filter(v => v === 0).length, 0);
+        status.textContent = 'Mini-batch ' + N + ': ' + dropped + ' of 14 units dropped, so only the solid weights are used and updated. The highlighted weight has been active (both its units kept) in ' + act + ' of ' + N + ' masks, ' + Math.round(100 * act / N) + '%; expected p² = ' + Math.round(100 * p * p) + '%.';
+      } else status.textContent = 'Test time: every unit present, outgoing weights × 0.8 for inputs and × ' + p.toFixed(2) + ' for hidden units. Output ' + num(sc, 3) + (N ? ', against ' + num(sum / N, 3) + ' averaged over ' + N + ' sampled masks.' : '. Sample some masks to compare it with their average.');
+    };
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } left = 0; };
+    const finish = () => { while (left > 0) { sample(); left--; } stop(); };
+    slider.addEventListener('input', () => { stop(); p = parseFloat(slider.value); mode = 'full'; last = null; N = 0; sum = 0; act = 0; render(); });
+    document.getElementById('do-one').addEventListener('click', () => { finish(); mode = 'train'; sample(); render(); });
+    document.getElementById('do-test').addEventListener('click', () => { finish(); mode = 'test'; render(); });
+    document.getElementById('do-many').addEventListener('click', () => {
+      finish(); mode = 'train';
+      if (reduce) { for (let i = 0; i < 1000; i++) sample(); render(); return; }
+      left = 1000;
+      timer = setInterval(() => { for (let i = 0; i < 50 && left > 0; i++, left--) sample(); render(); if (left <= 0) stop(); }, 40);
+    });
+    render();
+  })();
+})();
+</script>
+</body>
+</html>
