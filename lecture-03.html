@@ -1,0 +1,1291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lecture 3 · Sigmoid neurons and gradient descent · DL Notes</title>
+<meta name="description" content="CS6910 Deep Learning (IIT Madras) notes, Lecture 3: sigmoid neurons, the supervised learning setup, gradient descent derived from the Taylor series, and the representation power of networks of sigmoid neurons.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<style>
+.codeblock { margin: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 18px; overflow-x: auto; font: 13.5px/1.55 var(--font-mono); color: var(--ink); max-width: 100%; }
+.l03-surface { cursor: crosshair; }
+.l03-ctl { display: inline-flex; align-items: center; gap: 12px; }
+.l03-ctl input[type="range"] { width: 170px; }
+.l03-ctl output { min-width: 4ch; }
+</style>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <!-- PARTNAV:START --><nav class="partnav" aria-label="Lectures"><a href="index.html">DL Notes</a><span class="sep">/</span><span>Lecture 3</span><span class="sep">·</span><a href="lecture-04.html">Lecture 4 →</a></nav><!-- PARTNAV:END -->
+    <div class="eyebrow">CS6910 · Deep Learning · IIT Madras</div>
+    <h1>Sigmoid neurons, gradient descent and what networks can represent</h1>
+    <p class="lede">The perceptron's hard threshold gives way to the smooth sigmoid neuron, and a single sigmoid neuron is trained by gradient descent, a rule that falls out of the Taylor series: step against the gradient. Steep sigmoids then combine into "towers", and sums of towers show that a network with enough sigmoid neurons can approximate any continuous function.</p>
+    <div class="meta">
+      <span><b>Lecture 3</b></span>
+      <span>Instructor <b>Prof. Mitesh M. Khapra</b></span>
+      <span>About <b>174 min</b> of video</span>
+      <span><b>8</b> modules</span>
+    </div>
+    <div class="watch">
+      <a class="btn solid" href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-3-44073c/fullscreen" target="_blank" rel="noopener">Slides</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=ay402XiRrzc" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 20:21</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=Evhb4HxI32I" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 26:03</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=LbPKf7UVkyU" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 18:32</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=qyn6RERiIIY" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 24:22</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=o2pT74Nplq0" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 16:19</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=HEx-q6fkCbo" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 23:57</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=xHSErLWAlbU" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 23:14</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=BUGi6AH1D2c" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 21:10</a>
+    </div>
+  </div>
+</header>
+
+<div class="page gutter">
+  <nav class="toc" aria-label="Contents">
+    <div>
+      <h4>Module 3.1 · Sigmoid neuron</h4>
+      <ul>
+        <li><a href="#story">The story ahead</a></li>
+        <li><a href="#harsh-threshold">A harsh threshold</a></li>
+        <li><a href="#sigmoid-neuron">The sigmoid neuron</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 3.2 · Learning setup</h4>
+      <ul>
+        <li><a href="#minimum-error">Aim for minimum error</a></li>
+        <li><a href="#ml-setup">The five components</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 3.3 · Guess work</h4>
+      <ul>
+        <li><a href="#toy-problem">A one-input toy problem</a></li>
+        <li><a href="#guess-work">Guessing w and b</a></li>
+        <li><a href="#error-surface">The error surface</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 3.4 · Gradient descent</h4>
+      <ul>
+        <li><a href="#update-step">A small step η·Δθ</a></li>
+        <li><a href="#taylor">Taylor series</a></li>
+        <li><a href="#gd-derivation">Why step against ∇L</a></li>
+        <li><a href="#gd-rule">The update rule</a></li>
+        <li><a href="#gradients">∇w and ∇b for a sigmoid</a></li>
+        <li><a href="#gd-demo">Running it</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 3.5 · Representation power</h4>
+      <ul>
+        <li><a href="#uat">Universal approximation</a></li>
+        <li><a href="#towers">Functions from towers</a></li>
+        <li><a href="#tower-maker">Two sigmoids make a tower</a></li>
+        <li><a href="#towers-2d">Towers in two dimensions</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Revision</h4>
+      <ul>
+        <li><a href="#terms">Key terms</a></li>
+        <li><a href="#test">Test yourself</a></li>
+        <li><a href="index.html">All lectures</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="glance" id="glance">
+      <h2>At a glance</h2>
+      <ul>
+        <li>A perceptron's output jumps from 0 to 1 at its threshold. A <dfn>sigmoid neuron</dfn>, \(y = 1/(1 + e^{-\mathbf{w}^\top\mathbf{x}})\), changes smoothly, outputs a real number in \((0, 1)\) that can be read as a probability, and is differentiable.</li>
+        <li>Supervised learning has the same parts every time: <b>data</b>, a <b>model</b> with <b>parameters</b>, a <b>loss function</b>, and a <b>learning algorithm</b> that minimizes the loss. Since zero error is usually out of reach, the target becomes the minimum possible error.</li>
+        <li>Toy problem: fit \(f(x) = \sigma(wx + b)\) to \((0.5, 0.2)\) and \((2.5, 0.9)\) under squared error. Guessing \((w, b)\) by hand is a random walk on the error surface, and plotting the whole surface does not scale.</li>
+        <li>The Taylor series gives \(\mathcal{L}(\boldsymbol\theta + \eta\mathbf{u}) \approx \mathcal{L}(\boldsymbol\theta) + \eta\,\mathbf{u}^\top\nabla\mathcal{L}(\boldsymbol\theta)\) for small \(\eta\). The loss falls fastest when \(\mathbf{u}\) points opposite the gradient (angle 180°), which is <b>gradient descent</b>: \(\boldsymbol\theta_{t+1} = \boldsymbol\theta_t - \eta\nabla\mathcal{L}(\boldsymbol\theta_t)\). For the sigmoid neuron, each training point adds \((f(x_i) - y_i)\,f(x_i)(1 - f(x_i))\) times \(x_i\) to \(\nabla w\).</li>
+        <li><b>Universal approximation:</b> one hidden layer with enough sigmoid neurons approximates any continuous function to any precision \(\epsilon\). Two steep sigmoids subtracted give a tower; sums of towers rebuild any 1-D function; in 2-D, four sigmoids plus a thresholding sigmoid give a closed tower.</li>
+      </ul>
+    </div>
+
+    <!-- ============ MODULE 3.1 ============ -->
+    <section id="story">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=ay402XiRrzc&amp;t=62s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 1:02</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=ay402XiRrzc&amp;t=124s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 2:04 real-valued problems</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=ay402XiRrzc&amp;t=367s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 6:07 the quest</a>
+        </div>
+        <h2>The story ahead: from Boolean to real-valued functions</h2>
+      </div>
+      <p><a href="lecture-02.html">Lecture 2</a> was about Boolean functions, \(y = f(\mathbf{x})\) with \(\mathbf{x} \in \{0, 1\}^n\) and \(y \in \{0, 1\}\). Perceptrons accept real inputs, but the discussion stayed with Boolean ones. This lecture moves to arbitrary functions with real inputs and a real output:</p>
+      <div class="eq">\[ y = f(\mathbf{x}), \qquad \mathbf{x} \in \mathbb{R}^n, \quad y \in \mathbb{R}. \]</div>
+      <p>Such problems are common.</p>
+      <ul>
+        <li><b>Oil.</b> Whether to build a drilling station at a spot in the ocean depends on how much oil it holds. That quantity depends on salinity, density, pressure, temperature, marine diversity and more, all real numbers.</li>
+        <li><b>Interest rate.</b> A bank sets a customer's rate, say between 5% and 20%, from salary, family size, past loans, how quickly they were repaid, their interest rates and any defaults.</li>
+        <li><b>Images.</b> A 100 × 100 greyscale image flattens into a vector of 10,000 real pixel values, a very high-dimensional input.</li>
+      </ul>
+      <p>The goal mirrors Lecture 2. There a network <i>exactly</i> represented a Boolean function if it reproduced every row of the truth table, or every label of a linearly separable training set. The requirement is now relaxed to <i>approximately</i>. Given training pairs \((\mathbf{x}, y)\), such as existing drilling stations with their measurements and the oil they produced, we want a network whose prediction \(\hat{y}\) is close to \(y\) for every training input. Before asking whether such a network exists, we have to graduate from perceptrons to sigmoid neurons.</p>
+    </section>
+
+    <section id="harsh-threshold">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=ay402XiRrzc&amp;t=519s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 8:39</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=ay402XiRrzc&amp;t=580s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 9:40 the movie example</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=ay402XiRrzc&amp;t=701s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 11:41 a step function</a>
+        </div>
+        <h2>The perceptron's threshold is harsh</h2>
+      </div>
+      <p>Recall that a perceptron fires when the weighted sum of its inputs reaches the threshold \(\theta = -w_0\). (Lecture 2 moved the threshold into the sum as a weight \(w_0\) on a constant input \(x_0 = 1\).)</p>
+      <p>Take the movie example with a single input, the critics' rating \(x_1 \in (0, 1)\), with weight \(w_1 = 1\) and threshold 0.5, so \(w_0 = -0.5\). A movie rated 0.51 is liked; a movie rated 0.49 is disliked. Two nearly identical ratings get opposite decisions, which is not how anyone actually decides.</p>
+      <p>The same jump appears for any problem, any weights and any threshold, because it comes from the perceptron function itself. Write \(z = \sum_{i=1}^{n} w_i x_i\). The output is 0 while \(z\) is below \(-w_0\) and becomes 1 the moment \(z\) crosses \(-w_0\): a <dfn>step function</dfn>. The if/else form of the rule is what makes the decision discrete. For most real applications we would expect a decision function that moves gradually from 0 to 1.</p>
+    </section>
+
+    <section id="sigmoid-neuron">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=ay402XiRrzc&amp;t=763s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 12:43</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=ay402XiRrzc&amp;t=887s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 14:47 limits</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=ay402XiRrzc&amp;t=1014s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 16:54 probabilities</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=ay402XiRrzc&amp;t=1167s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 19:27 differentiability</a>
+        </div>
+        <h2>The sigmoid neuron</h2>
+      </div>
+      <p>A <dfn>sigmoid neuron</dfn> replaces the step with a smooth S-shaped curve. "Sigmoid" names a family of S-shaped functions. The member used here is the <dfn>logistic function</dfn>; tanh, which appears later in the course (<a href="lecture-07.html">Lecture 7</a>), is another.</p>
+      <div class="eq">\[ y = \frac{1}{1 + \exp\!\Big(-\big(w_0 + \sum_{i=1}^{n} w_i x_i\big)\Big)} = \frac{1}{1 + e^{-\mathbf{w}^\top\mathbf{x}}} \]</div>
+      <p class="note">With \(x_0 = 1\), the sum \(w_0 + \sum_{i=1}^{n} w_i x_i = \sum_{i=0}^{n} w_i x_i\) is the dot product \(\mathbf{w}^\top\mathbf{x}\) of \(\mathbf{w} = [w_0, \dots, w_n]\) and \(\mathbf{x} = [x_0, \dots, x_n]\). It is the same quantity the perceptron compares with 0.</p>
+      <p>To see the S shape, take \(w_0 = 0\) for the moment (a nonzero \(w_0\) only shifts the curve along the axis):</p>
+      <ul>
+        <li>as \(\mathbf{w}^\top\mathbf{x} \to \infty\), \(e^{-\mathbf{w}^\top\mathbf{x}} \to 0\) and \(y \to 1\);</li>
+        <li>as \(\mathbf{w}^\top\mathbf{x} \to -\infty\), the denominator grows without bound and \(y \to 0\);</li>
+        <li>at \(\mathbf{w}^\top\mathbf{x} = 0\), \(y = 1/(1 + e^0) = 1/2\).</li>
+      </ul>
+      <p>So the output saturates at both ends and moves smoothly from one to the other, with no sharp transition at the threshold. Two consequences matter.</p>
+      <ul>
+        <li><b>The output is a real number between 0 and 1</b>, which can be interpreted as a probability. Instead of a like/dislike decision we get the probability of liking the movie: an output of 0.49 means a 49% chance and 0.51 a 51% chance, a sensibly small difference. Most modelling problems want exactly this, for instance the probability of finding oil, or of a loan being repaid, which a domain expert can then act on.</li>
+        <li><b>It is smooth, continuous and differentiable.</b> The step function is not differentiable at \(-w_0\). Calculus, and derivatives in particular, will drive almost every algorithm in the course, so the functions we work with must be differentiable.</li>
+      </ul>
+      <div class="eq">\[ \text{Perceptron: } y = \begin{cases} 1 & \text{if } \sum_{i=0}^{n} w_i x_i \ge 0 \\ 0 & \text{if } \sum_{i=0}^{n} w_i x_i &lt; 0 \end{cases} \qquad\qquad \text{Sigmoid neuron: } y = \frac{1}{1 + e^{-\sum_{i=0}^{n} w_i x_i}} \]</div>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 640 410" role="img" aria-label="Top: a perceptron and a sigmoid neuron drawn the same way, with inputs x0 = 1, x1, x2 to xn and weights w0 = minus theta, w1, w2 to wn; the perceptron applies a step, the sigmoid neuron applies sigma. Bottom: as a function of z, the step output jumps from 0 to 1 at z = minus w0, while the sigmoid output rises smoothly and passes 0.5 there.">
+            <defs><marker id="l03a-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="20" y="22">Perceptron</text>
+            <text class="d-h" x="340" y="22">Sigmoid (logistic) neuron</text>
+            <g>
+              <line class="d-ln" x1="70" y1="44" x2="180.6" y2="103.6"/>
+              <line class="d-ln" x1="70" y1="82" x2="178.6" y2="108.7"/>
+              <line class="d-ln" x1="70" y1="120" x2="178" y2="115"/>
+              <line class="d-ln" x1="70" y1="172" x2="179.9" y2="123"/>
+              <text x="64" y="48" text-anchor="end">x₀ = 1</text>
+              <text x="64" y="86" text-anchor="end">x₁</text>
+              <text x="64" y="124" text-anchor="end">x₂</text>
+              <text x="58" y="150" text-anchor="end">⋮</text>
+              <text x="64" y="176" text-anchor="end">xₙ</text>
+              <text class="d-s" x="82" y="36">w₀ = −θ</text>
+              <text class="d-s" x="84" y="77">w₁</text>
+              <text class="d-s" x="84" y="113">w₂</text>
+              <text class="d-s" x="84" y="188">wₙ</text>
+              <circle class="node" cx="200" cy="114" r="22"/>
+              <path class="d-ln" d="M188 122 H200 V106 H212" style="stroke-width:1.8"/>
+              <line class="d-ln" x1="222" y1="114" x2="262" y2="114" marker-end="url(#l03a-ah)"/>
+              <text class="d-t" x="270" y="118">y</text>
+            </g>
+            <g transform="translate(320 0)">
+              <line class="d-ln" x1="70" y1="44" x2="180.6" y2="103.6"/>
+              <line class="d-ln" x1="70" y1="82" x2="178.6" y2="108.7"/>
+              <line class="d-ln" x1="70" y1="120" x2="178" y2="115"/>
+              <line class="d-ln" x1="70" y1="172" x2="179.9" y2="123"/>
+              <text x="64" y="48" text-anchor="end">x₀ = 1</text>
+              <text x="64" y="86" text-anchor="end">x₁</text>
+              <text x="64" y="124" text-anchor="end">x₂</text>
+              <text x="58" y="150" text-anchor="end">⋮</text>
+              <text x="64" y="176" text-anchor="end">xₙ</text>
+              <text class="d-s" x="82" y="36">w₀ = −θ</text>
+              <text class="d-s" x="84" y="77">w₁</text>
+              <text class="d-s" x="84" y="113">w₂</text>
+              <text class="d-s" x="84" y="188">wₙ</text>
+              <circle class="node-acc" cx="200" cy="114" r="22"/>
+              <text class="d-t" x="200" y="119" text-anchor="middle" style="font-size:16px">σ</text>
+              <line class="d-ln" x1="222" y1="114" x2="262" y2="114" marker-end="url(#l03a-ah)"/>
+              <text class="d-t" x="270" y="118">y</text>
+            </g>
+            <line class="d-rule" x1="20" y1="208" x2="620" y2="208"/>
+
+            <line class="d-rule" x1="40" y1="380" x2="292" y2="380"/>
+            <line class="d-rule" x1="40" y1="236" x2="40" y2="380"/>
+            <line class="d-rule" x1="40" y1="250" x2="290" y2="250" style="stroke-dasharray: 3 4"/>
+            <text class="d-al" x="34" y="384" text-anchor="end">0</text>
+            <text class="d-al" x="34" y="254" text-anchor="end">1</text>
+            <text class="d-al" x="48" y="240">y</text>
+            <text class="d-al" x="298" y="384">z</text>
+            <line class="d-ln" x1="165" y1="380" x2="165" y2="386"/>
+            <text class="d-al" x="165" y="399" text-anchor="middle">−w₀</text>
+            <path class="d-ln-acc" d="M40 380 H165 V250 H290" style="stroke-width:2.2"/>
+            <text class="d-s" x="174" y="300">jumps at z = −w₀:</text>
+            <text class="d-s" x="174" y="314">not smooth, not</text>
+            <text class="d-s" x="174" y="328">differentiable there</text>
+
+            <line class="d-rule" x1="360" y1="380" x2="612" y2="380"/>
+            <line class="d-rule" x1="360" y1="236" x2="360" y2="380"/>
+            <line class="d-rule" x1="360" y1="250" x2="610" y2="250" style="stroke-dasharray: 3 4"/>
+            <line class="d-rule" x1="360" y1="315" x2="485" y2="315" style="stroke-dasharray: 3 4"/>
+            <text class="d-al" x="354" y="384" text-anchor="end">0</text>
+            <text class="d-al" x="354" y="319" text-anchor="end">0.5</text>
+            <text class="d-al" x="354" y="254" text-anchor="end">1</text>
+            <text class="d-al" x="368" y="240">y</text>
+            <text class="d-al" x="618" y="384">z</text>
+            <line class="d-ln" x1="485" y1="380" x2="485" y2="386"/>
+            <text class="d-al" x="485" y="399" text-anchor="middle">−w₀</text>
+            <path class="d-ln-acc" style="stroke-width:2.2" d="M360.0 379.7 L370.4 379.5 L380.8 379.1 L391.2 378.6 L401.7 377.7 L412.1 376.2 L422.5 373.8 L432.9 370.1 L438.1 367.6 L443.3 364.5 L448.5 360.8 L453.8 356.3 L459.0 351.0 L464.2 345.0 L469.4 338.3 L474.6 330.9 L479.8 323.1 L485.0 315.0 L490.2 306.9 L495.4 299.1 L500.6 291.7 L505.8 285.0 L511.0 279.0 L516.2 273.7 L521.5 269.2 L526.7 265.5 L531.9 262.4 L537.1 259.9 L547.5 256.2 L557.9 253.8 L568.3 252.3 L578.8 251.4 L589.2 250.9 L599.6 250.5 L610.0 250.3"/>
+            <circle class="pt-plain" cx="485" cy="315" r="3.5"/>
+            <text class="d-s" x="500" y="352">smooth, continuous,</text>
+            <text class="d-s" x="500" y="366">differentiable</text>
+          </svg>
+        </div>
+        <figcaption><b>Same inputs, different output function.</b> Both neurons take the weighted sum of their inputs (with \(x_0 = 1\) carrying the bias \(w_0 = -\theta\)). The perceptron's output is a step at \(z = -w_0\), where \(z = \sum_{i=1}^n w_i x_i\). The sigmoid neuron's output, drawn to scale for \(y = \sigma(z + w_0)\), climbs smoothly through 0.5 at the same point.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ============ MODULE 3.2 ============ -->
+    <section id="minimum-error">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=Evhb4HxI32I&amp;t=31s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 0:31</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Evhb4HxI32I&amp;t=121s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 2:01 non-separable data</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Evhb4HxI32I&amp;t=249s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 4:09 minimize the error</a>
+        </div>
+        <h2>From zero error to minimum error</h2>
+      </div>
+      <p>The lecture calls this module the most important one of the course. The pattern from Lecture 2 repeats: after introducing the perceptron we needed an algorithm to learn its weights, and before that algorithm we took a detour through the idea of <i>error</i>, because the algorithm corrected the weights whenever it made an error. The sigmoid neuron needs a learning algorithm too, so error comes back first.</p>
+      <p>Lecture 2 said a single perceptron cannot handle data that is not linearly separable, such as one class surrounded by the other, or two classes split by a curved boundary. What does that mean in practice? If we ran the perceptron learning algorithm on such data for a fixed number of iterations, it would never converge, yet it would end with some line through the middle of the data. On the slide's examples that line misclassifies a few points of each class, roughly 2 or 3 out of 10, so around 20% error.</p>
+      <p>For many real applications that is acceptable. Predicting which party a voter will choose with 20% error still gives a rough picture of an election, unless the race is very close or the application is mission-critical. Reaching zero error would need a very complex boundary, with islands carved out around stray points.</p>
+      <p class="rule-of-thumb">From now on we accept that driving the error to 0 is hard in most cases, and aim for the minimum possible error instead.</p>
+    </section>
+
+    <section id="ml-setup">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=Evhb4HxI32I&amp;t=309s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 5:09 data</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Evhb4HxI32I&amp;t=523s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 8:43 y = f(x)</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Evhb4HxI32I&amp;t=796s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 13:16 models</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Evhb4HxI32I&amp;t=1162s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 19:22 the movie example</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Evhb4HxI32I&amp;t=1282s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 21:22 squared error</a>
+        </div>
+        <h2>A typical supervised machine learning setup</h2>
+      </div>
+      <p>Every supervised learning problem can be cast in the same mould. We are given \(n\) pairs \(\{(\mathbf{x}_i, y_i)\}_{i=1}^{n}\), where each \(\mathbf{x}_i\) is a vector of \(m\) features (the video uses \(m\) here to keep \(n\) for the number of examples) and \(y_i\) is the value to predict. It is real here for simplicity; it could also be a vector, for example a movie's box-office collection together with its IMDb rating. The oil sites, the bank's past customers and past movies (budget, number of superstars, music director, cinematographer, genre, …) all fit this form.</p>
+      <p>We have reason to believe that \(y\) depends on \(\mathbf{x}\), that is \(y = f(\mathbf{x})\) for some true function \(f\). If we knew \(f\), there would be nothing left to do: plug in any new location's measurements and read off the oil. We do not know it. So we <i>assume</i> a form \(\hat{f}\) with some parameters and learn those parameters from the data. A school example: assume \(y = mx + c\); two points give two simultaneous equations, and solving them gives \(m\) and \(c\). With many data points and many parameters we need a more principled algorithm, but the idea is the same.</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Component</th><th>What it is</th><th>Movie example</th></tr></thead>
+          <tbody>
+            <tr><td><b>Data</b></td><td>\(\{(\mathbf{x}_i, y_i)\}_{i=1}^{n}\)</td><td>\(\mathbf{x}_i\) = a movie's features, \(y_i\) = like/dislike</td></tr>
+            <tr><td><b>Model</b></td><td>Our approximation of the relation between \(\mathbf{x}\) and \(y\), e.g. \(\hat{y} = \frac{1}{1 + e^{-\mathbf{w}^\top\mathbf{x}}}\), \(\hat{y} = \mathbf{w}^\top\mathbf{x}\) or \(\hat{y} = \mathbf{x}^\top W\mathbf{x}\)</td><td>\(\hat{y} = \frac{1}{1 + e^{-\mathbf{w}^\top\mathbf{x}}}\), the probability of liking the movie</td></tr>
+            <tr><td><b>Parameters</b></td><td>What must be learned from the data; \(\mathbf{w}\) in all three models</td><td>\(\mathbf{w}\)</td></tr>
+            <tr><td><b>Loss function</b></td><td>The objective (or error) function that guides learning; the algorithm should minimize it</td><td>\(\mathcal{L}(\mathbf{w}) = \sum_{i=1}^{n} (\hat{y}_i - y_i)^2\)</td></tr>
+            <tr><td><b>Learning algorithm</b></td><td>Finds the parameters, e.g. the perceptron learning algorithm or gradient descent</td><td>Gradient descent (next modules)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The three example models are familiar: the first is <dfn>logistic regression</dfn>, the second <dfn>linear regression</dfn> and the third assumes a quadratic relation. None is right or wrong in advance. In deep learning \(\hat{f}\) will be a very complex composite function, but the setup is identical.</p>
+      <p><b>Why parameters at all?</b> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=Evhb4HxI32I&amp;t=886s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>14:46</a> Why not just declare \(\hat{y} = 1/(1 + e^{-x})\)? That function is as arbitrary as declaring \(y = 3x + 2\): nothing in it is learned, so the data could be thrown away. Parameters let the data shape the model. For a sigmoid, \(w\) and \(b\) decide how steep the S is and where it sits.</p>
+      <p><b>Why squared error?</b> The loss should be small when every \(\hat{y}_i\) is close to \(y_i\). Simply adding the differences fails: if one prediction is off by \(-0.5\) and another by \(+0.5\), the sum is 0 although both are badly wrong. Squaring removes the sign. The absolute value would also remove it, but it is not differentiable at 0, and the squared error is smooth, which matters because calculus will drive the learning.</p>
+      <p>\(\mathbf{w}\) has \(m + 1\) real components (counting \(w_0\)), each anywhere in \((-\infty, \infty)\). Of these infinitely many candidates, training should find the one with the smallest loss.</p>
+      <p class="callout">The lecture's analogy <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=Evhb4HxI32I&amp;t=1437s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>23:57</a>: studying a trigonometry chapter, where you may read the text and aim to get every formula right, is training. The exercises at the end are the validation set: you can still go back and re-read. The exam is the test set: no more studying allowed. Training minimizes the <b>training error</b>, the error on the chapter itself. (Training, validation and test error return in <a href="lecture-06.html">Lecture 6</a>.)</p>
+    </section>
+
+    <!-- ============ MODULE 3.3 ============ -->
+    <section id="toy-problem">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=LbPKf7UVkyU&amp;t=92s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 1:32</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=LbPKf7UVkyU&amp;t=213s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 3:33 the objective</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=LbPKf7UVkyU&amp;t=334s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 5:34 what training means</a>
+        </div>
+        <h2>The toy problem: one sigmoid neuron, two points</h2>
+      </div>
+      <p>Module 3.3 starts with an algorithm that will not work in practice but builds the intuition for one that does. The model is the sigmoid neuron, written with \(\sigma\) for the logistic function:</p>
+      <div class="eq">\[ f(\mathbf{x}) = \frac{1}{1 + \exp\!\big(-(\sum_{i=1}^{n} w_i x_i + w_0)\big)} \]</div>
+      <p>To keep the explanation simple:</p>
+      <ul>
+        <li>there is a single input \(x\), with weight \(w\);</li>
+        <li>following the literature, \(w_0\) is renamed \(b\), the <dfn>bias</dfn>, a notation kept for the rest of the course;</li>
+        <li>instead of like/dislike, the neuron predicts a real value: the critics' rating \(y\) from the IMDb rating \(x\) (the lecture says "for no particular reason"). Nothing in the method depends on the output being real-valued rather than Boolean.</li>
+      </ul>
+      <div class="eq">\[ f(x) = \frac{1}{1 + e^{-(wx + b)}}, \qquad \min_{(w, b) \in \mathbb{R}^2} \; \mathcal{L}(w, b) = \frac{1}{N}\sum_{i=1}^{N} \big(y_i - f(x_i)\big)^2 \]</div>
+      <p class="note">Notation: capital \(N\) counts training pairs; small \(n\) counts inputs, and \(n = 1\) here. The objective reads: find the \(w\) and \(b\) that make the average squared difference between true values and predictions as small as possible.</p>
+      <p>Now suppose we have only two training points, \((x_1, y_1) = (0.5, 0.2)\) and \((x_2, y_2) = (2.5, 0.9)\). At the end of training we expect \(w^*, b^*\) with \(f(0.5) \to 0.2\) and \(f(2.5) \to 0.9\). Geometrically: we want a sigmoid curve on which both points lie.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 640 250" role="img" aria-label="Left: the simplified model, a sigmoid neuron with a constant input 1 weighted by b and an input x weighted by w, output y hat equals f of x. Right: the two training points (0.5, 0.2) and (2.5, 0.9) and a sigmoid curve that passes through both.">
+            <defs><marker id="l03b-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="20" y="22">The simplified model</text>
+            <line class="d-ln" x1="52" y1="70" x2="149.2" y2="102.9"/>
+            <line class="d-ln" x1="52" y1="146" x2="149" y2="116.4"/>
+            <text x="46" y="75" text-anchor="end">1</text>
+            <text x="46" y="151" text-anchor="end">x</text>
+            <text class="d-t" x="92" y="74">b</text>
+            <text class="d-t" x="92" y="149">w</text>
+            <circle class="node-acc" cx="170" cy="110" r="22"/>
+            <text class="d-t" x="170" y="115" text-anchor="middle" style="font-size:16px">σ</text>
+            <line class="d-ln" x1="192" y1="110" x2="232" y2="110" marker-end="url(#l03b-ah)"/>
+            <text x="240" y="114">ŷ = f(x)</text>
+            <text class="d-s" x="20" y="196">f(x) = σ(wx + b), b plays the role of w₀</text>
+            <text class="d-s" x="20" y="214">x = imdbRating, y = criticsRating</text>
+            <line class="d-rule" x1="304" y1="10" x2="304" y2="240"/>
+
+            <text class="d-h" x="330" y="22">Goal: a sigmoid through both points</text>
+            <line class="d-rule" x1="330" y1="220" x2="612" y2="220"/>
+            <line class="d-rule" x1="330" y1="36" x2="330" y2="220"/>
+            <line class="d-rule" x1="330" y1="40" x2="610" y2="40" style="stroke-dasharray: 3 4"/>
+            <text class="d-al" x="324" y="224" text-anchor="end">0</text>
+            <text class="d-al" x="324" y="134" text-anchor="end">0.5</text>
+            <text class="d-al" x="324" y="44" text-anchor="end">1</text>
+            <text class="d-al" x="386" y="236" text-anchor="middle">0</text>
+            <text class="d-al" x="442" y="236" text-anchor="middle">1</text>
+            <text class="d-al" x="498" y="236" text-anchor="middle">2</text>
+            <text class="d-al" x="554" y="236" text-anchor="middle">3</text>
+            <text class="d-al" x="610" y="236" text-anchor="middle">4</text>
+            <text class="d-al" x="620" y="224">x</text>
+            <text class="d-al" x="338" y="58">f(x)</text>
+            <path class="d-ln-acc" style="stroke-width:2.2" d="M330.0 217.0 L341.2 215.7 L352.4 213.9 L363.6 211.5 L374.8 208.0 L386.0 203.3 L397.2 197.1 L408.4 188.9 L414.0 184.0 L419.6 178.6 L425.2 172.6 L430.8 166.1 L436.4 159.1 L442.0 151.6 L447.6 143.9 L453.2 135.9 L458.8 127.9 L464.4 119.9 L470.0 112.0 L475.6 104.4 L481.2 97.2 L486.8 90.5 L492.4 84.2 L498.0 78.5 L503.6 73.4 L509.2 68.8 L514.8 64.7 L520.4 61.1 L526.0 58.0 L531.6 55.3 L537.2 53.0 L542.8 51.0 L548.4 49.3 L554.0 47.8 L565.2 45.5 L576.4 43.9 L587.6 42.7 L598.8 41.9 L610.0 41.4"/>
+            <circle class="pt-new" cx="414" cy="184" r="5"/>
+            <circle class="pt-new" cx="526" cy="58" r="5"/>
+            <text class="d-s" x="424" y="203">(x₁, y₁) = (0.5, 0.2)</text>
+            <text class="d-s" x="600" y="98" text-anchor="end">(x₂, y₂) = (2.5, 0.9)</text>
+          </svg>
+        </div>
+        <figcaption><b>What it means to train this network.</b> The two training points must end up on (or very near) the neuron's sigmoid. The curve drawn has \(w \approx 1.79\), \(b \approx -2.28\). Not in the lecture: these exact values come from solving \(0.5w + b = \ln(0.2/0.8)\) and \(2.5w + b = \ln(0.9/0.1)\); the guessing below ends very close to them.</figcaption>
+      </figure>
+    </section>
+
+    <section id="guess-work">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=LbPKf7UVkyU&amp;t=486s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 8:06</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=LbPKf7UVkyU&amp;t=583s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 9:43 how bad is it?</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=LbPKf7UVkyU&amp;t=644s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 10:44 more guesses</a>
+        </div>
+        <h2>Learning by guess work</h2>
+      </div>
+      <p>Can we find \(w^*, b^*\) by hand? Start with a random guess, \(w = 3\), \(b = -1\). Neither point lies on the resulting curve, so the guess is clearly bad. The loss puts a number on how bad it is. With \(N = 2\):</p>
+      <div class="eq">\[ \begin{aligned} \mathcal{L}(w, b) &amp;= \tfrac12\big((y_1 - f(x_1))^2 + (y_2 - f(x_2))^2\big) = \tfrac12\big((0.9 - f(2.5))^2 + (0.2 - f(0.5))^2\big) \\ &amp;= \tfrac12\big((0.9 - 0.99)^2 + (0.2 - 0.62)^2\big) = 0.099 \end{aligned} \]</div>
+      <p class="note">The slide prints 0.099. Working the last line out gives about 0.092, and about 0.094 without rounding \(f\); either way it is far from 0.</p>
+      <p>We want \(\mathcal{L}\) as close to 0 as possible, so keep trying values (the slide has sliders for this). The lecture's sequence of guesses and the reasoning behind it:</p>
+      <ul>
+        <li>\((0.5, 0)\) gives 0.0730, better. A jump to \((-0.1, 0)\) gives 0.14, worse: making \(w\) negative seems to hurt.</li>
+        <li>So increase \(w\) and make \(b\) negative: \((0.94, -0.94)\) gives 0.0214, much better.</li>
+        <li>Keep going in that direction: \((1.42, -1.73)\), \((1.65, -2.08)\) and finally \((1.78, -2.27)\), where the loss is 0.0000 to four decimals.</li>
+      </ul>
+
+      <figure>
+        <div class="fig-split">
+          <svg class="dg" viewBox="0 0 260 240" role="img" aria-label="Seven sigmoid curves for the guesses, from the dashed first guess w = 3, b = minus 1, which misses both points, through faint intermediate guesses, to the final guess w = 1.78, b = minus 2.27, which passes through both training points.">
+            <line class="d-rule" x1="34" y1="200" x2="252" y2="200"/>
+            <line class="d-rule" x1="34" y1="16" x2="34" y2="200"/>
+            <line class="d-rule" x1="34" y1="20" x2="250" y2="20" style="stroke-dasharray: 3 4"/>
+            <text class="d-al" x="28" y="204" text-anchor="end">0</text>
+            <text class="d-al" x="28" y="114" text-anchor="end">0.5</text>
+            <text class="d-al" x="28" y="24" text-anchor="end">1</text>
+            <text class="d-al" x="77.2" y="214" text-anchor="middle">0</text>
+            <text class="d-al" x="120.4" y="214" text-anchor="middle">1</text>
+            <text class="d-al" x="163.6" y="214" text-anchor="middle">2</text>
+            <text class="d-al" x="206.8" y="214" text-anchor="middle">3</text>
+            <text class="d-al" x="248" y="214" text-anchor="middle">4</text>
+            <text class="d-al" x="142" y="232" text-anchor="middle">x</text>
+            <g style="stroke: var(--muted); stroke-width: 1.2; fill: none; opacity: .7">
+              <path d="M34.0 132.0 L44.8 126.7 L55.6 121.2 L66.4 115.6 L77.2 110.0 L88.0 104.4 L98.8 98.8 L109.6 93.3 L120.4 88.0 L131.2 82.8 L142.0 77.7 L152.8 73.0 L163.6 68.4 L174.4 64.1 L185.2 60.1 L196.0 56.3 L206.8 52.8 L217.6 49.6 L228.4 46.6 L239.2 43.9 L250.0 41.5"/>
+              <path d="M34.0 105.5 L77.2 110.0 L120.4 114.5 L163.6 119.0 L206.8 123.4 L250.0 127.8"/>
+              <path d="M34.0 176.2 L44.8 170.9 L55.6 164.7 L66.4 157.5 L77.2 149.4 L88.0 140.5 L98.8 130.8 L109.6 120.5 L120.4 110.0 L131.2 99.5 L142.0 89.2 L152.8 79.5 L163.6 70.6 L174.4 62.5 L185.2 55.3 L196.0 49.1 L206.8 43.8 L217.6 39.4 L228.4 35.7 L239.2 32.6 L250.0 30.1"/>
+              <path d="M34.0 192.6 L44.8 189.6 L55.6 185.6 L66.4 180.1 L77.2 172.9 L88.0 163.7 L98.8 152.3 L109.6 138.9 L120.4 123.8 L131.2 108.0 L142.0 92.2 L152.8 77.6 L163.6 64.6 L174.4 53.8 L185.2 45.1 L196.0 38.4 L206.8 33.3 L217.6 29.5 L228.4 26.8 L239.2 24.8 L250.0 23.4"/>
+              <path d="M34.0 195.8 L44.8 193.7 L55.6 190.7 L66.4 186.3 L77.2 180.0 L88.0 171.4 L98.8 160.1 L109.6 145.8 L120.4 129.1 L131.2 110.8 L142.0 92.5 L152.8 75.5 L163.6 61.0 L174.4 49.4 L185.2 40.6 L196.0 34.2 L206.8 29.7 L217.6 26.5 L228.4 24.4 L239.2 22.9 L250.0 21.9"/>
+            </g>
+            <path class="d-ln d-dash" d="M34.0 196.8 L44.8 193.3 L55.6 186.3 L61.0 180.8 L66.4 173.4 L71.8 163.7 L77.2 151.6 L82.6 137.2 L88.0 121.2 L93.4 104.4 L98.8 88.0 L104.2 73.0 L109.6 60.1 L115.0 49.6 L120.4 41.5 L125.8 35.3 L131.2 30.8 L136.6 27.6 L142.0 25.3 L152.8 22.5 L163.6 21.2 L185.2 20.3 L206.8 20.1 L250.0 20.0"/>
+            <path class="d-ln-acc" style="stroke-width:2.2" d="M34.0 196.9 L44.8 195.2 L55.6 192.7 L66.4 188.8 L77.2 183.1 L88.0 175.0 L93.4 169.8 L98.8 163.8 L104.2 157.0 L109.6 149.3 L115.0 140.8 L120.4 131.6 L125.8 122.0 L131.2 112.0 L136.6 102.0 L142.0 92.2 L147.4 82.9 L152.8 74.1 L158.2 66.1 L163.6 58.9 L169.0 52.5 L174.4 47.0 L179.8 42.3 L185.2 38.3 L190.6 34.9 L196.0 32.2 L206.8 28.0 L217.6 25.2 L228.4 23.4 L239.2 22.2 L250.0 21.4"/>
+            <circle class="pt-new" cx="98.8" cy="164" r="4.5"/>
+            <circle class="pt-new" cx="185.2" cy="38" r="4.5"/>
+            <text class="d-s" x="40" y="46">start (3, −1)</text>
+            <text class="d-s" x="140" y="160" style="fill: var(--accent)">final (1.78, −2.27)</text>
+          </svg>
+          <div class="tbl-wrap">
+            <table class="mini">
+              <thead><tr><th>Guess</th><th class="num">w</th><th class="num">b</th><th class="num">Loss</th></tr></thead>
+              <tbody>
+                <tr><td>start</td><td class="num">3.00</td><td class="num">−1.00</td><td class="num">0.099</td></tr>
+                <tr><td>1</td><td class="num">0.50</td><td class="num">0.00</td><td class="num">0.0730</td></tr>
+                <tr><td>2</td><td class="num">−0.10</td><td class="num">0.00</td><td class="num">0.14</td></tr>
+                <tr><td>3</td><td class="num">0.94</td><td class="num">−0.94</td><td class="num">0.0214</td></tr>
+                <tr><td>4</td><td class="num">1.42</td><td class="num">−1.73</td><td class="num">0.0028</td></tr>
+                <tr><td>5</td><td class="num">1.65</td><td class="num">−2.08</td><td class="num">0.0003</td></tr>
+                <tr><td>6</td><td class="num">1.78</td><td class="num">−2.27</td><td class="num">0.0000</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <figcaption><b>A few snapshots of the guessing</b> (loss values as on the slides). Dashed: the first guess. Faint: guesses 1 to 5. Accent: the last guess, whose curve passes through both training points.</figcaption>
+      </figure>
+      <p>The search was not truly random: each step was steered by whether the loss went up or down. Even so, the lecturer admits the values were reverse-engineered from the known answer <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=LbPKf7UVkyU&amp;t=767s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>12:47</a>. Guessing at random could go on forever without converging.</p>
+    </section>
+
+    <section id="error-surface">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=LbPKf7UVkyU&amp;t=799s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 13:19</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=LbPKf7UVkyU&amp;t=891s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 14:51 guessing as a walk</a>
+        </div>
+        <h2>The error surface</h2>
+      </div>
+      <p>With only 2 points and 2 parameters, we can do slightly better than guessing: compute \(\mathcal{L}(w, b)\) for a whole grid of \((w, b)\) values and plot it as a surface over the \((w, b)\) plane. The low region is visible at a glance, and we can pick a point there. (The lecture first did this for the perceptron in Lecture 2.)</p>
+      <p>This does not scale. With many more data points and parameters, computing the loss everywhere becomes intractable. Even here the surface is plotted only for \(w, b \in (-6, 6)\), not \((-\infty, \infty)\), so a lower point outside the range would be missed.</p>
+      <p>The surface also explains what the guessing was doing. Each guess is a point on the surface. The walk started high at \((3, -1)\), went down to \((0.5, 0)\), climbed back up at \((-0.1, 0)\), then came down steadily from \((0.94, -0.94)\) to \((1.78, -2.27)\) in the low region, where the loss is essentially 0. Without the surface in front of us, the moves were random jumps that sometimes went uphill. The <a href="#gd-fig">interactive figure</a> in Module 3.4 can draw this walk on the actual surface.</p>
+      <p class="rule-of-thumb">We want a principled way to move on the error surface, one that goes downhill at every step.</p>
+    </section>
+
+    <!-- ============ MODULE 3.4 ============ -->
+    <section id="update-step">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=qyn6RERiIIY&amp;t=61s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 1:01</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=qyn6RERiIIY&amp;t=185s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 3:05 a conservative step</a>
+        </div>
+        <h2>Moving by a small step η·Δθ</h2>
+      </div>
+      <p>The goal of Module 3.4: traverse the error surface so as to reach the minimum quickly, without brute-force search and without random jumps that raise the error. (The slides credit Ryan Harris's YouTube videos on visualizing backpropagation for ideas in this module.)</p>
+      <p>Collect the parameters into a vector \(\boldsymbol\theta = [w, b]\) and initialize it randomly. A change \(\Delta\boldsymbol\theta = [\Delta w, \Delta b]\) is another vector in \(\mathbb{R}^2\); adding it moves \(\boldsymbol\theta\) in the direction of \(\Delta\boldsymbol\theta\). To be conservative, move only a small amount \(\eta\) in that direction: the direction is kept and the length shrinks.</p>
+      <div class="eq">\[ \boldsymbol\theta_{\text{new}} = \boldsymbol\theta + \eta \cdot \Delta\boldsymbol\theta \]</div>
+      <p>The question is which \(\Delta\boldsymbol\theta\) to use. The guess-work algorithm made one up, checked the loss and tried again. The principled answer comes from the Taylor series.</p>
+    </section>
+
+    <section id="taylor">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=qyn6RERiIIY&amp;t=277s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 4:37</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=qyn6RERiIIY&amp;t=488s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 8:08 linear approximation</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=qyn6RERiIIY&amp;t=766s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 12:46 quadratic</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=qyn6RERiIIY&amp;t=828s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 13:48 demo</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=qyn6RERiIIY&amp;t=1266s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 21:06 two variables</a>
+        </div>
+        <h2>Taylor series: approximating a function near a point</h2>
+      </div>
+      <p>The <dfn>Taylor series</dfn> approximates any continuously differentiable function by polynomials; the higher the degree, the better the approximation. This applies to us because the loss is differentiable: the sigmoid is differentiable, and so is the squared error on top of it. For one parameter, around a point \(w_0\) where the loss is known:</p>
+      <div class="eq">\[ \mathcal{L}(w) = \mathcal{L}(w_0) + \frac{\mathcal{L}'(w_0)}{1!}(w - w_0) + \frac{\mathcal{L}''(w_0)}{2!}(w - w_0)^2 + \frac{\mathcal{L}'''(w_0)}{3!}(w - w_0)^3 + \cdots \]</div>
+      <p>Why we care: we sit at \(w_0\) at step 0, can compute the loss there but cannot see the whole curve, and want to know whether moving left or right lowers it. The series tells us about \(\mathcal{L}\) at nearby points \(w = w_0 + \Delta\), and we can cut it off after any term.</p>
+      <div class="eq">\[ \begin{aligned} n = 1 \text{ (linear):} \quad \mathcal{L}(w) &amp;\approx \mathcal{L}(w_0) + \frac{\mathcal{L}'(w_0)}{1!}(w - w_0) \\ n = 2 \text{ (quadratic):} \quad \mathcal{L}(w) &amp;\approx \mathcal{L}(w_0) + \frac{\mathcal{L}'(w_0)}{1!}(w - w_0) + \frac{\mathcal{L}''(w_0)}{2!}(w - w_0)^2 \end{aligned} \]</div>
+      <ul>
+        <li><b>Linear approximation (\(n = 1\))</b> is the tangent line. If a line \(y = mx + c\) passes through \((x_0, y_0)\), then subtracting \(y_0 = mx_0 + c\) from \(y_1 = mx_1 + c\) gives \(y_1 = y_0 + m(x_1 - x_0)\), and here the slope \(m\) is the derivative \(\mathcal{L}'(w_0)\). We pretend the curve is a straight line in a small neighbourhood of \(w_0\) and read the new value off that line.</li>
+        <li><b>Quadratic approximation (\(n = 2\))</b> is a parabola \(y = ax^2 + bx + c\) whose coefficients come from the first and second derivatives. In the same neighbourhood it hugs the curve more closely than the line.</li>
+      </ul>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 680 300" role="img" aria-label="The curve L of w equals e to the w, with its linear and quadratic Taylor approximations at w0 = 0.6. Inside a shaded neighbourhood of w0 both approximations are close to the curve. At w = 1.9, far outside it, the true value is 6.7, the quadratic gives 5.7 and the line only 4.2.">
+            <rect x="322.9" y="20" width="99.5" height="237.5" style="fill: var(--accent-soft); opacity: .7"/>
+            <line class="d-rule" x1="60" y1="257.5" x2="610" y2="257.5"/>
+            <line class="d-rule" x1="60" y1="16" x2="60" y2="270"/>
+            <text class="d-al" x="54" y="261.5" text-anchor="end">0</text>
+            <text class="d-al" x="54" y="211.5" text-anchor="end">2</text>
+            <text class="d-al" x="54" y="161.5" text-anchor="end">4</text>
+            <text class="d-al" x="54" y="111.5" text-anchor="end">6</text>
+            <text class="d-al" x="54" y="61.5" text-anchor="end">8</text>
+            <text class="d-al" x="145.3" y="272" text-anchor="middle">−1</text>
+            <text class="d-al" x="287.4" y="272" text-anchor="middle">0</text>
+            <text class="d-al" x="429.5" y="272" text-anchor="middle">1</text>
+            <text class="d-al" x="571.6" y="272" text-anchor="middle">2</text>
+            <text class="d-al" x="616" y="261.5">w</text>
+            <text class="d-s" x="372.6" y="34" text-anchor="middle">w₀ ± ε</text>
+            <path class="d-ln" style="stroke-width:2.2" d="M60.0 252.5 L87.0 251.4 L114.0 250.1 L141.0 248.6 L168.0 246.7 L195.0 244.4 L222.0 241.7 L249.0 238.4 L276.0 234.4 L303.0 229.6 L321.0 225.8 L339.0 221.5 L357.0 216.7 L375.0 211.2 L393.0 204.9 L411.0 197.8 L429.0 189.8 L447.0 180.6 L465.0 170.2 L483.0 158.5 L501.0 145.1 L519.0 129.9 L537.0 112.7 L555.0 93.1 L564.0 82.4 L573.0 70.9 L582.0 58.7 L591.0 45.7 L600.0 31.9"/>
+            <path class="d-ln-acc" d="M192.2 269.8 L600.0 139.1"/>
+            <path class="d-ln-acc d-dash" d="M60.0 201.9 L78.0 208.5 L96.0 214.3 L114.0 219.4 L132.0 223.8 L150.0 227.4 L168.0 230.3 L186.0 232.5 L204.0 233.9 L222.0 234.6 L240.0 234.6 L258.0 233.9 L276.0 232.4 L294.0 230.2 L312.0 227.2 L330.0 223.6 L348.0 219.2 L366.0 214.0 L384.0 208.2 L402.0 201.6 L420.0 194.2 L438.0 186.2 L456.0 177.4 L474.0 167.9 L492.0 157.6 L510.0 146.6 L528.0 134.9 L546.0 122.5 L564.0 109.3 L582.0 95.4 L600.0 80.8"/>
+            <line class="d-rule" x1="372.6" y1="211.9" x2="372.6" y2="257.5" style="stroke-dasharray: 3 3"/>
+            <circle class="pt-new" cx="372.6" cy="211.9" r="5"/>
+            <text class="d-t" x="372.6" y="288" text-anchor="middle">w₀</text>
+            <line class="d-rule" x1="557.4" y1="90.4" x2="557.4" y2="257.5" style="stroke-dasharray: 3 3"/>
+            <circle class="pt-plain" cx="557.4" cy="90.4" r="4.5"/>
+            <circle class="c-proxy" cx="557.4" cy="114.2" r="4.5"/>
+            <circle class="c-proxy" cx="557.4" cy="152.7" r="4.5"/>
+            <line class="d-rule" x1="563" y1="90.4" x2="612" y2="90.4" style="stroke-dasharray: 2 3"/>
+            <line class="d-rule" x1="563" y1="114.2" x2="612" y2="114.2" style="stroke-dasharray: 2 3"/>
+            <line class="d-rule" x1="563" y1="152.7" x2="612" y2="152.7" style="stroke-dasharray: 2 3"/>
+            <text class="d-s" x="616" y="94.4">true 6.7</text>
+            <text class="d-s" x="616" y="118.2" style="fill: var(--accent)">quad. 5.7</text>
+            <text class="d-s" x="616" y="156.7" style="fill: var(--accent)">linear 4.2</text>
+            <text class="d-t" x="557.4" y="288" text-anchor="middle">w₁</text>
+            <line class="d-ln" x1="80" y1="40" x2="104" y2="40" style="stroke-width:2.2"/>
+            <text class="d-s" x="112" y="44">L(w) (here eʷ, an example)</text>
+            <line class="d-ln-acc" x1="80" y1="60" x2="104" y2="60"/>
+            <text class="d-s" x="112" y="64">linear approximation, n = 1</text>
+            <line class="d-ln-acc d-dash" x1="80" y1="80" x2="104" y2="80"/>
+            <text class="d-s" x="112" y="84">quadratic approximation, n = 2</text>
+          </svg>
+        </div>
+        <figcaption><b>Good near \(w_0\), poor far away.</b> Drawn to scale for \(\mathcal{L}(w) = e^w\) and \(w_0 = 0.6\), an example chosen for these notes (the lecture's demo also lets you try \(e^w\), \(\sin w\), \(w^3\)). Inside the shaded window both approximations sit on the curve. At \(w_1 = 1.9\) the line is off by 2.5 and the parabola by 1.0.</figcaption>
+      </figure>
+
+      <p>The lecture's interactive Taylor-series demo makes four points:</p>
+      <ol>
+        <li><b>Small neighbourhoods work.</b> A parameter \(\epsilon\) sets the neighbourhood around \(w_0\). For small \(\epsilon\) the tangent line is close to the curve; move far from \(w_0\) and the value read off the line is way off.</li>
+        <li><b>A large window can still work where the curve is gentle</b> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=qyn6RERiIIY&amp;t=1019s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>16:59</a>: where the slope is small the line stays close over a wide window, and where the slope is high the same window gives a big gap. With a small enough window the approximation is good everywhere.</li>
+        <li><b>Higher degree, better fit</b> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=qyn6RERiIIY&amp;t=1144s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>19:04</a>: for \(\sin w\), degree 2 beats degree 1, degree 3 is good over a much larger neighbourhood, and by degree 7 or 8 the fit is almost perfect. Keeping every term rebuilds the function exactly.</li>
+        <li><b>It works in several variables.</b> For \(\mathcal{L}(w, b)\) (the demo uses \(0.5\sin x + 0.25\sin y\)) the linear approximation is a plane touching the surface, good in a small neighbourhood. The quadratic approximation stays good over a larger one.</li>
+      </ol>
+      <p class="rule-of-thumb">The Taylor approximation is trustworthy only in a small neighbourhood, which is exactly why the step \(\eta\) must be small.</p>
+    </section>
+
+    <section id="gd-derivation">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=o2pT74Nplq0&amp;t=31s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 0:31</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=o2pT74Nplq0&amp;t=124s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 2:04 gradient</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=o2pT74Nplq0&amp;t=276s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 4:36 Hessian</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=o2pT74Nplq0&amp;t=614s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 10:14 a favourable move</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=o2pT74Nplq0&amp;t=766s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 12:46 the angle β</a>
+        </div>
+        <h2>Why step against the gradient</h2>
+      </div>
+      <p>Write \(\mathbf{u} = \Delta\boldsymbol\theta\) for the direction we want to choose. The Taylor series around the current \(\boldsymbol\theta\), with the small step \(\eta\mathbf{u}\) keeping us in the neighbourhood where it is accurate:</p>
+      <div class="eq">\[ \mathcal{L}(\boldsymbol\theta + \eta\mathbf{u}) = \mathcal{L}(\boldsymbol\theta) + \eta\,\mathbf{u}^\top\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta) + \frac{\eta^2}{2!}\,\mathbf{u}^\top\nabla^2_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta)\,\mathbf{u} + \frac{\eta^3}{3!}\cdots + \frac{\eta^4}{4!}\cdots \]</div>
+      <p>Two new objects appear.</p>
+      <ul>
+        <li><b>The gradient \(\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta)\).</b> For \(y = x^2\) the derivative is \(dy/dx = 2x\). For a function of several variables, such as \(y = w^2 + b^2\), take a <dfn>partial derivative</dfn> with respect to each variable while treating the others as constants: \(\partial y/\partial w = 2w\) and \(\partial y/\partial b = 2b\). The <dfn>gradient</dfn> is the vector that collects them, here \([2w, 2b]\). So \(\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta) = [\partial\mathcal{L}/\partial w,\ \partial\mathcal{L}/\partial b]\), and \(\mathbf{u}^\top\nabla_{\boldsymbol\theta}\mathcal{L}\) is the dot product of the step direction with it.</li>
+        <li><b>The Hessian \(\nabla^2_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta)\).</b> The gradient of the gradient: differentiate each entry of the gradient with respect to each parameter. The derivative of an \(m\)-dimensional vector with respect to an \(n\)-dimensional vector is an \(m \times n\) matrix, so here it is \(2 \times 2\). The next term would need a third-order derivative, and so on.</li>
+      </ul>
+      <div class="eq">\[ \nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta) = \begin{bmatrix} \dfrac{\partial\mathcal{L}}{\partial w} \\ \dfrac{\partial\mathcal{L}}{\partial b} \end{bmatrix}, \qquad \nabla^2_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta) = \begin{bmatrix} \dfrac{\partial^2\mathcal{L}}{\partial w^2} &amp; \dfrac{\partial^2\mathcal{L}}{\partial w\,\partial b} \\ \dfrac{\partial^2\mathcal{L}}{\partial b\,\partial w} &amp; \dfrac{\partial^2\mathcal{L}}{\partial b^2} \end{bmatrix} \]</div>
+      <p>Neither the Hessian nor anything after it is needed. \(\eta\) is small, so \(\eta^2, \eta^3, \dots\) are smaller still and those terms can be dropped <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=o2pT74Nplq0&amp;t=581s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>9:41</a>. The Taylor demo showed that a linear approximation is good enough when the step is small.</p>
+      <div class="eq">\[ \mathcal{L}(\boldsymbol\theta + \eta\mathbf{u}) \approx \mathcal{L}(\boldsymbol\theta) + \eta\,\mathbf{u}^\top\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta) \]</div>
+      <p>The move \(\eta\mathbf{u}\) is <b>favourable</b> only if the new loss is less than the old one, \(\mathcal{L}(\boldsymbol\theta + \eta\mathbf{u}) - \mathcal{L}(\boldsymbol\theta) &lt; 0\). By the approximation this difference is \(\eta\,\mathbf{u}^\top\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta)\), and \(\eta\) is positive, so the condition is a condition on \(\mathbf{u}\) alone:</p>
+      <div class="eq">\[ \mathbf{u}^\top\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta) &lt; 0 \]</div>
+      <p>Many directions satisfy it. We want the one that satisfies it best, the most negative value, because that is the largest drop in loss. What is the range of this dot product? Let \(\beta\) be the angle between \(\mathbf{u}\) and \(\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta)\):</p>
+      <div class="eq">\[ -1 \le \cos\beta = \frac{\mathbf{u}^\top\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta)}{\lVert\mathbf{u}\rVert\,\lVert\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta)\rVert} \le 1 \]</div>
+      <p>Multiply through by \(k = \lVert\mathbf{u}\rVert\,\lVert\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta)\rVert\):</p>
+      <div class="eq">\[ -k \le k\cos\beta = \mathbf{u}^\top\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta) \le k \]</div>
+      <p>So \(\mathcal{L}(\boldsymbol\theta + \eta\mathbf{u}) - \mathcal{L}(\boldsymbol\theta) \approx \eta\,k\cos\beta\), which is most negative when \(\cos\beta = -1\), that is \(\beta = 180°\) <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=o2pT74Nplq0&amp;t=889s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>14:49</a>.</p>
+      <div class="result">
+        <span class="lbl">Gradient descent direction</span>
+        <p>The direction \(\mathbf{u}\) should be at 180° to the gradient: move in the direction <b>opposite to the gradient</b>. This is where the familiar phrase comes from. The Taylor series gave a condition for a good direction, and pushing that condition to its limit picked out \(\mathbf{u} \propto -\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta)\).</p>
+      </div>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 640 290" role="img" aria-label="Left: in the (w, b) plane, the point theta, a full change delta theta drawn dashed, and the short step eta times delta theta that leads to the new point. Right: elliptical contours of a loss bowl; at theta, the gradient points away from the minimum, the steepest-descent direction minus the gradient is at 180 degrees to it, and another direction at 120 degrees also goes downhill. The half-plane of directions with negative dot product with the gradient is shaded.">
+            <defs>
+              <marker id="l03e-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="l03e-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+              <clipPath id="l03e-clip"><rect x="330" y="30" width="310" height="230"/></clipPath>
+            </defs>
+            <text class="d-h" x="20" y="22">One small step along Δθ</text>
+            <line class="d-rule" x1="40" y1="262" x2="290" y2="262"/>
+            <line class="d-rule" x1="40" y1="40" x2="40" y2="262"/>
+            <text class="d-al" x="294" y="266">w</text>
+            <text class="d-al" x="36" y="48" text-anchor="end">b</text>
+            <line class="d-ln" x1="40" y1="262" x2="118.5" y2="191.4" marker-end="url(#l03e-ah)"/>
+            <line class="d-ln d-dash" x1="120" y1="190" x2="247.5" y2="101.7" marker-end="url(#l03e-ah)"/>
+            <line class="d-ln-acc" x1="120" y1="190" x2="157" y2="164.4" marker-end="url(#l03e-aha)" style="stroke-width:2.4"/>
+            <circle class="pt-plain" cx="120" cy="190" r="4.5"/>
+            <circle class="pt-tree" cx="159" cy="163" r="4.5"/>
+            <text class="d-t" x="126" y="214">θ = [w, b]</text>
+            <text class="d-t" x="254" y="104">Δθ</text>
+            <text class="d-s" x="154" y="190" style="fill: var(--accent)">η·Δθ</text>
+            <text class="d-t" x="104" y="150" style="fill: var(--accent)">θ + η·Δθ</text>
+            <text class="d-s" x="20" y="284">η small: same direction, shorter move</text>
+            <line class="d-rule" x1="320" y1="10" x2="320" y2="282"/>
+
+            <text class="d-h" x="340" y="22">Choosing the direction u</text>
+            <g clip-path="url(#l03e-clip)">
+              <path d="M391.1 160.3 L396.7 149.9 L403.7 140.4 L412.2 132.2 L421.8 125.5 L432.3 120.3 L443.6 116.8 L455.2 115.2 L467.0 115.3 L478.6 117.3 L489.7 121.1 L500.1 126.7 L509.6 133.7 L517.8 142.2 L524.5 151.8 L529.7 162.3 L533.2 173.6 L534.8 185.2 L534.7 197.0 L532.7 208.6 L528.9 219.7 Z" style="fill: var(--accent-soft); opacity: .85"/>
+              <ellipse class="d-plot" cx="520" cy="140" rx="35" ry="21"/>
+              <ellipse class="d-plot" cx="520" cy="140" rx="70" ry="42"/>
+              <ellipse class="d-ln" cx="520" cy="140" rx="102.7" ry="61.6" style="stroke-width:1"/>
+              <ellipse class="d-plot" cx="520" cy="140" rx="140" ry="84"/>
+              <line class="d-rule" x1="372.8" y1="152.3" x2="547.2" y2="227.7" style="stroke-dasharray: 4 4"/>
+            </g>
+            <path class="d-ln" d="M514 140 H526 M520 134 V146"/>
+            <text class="d-s" x="530" y="137">min</text>
+            <path class="d-ln" d="M451.3 210.2 L447.9 208.4 L444.9 206.0 L442.3 203.1 L440.3 199.9 L438.9 196.3 L438.1 192.5 L438.0 188.7 L438.6 184.9 L439.8 181.3 L441.6 177.9 L444.0 174.9 L446.9 172.3"/>
+            <text class="d-t" x="424" y="198" text-anchor="middle">β</text>
+            <line class="d-ln" x1="460" y1="190" x2="437.4" y2="242.3" marker-end="url(#l03e-ah)" style="stroke-width:1.8"/>
+            <line class="d-ln" x1="460" y1="190" x2="425.4" y2="143.4" marker-end="url(#l03e-ah)"/>
+            <line class="d-ln-acc" x1="460" y1="190" x2="482.6" y2="137.7" marker-end="url(#l03e-aha)" style="stroke-width:2.4"/>
+            <circle class="pt-plain" cx="460" cy="190" r="4.5"/>
+            <text class="d-t" x="466" y="214">θ</text>
+            <text class="d-s" x="436" y="262" text-anchor="middle">∇L(θ)</text>
+            <text class="d-s" x="404" y="118" text-anchor="end">u, β = 120°</text>
+            <text class="d-s" x="494" y="110" style="fill: var(--accent)">u = −∇L(θ), β = 180°</text>
+            <rect x="340" y="266" width="12" height="12" style="fill: var(--accent-soft)"/>
+            <text class="d-s" x="358" y="276">shaded: every u with uᵀ∇L(θ) &lt; 0 lowers the loss</text>
+          </svg>
+        </div>
+        <figcaption><b>The step and its direction.</b> Left: \(\eta\) keeps the direction of \(\Delta\boldsymbol\theta\) and shortens the move. Right (illustrative bowl): the gradient at \(\boldsymbol\theta\) is perpendicular to the contour and points uphill. Any \(\mathbf{u}\) in the shaded half-plane, such as the one at \(\beta = 120°\), lowers the loss for a small enough step; \(\mathbf{u} = -\nabla\mathcal{L}\) at \(\beta = 180°\) lowers it the most. It points straight downhill from \(\boldsymbol\theta\), which on an elongated bowl is generally not straight at the minimum.</figcaption>
+      </figure>
+    </section>
+
+    <section id="gd-rule">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=HEx-q6fkCbo&amp;t=0s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 0:00 a 1-D game</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=HEx-q6fkCbo&amp;t=308s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 5:08 the rule</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=HEx-q6fkCbo&amp;t=400s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 6:40 notation</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=HEx-q6fkCbo&amp;t=492s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 8:12 the algorithm</a>
+        </div>
+        <h2>The gradient descent update rule</h2>
+      </div>
+      <p>Moving opposite the gradient, by a small conservative step \(\eta\) (small because the Taylor series only holds in a small neighbourhood), gives the parameter update rule:</p>
+      <div class="result">
+        <span class="lbl">Gradient descent update</span>
+        \[ w_{t+1} = w_t - \eta\,\nabla w_t, \qquad b_{t+1} = b_t - \eta\,\nabla b_t \]
+        \[ \text{where}\quad \nabla w_t = \frac{\partial\mathcal{L}(w, b)}{\partial w}\bigg|_{w = w_t,\; b = b_t}, \qquad \nabla b_t = \frac{\partial\mathcal{L}(w, b)}{\partial b}\bigg|_{w = w_t,\; b = b_t} \]
+        <p>In vector form, \(\boldsymbol\theta_{t+1} = \boldsymbol\theta_t - \eta\,\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta_t)\).</p>
+      </div>
+      <p>The subscript \(t\) matters. The partial derivative is first a formula (for \(w^2 + b^2\) it is \([2w, 2b]\)), and substituting the current values turns it into a vector of two real numbers that can be added and subtracted. We now have a principled way of moving in the \((w, b)\) plane instead of guessing.</p>
+      <ol class="algo">
+        <li class="algo-title">gradient_descent()</li>
+        <li>\(t \leftarrow 0\); max_iterations \(\leftarrow 1000\).</li>
+        <li>Initialize \(w, b\) randomly.</li>
+        <li>While \(t &lt;\) max_iterations: \(w_{t+1} \leftarrow w_t - \eta\nabla w_t\); \(b_{t+1} \leftarrow b_t - \eta\nabla b_t\); \(t \leftarrow t + 1\).</li>
+      </ol>
+      <p>The hope is that after the maximum number of iterations we are very close to the minimum.</p>
+      <h3>A 1-D game: land in a minimum <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=HEx-q6fkCbo&amp;t=92s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 1:32</a></h3>
+      <p>The slides set this up as a game. A function \(f(w)\) with several local minima is given; start at \(w = 1.2\) with \(\eta = 1\), read off the gradient, and type in \(w - \eta\,dw\) yourself.</p>
+      <ul>
+        <li>Step 1: \(\eta\,dw = 0.31\), so \(w = 1.2 - 0.31 = 0.89\). This heads toward a minimum.</li>
+        <li>Step 2: at 0.89, \(\eta\,dw = 1.25\), so \(w = 0.89 - 1.25 = -0.36\). This overshoots: the point crosses the minimum and lands on the other side.</li>
+      </ul>
+      <p>The lecture leaves two lessons to discover by playing (they return in <a href="lecture-05.html">Lecture 5</a>). If \(\eta\) is too large the step jumps over the minimum, and the loss can even go up; the Taylor argument only promises a decrease for small steps. And the starting point decides which minimum you reach: start on one slope and you roll into the minimum below it.</p>
+    </section>
+
+    <section id="gradients">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=HEx-q6fkCbo&amp;t=584s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 9:44</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=HEx-q6fkCbo&amp;t=738s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 12:18 derivative of the sigmoid</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=HEx-q6fkCbo&amp;t=832s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 13:52 more than one point</a>
+        </div>
+        <h2>∇w and ∇b for the sigmoid neuron</h2>
+      </div>
+      <p>Everything in the algorithm is known except \(\nabla w\) and \(\nabla b\), so derive them for the toy network. Assume first there is only one point \((x, y)\) to fit, and use</p>
+      <div class="eq">\[ \mathcal{L}(w, b) = \tfrac12\,\big(f(x) - y\big)^2, \qquad f(x) = \frac{1}{1 + e^{-(wx + b)}} \]</div>
+      <p class="note">The factor \(\tfrac12\) is for convenience: scaling every loss value by the same positive number does not move the minimizer, and the \(\tfrac12\) will cancel a 2.</p>
+      <p>By the chain rule, and since \(y\) is a constant given by the data:</p>
+      <div class="eq">\[ \nabla w = \frac{\partial}{\partial w}\Big[\tfrac12\big(f(x) - y\big)^2\Big] = \tfrac12\Big[2\big(f(x) - y\big)\,\frac{\partial}{\partial w}\big(f(x) - y\big)\Big] = \big(f(x) - y\big)\,\frac{\partial}{\partial w}\,f(x) \]</div>
+      <p>Now the derivative of the sigmoid itself. It is 1 over a function of \(w\), so its derivative is \(-1\) over that function squared, times the derivative of the function (the constant 1 in the denominator contributes nothing):</p>
+      <div class="eq">\[ \begin{aligned} \frac{\partial}{\partial w}\Big(\frac{1}{1 + e^{-(wx + b)}}\Big) &amp;= \frac{-1}{\big(1 + e^{-(wx + b)}\big)^2}\,\frac{\partial}{\partial w}\big(e^{-(wx + b)}\big) \\ &amp;= \frac{-1}{\big(1 + e^{-(wx + b)}\big)^2}\; e^{-(wx + b)}\;\frac{\partial}{\partial w}\big(-(wx + b)\big) \\ &amp;= \frac{-1}{1 + e^{-(wx + b)}}\cdot\frac{e^{-(wx + b)}}{1 + e^{-(wx + b)}}\cdot(-x) \\ &amp;= \frac{1}{1 + e^{-(wx + b)}}\cdot\frac{e^{-(wx + b)}}{1 + e^{-(wx + b)}}\cdot x \;=\; f(x)\,\big(1 - f(x)\big)\,x \end{aligned} \]</div>
+      <p>The first factor is \(f(x)\). The second is \(1 - f(x)\), because \(1 - \frac{1}{1 + e^{-z}} = \frac{1 + e^{-z} - 1}{1 + e^{-z}} = \frac{e^{-z}}{1 + e^{-z}}\). The two minus signs (\(-1\) and \(-x\)) cancel. Substituting back:</p>
+      <div class="eq">\[ \nabla w = \big(f(x) - y\big)\, f(x)\,\big(1 - f(x)\big)\, x \]</div>
+      <p>With several points the loss is a sum over them, and the derivative of a sum is the sum of the derivatives. For \(\nabla b\) everything is the same except the last factor: \(\partial(wx + b)/\partial b = 1\) instead of \(x\).</p>
+      <div class="result">
+        <span class="lbl">Gradients for the two training points</span>
+        \[ \nabla w = \sum_{i=1}^{2} \big(f(x_i) - y_i\big)\, f(x_i)\,\big(1 - f(x_i)\big)\, x_i, \qquad \nabla b = \sum_{i=1}^{2} \big(f(x_i) - y_i\big)\, f(x_i)\,\big(1 - f(x_i)\big) \]
+        <p>These are the gradients of \(\tfrac12\sum_i (f(x_i) - y_i)^2\). With \(N = 2\), that is exactly the earlier loss \(\frac1N\sum_i (y_i - f(x_i))^2\).</p>
+      </div>
+    </section>
+
+    <section id="gd-demo">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=HEx-q6fkCbo&amp;t=953s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 15:53 the code</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=HEx-q6fkCbo&amp;t=1199s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 19:59 the demo</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=HEx-q6fkCbo&amp;t=1354s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 22:34 where next</a>
+        </div>
+        <h2>Running gradient descent on the toy problem</h2>
+      </div>
+      <p>The slide's Python code puts the pieces together. It starts at \(w = b = -2\) with \(\eta = 1\) and runs 1000 epochs; each epoch adds up the gradient contributions of both points and then makes one update.</p>
+<pre class="codeblock">import numpy as np
+
+X = [0.5, 2.5]
+Y = [0.2, 0.9]
+
+def f(x, w, b):
+    return 1 / (1 + np.exp(-(w*x + b)))
+
+def error(w, b):
+    err = 0.0
+    for x, y in zip(X, Y):
+        fx = f(x, w, b)
+        err += (fx - y) ** 2
+    return 0.5 * err
+
+def grad_b(x, w, b, y):
+    fx = f(x, w, b)
+    return (fx - y) * fx * (1 - fx)
+
+def grad_w(x, w, b, y):
+    fx = f(x, w, b)
+    return (fx - y) * fx * (1 - fx) * x
+
+def do_gradient_descent():
+    w, b, eta, max_epochs = -2, -2, 1.0, 1000
+    for i in range(max_epochs):
+        dw, db = 0, 0
+        for x, y in zip(X, Y):
+            dw += grad_w(x, w, b, y)
+            db += grad_b(x, w, b, y)
+        w = w - eta * dw
+        b = b - eta * db</pre>
+      <p>In the demo the point starts far from the low region and moves slowly at first. The lecturer asks why it is slow in some regions and fast in others, and leaves the answer for later (<a href="lecture-05.html">Lecture 5</a>). A hint, not given in the lecture: at \((-2, -2)\) both outputs are close to 0, so the factor \(f(1 - f)\) in each gradient is tiny. After 100 iterations the loss is about 0.02, and running longer keeps lowering it. Unlike the guesswork, the loss never goes up: every step moves downhill on the error surface.</p>
+
+      <figure id="gd-fig">
+        <div class="controls">
+          <label for="gd-eta">Learning rate η</label>
+          <input type="range" id="gd-eta" min="0" max="9" step="1" value="3">
+          <output id="gd-eta-out" for="gd-eta">1</output>
+          <button class="btn" id="gd-step" type="button">One step</button>
+          <button class="btn" id="gd-run" type="button">Run 1000 steps</button>
+          <button class="btn" id="gd-reset" type="button">Reset</button>
+          <label class="check"><input type="checkbox" id="gd-guess"> Show the guess-work path</label>
+        </div>
+        <div class="readouts">
+          <div><span class="k">Step t</span><span class="v" id="gd-t">0</span></div>
+          <div><span class="k">w</span><span class="v" id="gd-w">–</span></div>
+          <div><span class="k">b</span><span class="v" id="gd-b">–</span></div>
+          <div><span class="k">Loss L(w, b)</span><span class="v mine" id="gd-loss">–</span></div>
+        </div>
+        <div class="status" id="gd-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="gd-svg" viewBox="0 0 720 370" role="img" aria-label="Left: contour map of the loss of the toy sigmoid neuron over w and b from minus 6 to 6, darker where the loss is lower, with the minimum near (1.79, minus 2.28) marked. The gradient descent path is drawn from the start point. Right: the current sigmoid curve and the two training points."></svg></div>
+        <figcaption><b>Gradient descent on the toy problem's error surface.</b> Left: contours of \(\mathcal{L}(w, b) = \tfrac12\sum_i (f(x_i) - y_i)^2\) for the lecture's two points over the lecture's range \((-6, 6)\); darker is lower, + marks the minimum. Right: the current sigmoid and the two points. From \((-2, -2)\) with \(\eta = 1\), as in the slide's code, the path crawls across the flat region, reaches a loss of about 0.018 after 100 steps and settles at the minimum within 1000. Larger \(\eta\) (5 or 10) gets there much sooner. At 40 the steps overshoot the narrow valley and the loss goes up on some of them; at 80 the path is thrown onto a far plateau where the gradient is almost 0 and descent stalls. Click the surface to start elsewhere. The guess-work box draws Module 3.3's hand-picked walk on the same surface.</figcaption>
+      </figure>
+
+      <p>Later in the course gradient descent is studied in much more detail, with many variants (<a href="lecture-05.html">Lecture 5</a>). For now it is enough to have an algorithm for learning the parameters of a sigmoid neuron, along with the maths behind it, its geometric picture and code. The cycle from Lecture 2 is complete: a neuron model (perceptron, now sigmoid), a learning algorithm (perceptron learning, now gradient descent), its behaviour on errors. Next in that cycle comes representation power <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=HEx-q6fkCbo&amp;t=1384s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>23:04</a>.</p>
+    </section>
+
+    <!-- ============ MODULE 3.5 ============ -->
+    <section id="uat">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=xHSErLWAlbU&amp;t=30s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 0:30</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=xHSErLWAlbU&amp;t=152s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 2:32 the statement</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=xHSErLWAlbU&amp;t=366s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 6:06 why it matters</a>
+        </div>
+        <h2>Representation power of a network of sigmoid neurons</h2>
+      </div>
+      <p>The same template as for perceptrons. <a href="lecture-02.html">Lecture 2</a> showed by construction that a network of perceptrons with one hidden layer represents any Boolean function exactly, using up to exponentially many hidden perceptrons, each one specializing in one input. The analogous statement for sigmoid neurons changes two words: <i>represent</i> becomes <i>approximate</i>, and <i>Boolean</i> becomes <i>continuous</i>.</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Multilayer network of perceptrons</th><th>Multilayer network of sigmoid neurons</th></tr></thead>
+          <tbody>
+            <tr><td>With a single hidden layer, it can <b>represent</b> any <b>Boolean</b> function <b>precisely</b> (no errors).</td><td>With a single hidden layer, it can <b>approximate</b> any <b>continuous</b> function <b>to any desired precision</b>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Any desired precision is meant in the usual mathematical sense: you choose a tolerance \(\epsilon\) as small as you like, 0.0001 or a hundred zeros followed by a one, and a network can be built to meet it.</p>
+      <div class="result">
+        <span class="lbl">Universal approximation (Cybenko 1989, Hornik 1991)</span>
+        <p>For any continuous function \(f(\mathbf{x}) : \mathbb{R}^n \to \mathbb{R}^m\) and any \(\epsilon > 0\), there is a neural network with one hidden layer containing enough neurons whose output \(g(\mathbf{x})\) satisfies</p>
+        \[ |g(\mathbf{x}) - f(\mathbf{x})| &lt; \epsilon \quad \text{for every input } \mathbf{x}. \]
+      </div>
+      <p class="note">Standard fine print, not stated in the lecture: the guarantee is for inputs in a bounded region, such as a box of input values.</p>
+      <p>This is a very powerful result and much of the appeal of deep learning. Take the oil example: the true \(f\) from salinity, pressure, temperature, marine diversity and so on is unknown and complicated, yet a network exists whose output is close to it. Smaller \(\epsilon\) needs more neurons, and the practical catch is that the hidden layer may need a huge number of them. The lecture mentions that adding a second layer can bring the count per layer down from exponential to something manageable, a point left for an assignment or quiz <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=xHSErLWAlbU&amp;t=396s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>6:36</a>.</p>
+      <p>The actual proof is difficult. The lecture gives an illustrative proof instead, in the same spirit as the proof by construction for perceptrons, based on the illustration in chapter 4 of the online book at <a href="http://neuralnetworksanddeeplearning.com/chap4.html" target="_blank" rel="noopener">neuralnetworksanddeeplearning.com</a>.</p>
+    </section>
+
+    <section id="towers">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=xHSErLWAlbU&amp;t=487s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 8:07</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=xHSErLWAlbU&amp;t=610s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 10:10 more towers</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=xHSErLWAlbU&amp;t=826s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 13:46 tower makers</a>
+        </div>
+        <h2>Any function as a sum of towers</h2>
+      </div>
+      <p>Start from an arbitrary 1-D function \(f(x)\), not \(\sin x\), \(x^2\) or anything standard. Can a network of neurons represent it to a desired precision?</p>
+      <p>Observe first that such a function can be approximated by a row of <dfn>tower functions</dfn>: rectangles of some width placed side by side, each as high as the function there. Their sum, the outline of the towers, follows the curve. With a few wide towers the approximation is poor: at some \(x\) the tower top is far from \(f(x)\). With more, narrower towers it gets better and better, and there is always room to make them narrower still. This observation has nothing to do with neural networks yet.</p>
+      <p>The appealing part is that every tower is the same shape. They differ only in height and in position along the x-axis, so all of them are shifted and scaled copies of one basic tower. (The slide names this the sifting property of the tower function, as for an impulse or delta function.) Learn to build one tower and you can build them all.</p>
+      <p>Now imagine a black box, a <dfn>tower maker</dfn>, that takes the input \(x\) and produces one tower. Use as many as needed, each making a tower of the right height at the right place, and a simple network that adds their outputs approximates \(f\). Thinner towers give a better approximation, which will mean more neurons. This is the cartoon version of the network; what remains is to find out what is inside the black box.</p>
+    </section>
+
+    <section id="tower-maker">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=xHSErLWAlbU&amp;t=918s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 15:18</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=xHSErLWAlbU&amp;t=1072s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 17:52 large w, a step</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=xHSErLWAlbU&amp;t=1133s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 18:53 subtract</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=xHSErLWAlbU&amp;t=1315s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 21:55 the network</a>
+        </div>
+        <h2>Two sigmoid neurons make a tower</h2>
+      </div>
+      <p>Take two sigmoid neurons on the input \(x\): \(h_{11} = \sigma(w_1 x + b_1)\) and \(h_{12} = \sigma(w_2 x + b_2)\). The lecture's demo varies their parameters:</p>
+      <ul>
+        <li>With \(w_1 = 0\) and \(b_1 = 0\), \(h_{11} = 1/(1 + e^0) = 0.5\) for every \(x\): a flat line.</li>
+        <li>Make \(w_1\) nonzero and the S appears, gently at first. As \(w_1\) grows the slope gets steeper, until the sigmoid is almost a <b>step function</b>: with a very large \(w\) the logistic function recovers the step.</li>
+        <li>\(b\) moves the curve left or right: it sets the crossover point where the output goes from 0 to 1, at \(x = -b/w\) (where \(wx + b = 0\)).</li>
+      </ul>
+      <p>Now define \(h_{21} = h_{11} - h_{12}\), with \(h_{11}\) stepping up before \(h_{12}\). Left of both steps it is \(0 - 0 = 0\). Right of both it is \(1 - 1 = 0\). Between them it is \(1 - 0 = 1\). That is a tower. The larger the \(w\)'s, the closer it is to a perfect rectangle, and the gap between the crossover points sets its width. A very narrow tower made with only moderately large \(w\) also loses height, because neither sigmoid finishes climbing.</p>
+      <p>As a network: \(x\) feeds two sigmoid neurons, and their outputs reach \(h_{21}\) with weights \(+1\) and \(-1\). The slide asks what activation \(h_{21}\) should have. None is needed: it is linear, just the weighted sum \(\sum_i w_i h_{1i}\) with the hand-set weights \(w_1 = 1\), \(w_2 = -1\). This is the tower maker.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 640 430" role="img" aria-label="Top: the input x feeds several tower makers, each producing one tower of a different height and position; their outputs are added, giving a staircase that follows a curve f of x. Bottom: inside one tower maker, x feeds two sigmoid neurons h11 and h12 with parameters w1, b1 and w2, b2; a linear unit h21 adds them with weights plus 1 and minus 1. Small plots show h11 as a step at minus b1 over w1, h12 as a later step at minus b2 over w2, and h21 as the tower between them.">
+            <defs><marker id="l03f-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="20" y="22">The cartoon network: tower makers, then add</text>
+            <line class="d-ln" x1="66" y1="118" x2="110" y2="50"/>
+            <line class="d-ln" x1="66" y1="118" x2="110" y2="95"/>
+            <line class="d-ln" x1="66" y1="118" x2="110" y2="140"/>
+            <line class="d-ln" x1="66" y1="118" x2="110" y2="195"/>
+            <line class="d-ln" x1="300" y1="50" x2="326" y2="110"/>
+            <line class="d-ln" x1="300" y1="95" x2="324.5" y2="114"/>
+            <line class="d-ln" x1="300" y1="140" x2="324.5" y2="122"/>
+            <line class="d-ln" x1="300" y1="195" x2="328" y2="128"/>
+            <circle class="node" cx="50" cy="118" r="16"/>
+            <text class="d-t" x="50" y="123" text-anchor="middle">x</text>
+            <rect class="d-box" x="110" y="35" width="112" height="30" rx="6"/>
+            <rect class="d-box" x="110" y="80" width="112" height="30" rx="6"/>
+            <rect class="d-box" x="110" y="125" width="112" height="30" rx="6"/>
+            <rect class="d-box" x="110" y="180" width="112" height="30" rx="6"/>
+            <text class="d-s" x="166" y="54" text-anchor="middle">tower maker</text>
+            <text class="d-s" x="166" y="99" text-anchor="middle">tower maker</text>
+            <text class="d-s" x="166" y="144" text-anchor="middle">tower maker</text>
+            <text class="d-s" x="166" y="199" text-anchor="middle">tower maker</text>
+            <text class="d-t" x="166" y="174" text-anchor="middle">⋮</text>
+            <line class="d-rule" x1="232" y1="62" x2="300" y2="62"/>
+            <line class="d-rule" x1="232" y1="107" x2="300" y2="107"/>
+            <line class="d-rule" x1="232" y1="152" x2="300" y2="152"/>
+            <line class="d-rule" x1="232" y1="207" x2="300" y2="207"/>
+            <rect class="d-box-acc" x="240" y="40" width="10" height="22"/>
+            <rect class="d-box-acc" x="256" y="93" width="10" height="14"/>
+            <rect class="d-box-acc" x="272" y="126" width="10" height="26"/>
+            <rect class="d-box-acc" x="286" y="193" width="10" height="14"/>
+            <circle class="node" cx="340" cy="118" r="16"/>
+            <text class="d-t" x="340" y="123" text-anchor="middle">+</text>
+            <line class="d-ln" x1="356" y1="118" x2="404" y2="118" marker-end="url(#l03f-ah)"/>
+            <line class="d-rule" x1="420" y1="190" x2="620" y2="190"/>
+            <path class="d-ln-acc" style="stroke-width:1.6" d="M420.0 190 V164.3 H440.0 V190 M440.0 190 V131.2 H460.0 V190 M460.0 190 V97.1 H480.0 V190 M480.0 190 V114.5 H500.0 V190 M500.0 190 V117.1 H520.0 V190 M520.0 190 V65.9 H540.0 V190 M540.0 190 V76.8 H560.0 V190 M560.0 190 V79.1 H580.0 V190 M580.0 190 V117.4 H600.0 V190 M600.0 190 V174.7 H620.0 V190"/>
+            <path class="d-ln" style="stroke-width:2" d="M420.0 190.0 L425.0 176.6 L430.0 164.3 L435.0 153.9 L440.0 145.7 L445.0 138.5 L450.0 131.2 L455.0 122.8 L460.0 113.3 L465.0 104.0 L470.0 97.1 L475.0 94.4 L480.0 97.1 L485.0 104.6 L490.0 114.5 L495.0 123.4 L500.0 128.0 L505.0 126.0 L510.0 117.1 L515.0 103.3 L520.0 87.8 L525.0 74.3 L530.0 65.9 L535.0 63.4 L540.0 66.1 L545.0 71.4 L550.0 76.8 L555.0 80.0 L560.0 80.6 L565.0 79.5 L570.0 79.1 L575.0 81.8 L580.0 89.2 L585.0 101.5 L590.0 117.4 L595.0 134.6 L600.0 150.8 L605.0 164.3 L610.0 174.7 L615.0 182.9 L620.0 190.0"/>
+            <text class="d-s" x="420" y="210">f(x) (dark) and the sum of 10 towers</text>
+
+            <line class="d-rule" x1="20" y1="232" x2="620" y2="232"/>
+            <text class="d-h" x="20" y="256">Inside one tower maker</text>
+            <line class="d-ln" x1="65" y1="334.5" x2="143.1" y2="306.2"/>
+            <line class="d-ln" x1="64.5" y1="346.8" x2="143.7" y2="384.3"/>
+            <line class="d-ln" x1="176.6" y1="306.9" x2="253.4" y2="339.1"/>
+            <line class="d-ln" x1="176.6" y1="385.1" x2="253.4" y2="352.9"/>
+            <line class="d-ln" x1="288" y1="346" x2="308" y2="346" marker-end="url(#l03f-ah)"/>
+            <circle class="node" cx="50" cy="340" r="16"/>
+            <text class="d-t" x="50" y="345" text-anchor="middle">x</text>
+            <circle class="node-acc" cx="160" cy="300" r="18"/>
+            <text class="d-t" x="160" y="305" text-anchor="middle">σ</text>
+            <circle class="node-acc" cx="160" cy="392" r="18"/>
+            <text class="d-t" x="160" y="397" text-anchor="middle">σ</text>
+            <circle class="node" cx="270" cy="346" r="18"/>
+            <text class="d-t" x="270" y="351" text-anchor="middle">+</text>
+            <text class="d-t" x="160" y="276" text-anchor="middle">h₁₁</text>
+            <text class="d-t" x="160" y="426" text-anchor="middle">h₁₂</text>
+            <text class="d-s" x="72" y="316">w₁, b₁</text>
+            <text class="d-s" x="60" y="380">w₂, b₂</text>
+            <text class="d-s" x="210" y="312">+1</text>
+            <text class="d-s" x="210" y="392">−1</text>
+            <text class="d-s" x="270" y="322" text-anchor="middle">h₂₁ (linear)</text>
+
+            <text class="d-t" x="330" y="270">h₁₁</text>
+            <text class="d-t" x="435" y="270">h₁₂</text>
+            <text class="d-t" x="540" y="270">h₂₁ = h₁₁ − h₁₂</text>
+            <line class="d-rule" x1="330" y1="350" x2="420" y2="350"/>
+            <line class="d-rule" x1="435" y1="350" x2="525" y2="350"/>
+            <line class="d-rule" x1="540" y1="350" x2="630" y2="350"/>
+            <line class="d-rule" x1="330" y1="280" x2="420" y2="280" style="stroke-dasharray: 3 4"/>
+            <line class="d-rule" x1="435" y1="280" x2="525" y2="280" style="stroke-dasharray: 3 4"/>
+            <line class="d-rule" x1="540" y1="280" x2="630" y2="280" style="stroke-dasharray: 3 4"/>
+            <text class="d-al" x="324" y="284" text-anchor="end">1</text>
+            <text class="d-al" x="324" y="354" text-anchor="end">0</text>
+            <path class="d-ln-acc" style="stroke-width:2" d="M330.0 350.0 L351.0 349.9 L354.0 349.5 L355.5 348.7 L357.0 346.7 L358.5 341.7 L360.0 331.2 L361.5 315.0 L363.0 298.8 L364.5 288.3 L366.0 283.3 L367.5 281.3 L369.0 280.5 L372.0 280.1 L420.0 280.0"/>
+            <path class="d-ln" style="stroke-width:2" d="M435.0 350.0 L483.0 349.9 L486.0 349.5 L487.5 348.7 L489.0 346.7 L490.5 341.7 L492.0 331.2 L493.5 315.0 L495.0 298.8 L496.5 288.3 L498.0 283.3 L499.5 281.3 L501.0 280.5 L504.0 280.1 L525.0 280.0"/>
+            <path class="d-ln-acc" style="stroke-width:2; fill: var(--accent-soft)" d="M540.0 350.0 L561.0 349.9 L564.0 349.5 L565.5 348.7 L567.0 346.7 L568.5 341.7 L570.0 331.2 L571.5 315.0 L573.0 298.8 L574.5 288.3 L576.0 283.3 L577.5 281.3 L579.0 280.5 L582.0 280.1 L588.0 280.1 L591.0 280.5 L592.5 281.3 L594.0 283.3 L595.5 288.3 L597.0 298.8 L598.5 315.0 L600.0 331.2 L601.5 341.7 L603.0 346.7 L604.5 348.7 L606.0 349.5 L609.0 349.9 L630.0 350.0"/>
+            <line class="d-ln" x1="361.5" y1="350" x2="361.5" y2="355"/>
+            <line class="d-ln" x1="493.5" y1="350" x2="493.5" y2="355"/>
+            <text class="d-al" x="361.5" y="367" text-anchor="middle">−b₁/w₁</text>
+            <text class="d-al" x="493.5" y="367" text-anchor="middle">−b₂/w₂</text>
+            <text class="d-al" x="555" y="367" text-anchor="middle">0−0</text>
+            <text class="d-al" x="585" y="367" text-anchor="middle">1−0</text>
+            <text class="d-al" x="614" y="367" text-anchor="middle">1−1</text>
+            <text class="d-s" x="330" y="400">large w: each sigmoid is almost a step at x = −b/w;</text>
+            <text class="d-s" x="330" y="414">subtracting the later step leaves a tower between them</text>
+          </svg>
+        </div>
+        <figcaption><b>The tower maker, opened up.</b> Top: the plan, with many tower makers whose outputs are added (the staircase and curve are drawn to scale for the function used in the interactive below). Bottom: one tower maker is two sigmoid neurons with large weights, joined by a linear unit with weights \(+1\) and \(-1\). The mini plots are drawn to scale with \(w_1 = w_2 = 60\) on \(0 \le x \le 1\) and steps at 0.35 and 0.65.</figcaption>
+      </figure>
+
+      <figure id="tower-fig">
+        <div class="controls">
+          <span class="l03-ctl"><label for="tw-w">Steepness w</label>
+          <input type="range" id="tw-w" min="0" max="6" step="1" value="4">
+          <output id="tw-w-out" for="tw-w">100</output></span>
+          <span class="l03-ctl"><label for="tw-n">Towers N</label>
+          <input type="range" id="tw-n" min="1" max="40" step="1" value="8">
+          <output id="tw-n-out" for="tw-n">8</output></span>
+          <span class="l03-ctl"><label for="tw-k">Tower k</label>
+          <input type="range" id="tw-k" min="1" max="8" step="1" value="4">
+          <output id="tw-k-out" for="tw-k">4</output></span>
+          <button class="btn" id="tw-sharp" type="button">Sharp and many: w = 500, N = 40</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">b₁, b₂ of tower k</span><span class="v" id="tw-b">–</span></div>
+          <div><span class="k">Hidden sigmoids 2N</span><span class="v" id="tw-hid">–</span></div>
+          <div><span class="k">Max error |g(x) − f(x)|</span><span class="v mine" id="tw-err">–</span></div>
+        </div>
+        <div class="status" id="tw-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="tw-svg" viewBox="0 0 720 330" role="img" aria-label="Left: the two sigmoids of one tower maker and their difference, a tower. Right: a target curve on 0 to 1, the individual scaled towers, and their sum, the network output, which follows the curve more closely as the number of towers and the steepness grow."></svg></div>
+        <figcaption><b>Building \(f\) from towers.</b> The target \(f\) (synthetic: a smooth curve made up for this page) on \(0 \le x \le 1\) is split into \(N\) equal intervals. Each interval gets a tower maker: two sigmoids \(\sigma(wx + b)\) with the same \(w\) and biases that put their steps at the interval's ends, joined to the output with weights \(+h\) and \(-h\), where \(h\) is \(f\) at the interval's midpoint. Left: tower \(k\)'s two sigmoids and their difference. Right: every scaled tower (faint), tower \(k\) (shaded), their sum \(g\) and \(f\). With \(w = 500\) the largest error falls from 0.36 with 4 towers to 0.10 with 16 and 0.026 with 40. With \(w = 5\) it stays near 0.36 however many towers you add: each sigmoid needs a distance of about \(4/w = 0.8\) to rise, so the "towers" are low, blurred bumps.</figcaption>
+      </figure>
+    </section>
+
+    <section id="towers-2d">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=BUGi6AH1D2c&amp;t=32s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 0:32</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=BUGi6AH1D2c&amp;t=184s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 3:04 a 2-D sigmoid</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=BUGi6AH1D2c&amp;t=494s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 8:14 open on two sides</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=BUGi6AH1D2c&amp;t=738s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 12:18 three levels</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=BUGi6AH1D2c&amp;t=953s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 15:53 threshold</a>
+        </div>
+        <h2>Towers in two dimensions</h2>
+      </div>
+      <p>What if there is more than one input? Back to oil: decide whether there is oil at a location on the ocean bed (yes/no) from two factors, salinity \(x_1\) and pressure \(x_2\). Each known location is a point in the \((x_1, x_2)\) plane, labelled oil or no oil. The data shows that \(y\) is a complex function of \(x_1\) and \(x_2\): no line separates the classes, but a function that is 1 on the oil regions and 0 elsewhere would. To approximate it we want 2-D towers, which can again be placed side by side. Once 2-D is clear, the same idea extends to 3, 4 or \(n\) dimensions.</p>
+      <p>A sigmoid neuron with two inputs is</p>
+      <div class="eq">\[ f(x_1, x_2) = \frac{1}{1 + \exp\!\big(-(w_1 x_1 + w_2 x_2 + b)\big)} \]</div>
+      <ul>
+        <li>Vary \(w_1\) with \(w_2 = 0\), \(b = 0\): the surface is flat at 0.5, then an S along the \(x_1\) direction that gets steeper until it is a step.</li>
+        <li>Vary \(w_2\) with \(w_1 = 0\), \(b = 0\): the same, along the \(x_2\) direction.</li>
+        <li>Vary \(b\) with \(w_1 = k\) (large), \(w_2 = 0\): the step slides along \(x_1\); \(b\) sets where the crossover happens.</li>
+      </ul>
+      <p>Subtract two such steps along \(x_1\) with different \(b\), exactly as in 1-D: \(h_{11} - h_{12}\). Where both are 0 the result is 0, where both are 1 it is 0, and in between it is 1. This is still not a tower. It is a wall-like strip, a tower open on two sides <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=BUGi6AH1D2c&amp;t=494s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>8:14</a>.</p>
+      <p>Two more neurons, \(h_{13}\) and \(h_{14}\), with the large weight on \(x_2\) instead (and 0 on \(x_1\)), give a strip in the other direction. Adding the two strips closes all four walls but produces three levels <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=BUGi6AH1D2c&amp;t=922s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>15:22</a>: 0 where neither strip is, 1 on the arms where exactly one strip is, and 2 in the centre where they cross. The tower we want sits on top, at level 2, surrounded by scaffolding at level 1.</p>
+      <p>To keep only the top, pass the sum through one more sigmoid whose switch-over sits between levels 1 and 2. Everything at level 0 or 1 maps to about 0, and only the centre, at level 2, maps to about 1. The result is a tower closed on all sides. (The lecture describes the switch-over as being at 1; any value strictly between 1 and 2, such as 1.5, separates the levels.)</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 640 420" role="img" aria-label="Top: a network with inputs x1 and x2, four sigmoid neurons h11 to h14, a sum with weights plus 1, minus 1, plus 1, minus 1, and a final thresholding sigmoid that outputs a closed tower. Bottom: four top-down maps of the (x1, x2) plane: h11 minus h12 is a vertical strip at level 1; h13 minus h14 is a horizontal strip at level 1; their sum is 0 outside, 1 on the arms of a cross and 2 in the centre; after the thresholding sigmoid only the centre square remains, at 1.">
+            <defs><marker id="l03g-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="20" y="22">Four sigmoids, a sum and a threshold</text>
+            <line class="d-ln" x1="65.7" y1="81.7" x2="153.4" y2="63.5"/>
+            <line class="d-ln" x1="65.7" y1="88.3" x2="153.4" y2="106.5"/>
+            <line class="d-ln" x1="65.7" y1="186.7" x2="153.4" y2="168.5"/>
+            <line class="d-ln" x1="65.7" y1="193.3" x2="153.4" y2="211.5"/>
+            <line class="d-ln" x1="184.2" y1="69.3" x2="274.9" y2="128.2"/>
+            <line class="d-ln" x1="186.6" y1="113.9" x2="272.5" y2="134"/>
+            <line class="d-ln" x1="186.6" y1="161.3" x2="272.4" y2="142"/>
+            <line class="d-ln" x1="184.3" y1="205.8" x2="274.9" y2="147.7"/>
+            <line class="d-ln" x1="308" y1="138" x2="372" y2="138"/>
+            <line class="d-ln" x1="408" y1="138" x2="444" y2="138" marker-end="url(#l03g-ah)"/>
+            <circle class="node" cx="50" cy="85" r="16"/><text class="d-t" x="50" y="90" text-anchor="middle">x₁</text>
+            <circle class="node" cx="50" cy="190" r="16"/><text class="d-t" x="50" y="195" text-anchor="middle">x₂</text>
+            <circle class="node-acc" cx="170" cy="60" r="17"/><text class="d-s" x="170" y="64" text-anchor="middle">h₁₁</text>
+            <circle class="node-acc" cx="170" cy="110" r="17"/><text class="d-s" x="170" y="114" text-anchor="middle">h₁₂</text>
+            <circle class="node-acc" cx="170" cy="165" r="17"/><text class="d-s" x="170" y="169" text-anchor="middle">h₁₃</text>
+            <circle class="node-acc" cx="170" cy="215" r="17"/><text class="d-s" x="170" y="219" text-anchor="middle">h₁₄</text>
+            <circle class="node" cx="290" cy="138" r="18"/><text class="d-t" x="290" y="143" text-anchor="middle">+</text>
+            <circle class="node-acc" cx="390" cy="138" r="18"/><text class="d-t" x="390" y="143" text-anchor="middle">σ</text>
+            <text class="d-s" x="72" y="54">steep in x₁</text>
+            <text class="d-s" x="72" y="236">steep in x₂</text>
+            <text class="d-s" x="214" y="80">+1</text>
+            <text class="d-s" x="212" y="112">−1</text>
+            <text class="d-s" x="212" y="174">+1</text>
+            <text class="d-s" x="214" y="210">−1</text>
+            <text class="d-t" x="450" y="142">closed tower</text>
+            <text class="d-s" x="390" y="174" text-anchor="middle">switches between</text>
+            <text class="d-s" x="390" y="188" text-anchor="middle">levels 1 and 2</text>
+
+            <text class="d-t" x="85" y="262" text-anchor="middle">h₁₁ − h₁₂</text>
+            <text class="d-t" x="240" y="262" text-anchor="middle">h₁₃ − h₁₄</text>
+            <text class="d-t" x="395" y="262" text-anchor="middle">sum of both</text>
+            <text class="d-t" x="550" y="262" text-anchor="middle">σ(sum)</text>
+            <rect x="25" y="270" width="120" height="120" style="fill: var(--surface)"/>
+            <rect x="65" y="270" width="40" height="120" style="fill: var(--accent-soft)"/>
+            <rect class="d-plot" x="25" y="270" width="120" height="120"/>
+            <rect x="180" y="270" width="120" height="120" style="fill: var(--surface)"/>
+            <rect x="180" y="310" width="120" height="40" style="fill: var(--accent-soft)"/>
+            <rect class="d-plot" x="180" y="270" width="120" height="120"/>
+            <rect x="335" y="270" width="120" height="120" style="fill: var(--surface)"/>
+            <rect x="375" y="270" width="40" height="120" style="fill: var(--accent-soft)"/>
+            <rect x="335" y="310" width="120" height="40" style="fill: var(--accent-soft)"/>
+            <rect x="375" y="310" width="40" height="40" style="fill: var(--accent)"/>
+            <rect class="d-plot" x="335" y="270" width="120" height="120"/>
+            <rect x="490" y="270" width="120" height="120" style="fill: var(--surface)"/>
+            <rect class="d-box-acc" x="530" y="310" width="40" height="40"/>
+            <rect class="d-plot" x="490" y="270" width="120" height="120"/>
+            <g class="d-t" text-anchor="middle">
+              <text x="45" y="335">0</text><text x="85" y="335">1</text><text x="125" y="335">0</text>
+              <text x="240" y="295">0</text><text x="240" y="335">1</text><text x="240" y="375">0</text>
+              <text x="355" y="295">0</text><text x="395" y="295">1</text><text x="435" y="295">0</text>
+              <text x="355" y="335">1</text><text x="395" y="335" style="fill: var(--surface)">2</text><text x="435" y="335">1</text>
+              <text x="355" y="375">0</text><text x="395" y="375">1</text><text x="435" y="375">0</text>
+              <text x="510" y="295">0</text><text x="590" y="295">0</text><text x="550" y="335">1</text>
+              <text x="510" y="375">0</text><text x="590" y="375">0</text>
+            </g>
+            <text class="d-h" x="162.5" y="335" text-anchor="middle">+</text>
+            <text class="d-h" x="317.5" y="335" text-anchor="middle">=</text>
+            <text class="d-h" x="472.5" y="335" text-anchor="middle">→</text>
+            <text class="d-s" x="25" y="410">Each square is the (x₁, x₂) plane seen from above, x₁ running left to right; numbers are output values.</text>
+          </svg>
+        </div>
+        <figcaption><b>Closing the tower in 2-D.</b> Each first-layer pair is a 1-D tower along one input, a strip open on two sides. Adding the two strips gives a cross with level 2 only where they overlap, and a final sigmoid with its switch-over between 1 and 2 keeps just that square. In the lecture's demo the steep weights are 200 with biases of \(\pm 100\), which puts a pair's steps at \(\pm 0.5\) along one input.</figcaption>
+      </figure>
+
+      <p>The full network: \(x_1, x_2\) feed four sigmoid neurons, two steep in each direction; their outputs are summed with weights \(+1, -1, +1, -1\); the sum goes through a thresholding sigmoid <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=BUGi6AH1D2c&amp;t=1047s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>17:27</a>. Compared with 1-D, the middle layer has grown from two neurons to four. Many such 2-D towers, placed side by side and made thinner, approximate the 2-D function as closely as we like.</p>
+      <p class="callout">One caveat the lecturer points out <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=BUGi6AH1D2c&amp;t=1108s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>18:28</a>: this construction uses two layers of sigmoids (the four neurons, then the threshold), while the theorem promises a single hidden layer. The single-layer argument exists but is more complicated; the illustration shows that a slightly deeper network can approximate any 2-D function to arbitrary precision.</p>
+      <p>Why this matters: in the real world the true \(f\) can be as arbitrary as you like, and the theorem says a neural network can approximate it to a desired precision if it has enough neurons. Such a network is just a composite function of \(\mathbf{x}\), built from sigmoids and weighted sums, which is exactly the kind of \(\hat{f}\) that machine learning looks for. The count of neurons is still large, and later lectures deal with that. The lecture ends with a question: one input needed 2 neurons per tower and two inputs needed 4, so how many does an \(n\)-dimensional tower need? (See Q8 below.) <a href="lecture-04.html">Lecture 4</a> continues with deep feedforward networks and backpropagation.</p>
+    </section>
+
+    <!-- ============ REVISION ============ -->
+    <section id="terms">
+      <div class="sec-head"><h2>Key terms</h2></div>
+      <dl class="terms">
+        <div><dt>Sigmoid neuron</dt><dd>A neuron whose output is the logistic function \(1/(1 + e^{-\mathbf{w}^\top\mathbf{x}})\): smooth, in \((0, 1)\), differentiable.</dd></div>
+        <div><dt>Step function</dt><dd>The perceptron's output as a function of \(z\): 0 below \(-w_0\), 1 above it; not differentiable at the jump.</dd></div>
+        <div><dt>Model</dt><dd>Our assumed approximation \(\hat{f}\) of the unknown relation \(y = f(\mathbf{x})\), with parameters to learn.</dd></div>
+        <div><dt>Parameters</dt><dd>The quantities learned from data; here \(w\) and \(b\), collected as \(\boldsymbol\theta = [w, b]\).</dd></div>
+        <div><dt>Bias \(b\)</dt><dd>The new name for \(w_0\); with large \(w\), a sigmoid's step sits at \(x = -b/w\).</dd></div>
+        <div><dt>Loss function</dt><dd>The objective that measures how far predictions are from the true values; learning minimizes it.</dd></div>
+        <div><dt>Squared error loss</dt><dd>\(\sum_i (\hat{y}_i - y_i)^2\): signs cannot cancel, and it is differentiable.</dd></div>
+        <div><dt>Error surface</dt><dd>The loss plotted over the parameter plane \((w, b)\).</dd></div>
+        <div><dt>Taylor series</dt><dd>A polynomial approximation of a smooth function around a point; the linear one is accurate only nearby.</dd></div>
+        <div><dt>Gradient</dt><dd>The vector of partial derivatives \(\nabla_{\boldsymbol\theta}\mathcal{L}\); its negative is the direction of steepest descent.</dd></div>
+        <div><dt>Hessian</dt><dd>The matrix of second partial derivatives, the gradient of the gradient; dropped in the derivation.</dd></div>
+        <div><dt>Gradient descent</dt><dd>\(\boldsymbol\theta_{t+1} = \boldsymbol\theta_t - \eta\nabla\mathcal{L}(\boldsymbol\theta_t)\), with a small learning rate \(\eta\).</dd></div>
+        <div><dt>Universal approximation theorem</dt><dd>One hidden layer with enough sigmoid neurons approximates any continuous function within any \(\epsilon\).</dd></div>
+        <div><dt>Tower function</dt><dd>The difference of two steep sigmoids, \(\sigma(w_1x + b_1) - \sigma(w_2x + b_2)\); sums of towers rebuild a function.</dd></div>
+      </dl>
+    </section>
+
+    <section id="test">
+      <div class="sec-head"><h2>Test yourself</h2></div>
+      <div class="quiz">
+        <details><summary><span class="q">Q1</span><span>With \(w_1 = 1\) and \(w_0 = -0.5\), what do a perceptron and a sigmoid neuron output for critics' ratings 0.49 and 0.51?</span><span class="tog"></span></summary>
+          <p>The perceptron gives 0 and 1, because \(0.49 - 0.5 &lt; 0\) and \(0.51 - 0.5 \ge 0\). The sigmoid neuron gives \(\sigma(-0.01) \approx 0.4975\) and \(\sigma(0.01) \approx 0.5025\): almost the same, as two almost equal ratings should be.</p></details>
+        <details><summary><span class="q">Q2</span><span>Why is \(\hat{y} = 1/(1 + e^{-x})\) a poor model, even though it is a function of \(x\)?</span><span class="tog"></span></summary>
+          <p>It has no parameters, so nothing is learned from the data; it is as arbitrary as declaring \(y = 3x + 2\). With \(\sigma(wx + b)\), the data can choose how steep the curve is and where it sits.</p></details>
+        <details><summary><span class="q">Q3</span><span>Why squared error rather than the plain difference or the absolute difference?</span><span class="tog"></span></summary>
+          <p>Plain differences can cancel: errors of \(-0.5\) and \(+0.5\) sum to 0. The absolute value fixes that but is not differentiable at 0. The square removes the sign and is smooth, which gradient-based learning needs.</p></details>
+        <details><summary><span class="q">Q4</span><span>Check the slide's loss for \((w, b) = (0.5, 0)\) on the points \((0.5, 0.2)\) and \((2.5, 0.9)\).</span><span class="tog"></span></summary>
+          <p>\(f(0.5) = \sigma(0.25) \approx 0.562\) and \(f(2.5) = \sigma(1.25) \approx 0.777\). The loss is half of \((0.2 - 0.562)^2 + (0.9 - 0.777)^2\), which is \(\tfrac12(0.131 + 0.015) \approx 0.073\), the 0.0730 on the slide.</p></details>
+        <details><summary><span class="q">Q5</span><span>At \((w, b) = (0, 0)\), compute \(\nabla w\) and \(\nabla b\) for the two training points, and the next \((w, b)\) with \(\eta = 1\).</span><span class="tog"></span></summary>
+          <p>Both outputs are \(\sigma(0) = 0.5\), so \(f(1 - f) = 0.25\). \(\nabla w\) is \((0.5 - 0.2)(0.25)(0.5)\) plus \((0.5 - 0.9)(0.25)(2.5)\), that is \(0.0375 - 0.25 = -0.2125\). \(\nabla b\) is \((0.3)(0.25) + (-0.4)(0.25)\), that is \(-0.025\). The update gives \(w = 0.2125\), \(b = 0.025\): \(w\) grows, which steepens the curve toward the points.</p></details>
+        <details><summary><span class="q">Q6</span><span>In the derivation, why may the \(\eta^2\) term be dropped, and what can go wrong when \(\eta\) is large?</span><span class="tog"></span></summary>
+          <p>For small \(\eta\), \(\eta^2\) and higher powers are negligible, so \(\mathcal{L}(\boldsymbol\theta + \eta\mathbf{u}) \approx \mathcal{L}(\boldsymbol\theta) + \eta\mathbf{u}^\top\nabla\mathcal{L}\) and moving along \(-\nabla\mathcal{L}\) is guaranteed to lower the loss. For a large \(\eta\) the linear approximation fails: in the 1-D game the step from 0.89 by 1.25 jumped over the minimum to \(-0.36\), and the loss can go up.</p></details>
+        <details><summary><span class="q">Q7</span><span>Build a tower that is 1 for \(2 &lt; x &lt; 3\) and 0 elsewhere from two sigmoid neurons.</span><span class="tog"></span></summary>
+          <p>Use a large weight, say \(w = 100\), and put the steps at 2 and 3 with \(b = -wx_{\text{step}}\): \(h_{11} = \sigma(100x - 200)\), \(h_{12} = \sigma(100x - 300)\). Then \(h_{21} = h_{11} - h_{12}\) with a linear output unit (weights \(+1\), \(-1\)) is about 1 between 2 and 3 and about 0 outside.</p></details>
+        <details><summary><span class="q">Q8</span><span>The lecture's closing question: one input needs 2 neurons per tower, two inputs need 4. How many for \(n\) inputs?</span><span class="tog"></span></summary>
+          <p>The lecture leaves this to think about. Following the same construction: two steep sigmoids per input direction, so \(2n\) in the first layer, plus one thresholding sigmoid. The sum of the \(n\) strips reaches level \(n\) only in the central box (and at most \(n - 1\) anywhere else), so the threshold must sit between \(n - 1\) and \(n\).</p></details>
+      </div>
+    </section>
+
+    <!-- PAGER:START --><nav class="pager" aria-label="Previous and next lecture"><a href="index.html"><span class="dir">← All lectures</span><span class="nm">Course map</span></a><a class="next" href="lecture-04.html"><span class="dir">Lecture 4 →</span><span class="nm">Feedforward networks and backpropagation</span></a></nav><!-- PAGER:END -->
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the official lecture slides and the module videos' YouTube auto-generated captions. Timestamp links open the video at that moment. Charts marked synthetic use data generated for these notes. Not an official IIT Madras resource.</div>
+</footer>
+
+<script src="notes.js"></script>
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const sig = z => 1 / (1 + Math.exp(-z));
+  const num = (v, d) => { const s = (Math.abs(v) < 0.5 * Math.pow(10, -d) ? 0 : v).toFixed(d); return s.replace('-', '−'); };
+  const pathOf = pts => 'M' + pts.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' L');
+
+  /* ---------- Gradient descent on the toy sigmoid neuron's error surface ---------- */
+  (() => {
+    const svg = document.getElementById('gd-svg'); if (!svg) return;
+    const X = [0.5, 2.5], Y = [0.2, 0.9];
+    const loss = (w, b) => 0.5 * X.reduce((s, x, i) => s + Math.pow(sig(w * x + b) - Y[i], 2), 0);
+    const grad = (w, b) => { let dw = 0, db = 0; X.forEach((x, i) => { const f = sig(w * x + b), g = (f - Y[i]) * f * (1 - f); dw += g * x; db += g; }); return [dw, db]; };
+    const ETAS = [0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 40, 80];
+    const fmtL = v => v >= 0.001 ? v.toFixed(4) : v.toExponential(1).replace('-', '−');
+    const lo = -6, hi = 6, L0 = 44, T0 = 34, SZ = 300, S = SZ / (hi - lo);
+    const sx = w => L0 + (w - lo) * S, sy = b => T0 + (hi - b) * S;
+    const defs = mk('defs', {}, svg);
+    const cp = mk('clipPath', { id: 'l03-gd-clip' }, defs); mk('rect', { x: L0, y: T0, width: SZ, height: SZ }, cp);
+    const mkr = mk('marker', { id: 'l03-gd-ah', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 5, markerHeight: 5, orient: 'auto-start-reverse' }, defs);
+    mk('path', { d: 'M0,0 L10,5 L0,10 z', style: 'fill: var(--ink-2)' }, mkr);
+    mk('text', { x: L0, y: 22, class: 'c-title' }, svg).textContent = 'Error surface L(w, b), seen from above';
+    /* shading: darker where the loss is lower */
+    const M = 50, cell = SZ / M, Lmax = 0.43;
+    const gHeat = mk('g', { 'shape-rendering': 'crispEdges' }, svg);
+    for (let i = 0; i < M; i++) for (let j = 0; j < M; j++) {
+      const w = lo + (i + 0.5) * (hi - lo) / M, b = hi - (j + 0.5) * (hi - lo) / M;
+      const op = 0.03 + 0.5 * Math.pow(Math.max(0, 1 - loss(w, b) / Lmax), 2.2);
+      mk('rect', { x: L0 + i * cell, y: T0 + j * cell, width: cell, height: cell, style: 'fill: var(--accent); fill-opacity: ' + op.toFixed(3) }, gHeat);
+    }
+    /* contour lines by marching squares */
+    const G = 120, st = (hi - lo) / G, val = [];
+    for (let i = 0; i <= G; i++) { val.push([]); for (let j = 0; j <= G; j++) val[i].push(loss(lo + i * st, lo + j * st)); }
+    const gC = mk('g', { style: 'stroke: var(--ink-2); stroke-opacity: .5; stroke-width: .9; fill: none' }, svg);
+    [0.003, 0.02, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4].forEach(c => {
+      let d = '';
+      for (let i = 0; i < G; i++) for (let j = 0; j < G; j++) {
+        const v = [val[i][j], val[i + 1][j], val[i + 1][j + 1], val[i][j + 1]], P = [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]], pts = [];
+        for (let e = 0; e < 4; e++) { const a = v[e], q = v[(e + 1) % 4]; if ((a < c) !== (q < c)) { const t = (c - a) / (q - a), A = P[e], B = P[(e + 1) % 4]; pts.push([lo + (A[0] + t * (B[0] - A[0])) * st, lo + (A[1] + t * (B[1] - A[1])) * st]); } }
+        for (let k = 0; k + 1 < pts.length; k += 2) d += 'M' + sx(pts[k][0]).toFixed(1) + ' ' + sy(pts[k][1]).toFixed(1) + 'L' + sx(pts[k + 1][0]).toFixed(1) + ' ' + sy(pts[k + 1][1]).toFixed(1);
+      }
+      if (d) mk('path', { d }, gC);
+    });
+    mk('rect', { x: L0, y: T0, width: SZ, height: SZ, style: 'fill: none; stroke: var(--rule)' }, svg);
+    for (let v = lo; v <= hi; v += 2) {
+      mk('text', { x: sx(v), y: T0 + SZ + 15, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = num(v, 0);
+      mk('text', { x: L0 - 6, y: sy(v) + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = num(v, 0);
+    }
+    mk('text', { x: L0 + SZ / 2, y: T0 + SZ + 31, 'text-anchor': 'middle', class: 'c-note' }, svg).textContent = 'w';
+    mk('text', { x: 12, y: T0 + SZ / 2 + 4, class: 'c-note' }, svg).textContent = 'b';
+    const wS = 1.791759, bS = -2.282174;
+    mk('path', { d: `M${sx(wS) - 6} ${sy(bS)} H${sx(wS) + 6} M${sx(wS)} ${sy(bS) - 6} V${sy(bS) + 6}`, style: 'stroke: var(--ink); stroke-width: 2' }, svg);
+    mk('text', { x: sx(wS) + 9, y: sy(bS) + 16, class: 'c-note' }, svg).textContent = 'minimum';
+    /* the guess-work walk from Module 3.3 */
+    const guesses = [[3, -1], [0.5, 0], [-0.1, 0], [0.94, -0.94], [1.42, -1.73], [1.65, -2.08], [1.78, -2.27]];
+    const gGuess = mk('g', { visibility: 'hidden' }, svg);
+    for (let i = 0; i + 1 < guesses.length; i++) mk('line', { x1: sx(guesses[i][0]), y1: sy(guesses[i][1]), x2: sx(guesses[i + 1][0]), y2: sy(guesses[i + 1][1]), 'marker-end': 'url(#l03-gd-ah)', style: 'stroke: var(--ink-2); stroke-width: 1.4; stroke-dasharray: 4 3' }, gGuess);
+    guesses.forEach((p, i) => { mk('circle', { cx: sx(p[0]), cy: sy(p[1]), r: 3.2, style: 'fill: var(--ink-2)' }, gGuess); if (i < 3) mk('text', { x: sx(p[0]) + (i === 2 ? -8 : 6), y: sy(p[1]) - 6, 'text-anchor': i === 2 ? 'end' : 'start', class: 'c-tick' }, gGuess).textContent = i === 0 ? 'guess (3, −1)' : '(' + num(p[0], 1) + ', ' + num(p[1], 0) + ')'; });
+    /* gradient descent path */
+    const gPath = mk('g', { 'clip-path': 'url(#l03-gd-clip)' }, svg);
+    const line = mk('polyline', { style: 'fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linejoin: round' }, gPath);
+    const startDot = mk('circle', { r: 5, class: 'c-proxy' }, gPath);
+    const cur = mk('circle', { r: 5.5, class: 'c-pt-hi' }, gPath);
+    const hit = mk('rect', { x: L0, y: T0, width: SZ, height: SZ, class: 'l03-surface', style: 'fill: transparent' }, svg);
+    /* right panel: the current sigmoid */
+    const RX0 = 420, RX1 = 700, RY0 = 314, RY1 = 54;
+    const rx = x => RX0 + (x + 1) * (RX1 - RX0) / 5, ry = y => RY0 - y * (RY0 - RY1);
+    mk('text', { x: RX0, y: 22, class: 'c-title' }, svg).textContent = 'Current fit f(x) = σ(wx + b)';
+    const gR = mk('g', { class: 'c-grid' }, svg);
+    [0, 0.5, 1].forEach(v => { mk('line', { x1: RX0, x2: RX1, y1: ry(v), y2: ry(v) }, gR); mk('text', { x: RX0 - 6, y: ry(v) + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = v; });
+    [-1, 0, 1, 2, 3, 4].forEach(v => { mk('line', { x1: rx(v), x2: rx(v), y1: RY0, y2: RY1 }, gR); mk('text', { x: rx(v), y: RY0 + 15, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = num(v, 0); });
+    mk('line', { x1: RX0, x2: RX1, y1: RY0, y2: RY0, class: 'c-axis' }, svg);
+    mk('text', { x: (RX0 + RX1) / 2, y: RY0 + 31, 'text-anchor': 'middle', class: 'c-note' }, svg).textContent = 'x';
+    const curve = mk('path', { style: 'fill: none; stroke: var(--accent); stroke-width: 2.4' }, svg);
+    X.forEach((x, i) => { mk('circle', { cx: rx(x), cy: ry(Y[i]), r: 5.5, class: 'c-pt-hi' }, svg); mk('text', { x: rx(x) + 9, y: ry(Y[i]) + (i ? 18 : 4), class: 'c-note' }, svg).textContent = '(' + x + ', ' + Y[i] + ')'; });
+    const slider = document.getElementById('gd-eta'), out = document.getElementById('gd-eta-out'), chk = document.getElementById('gd-guess');
+    const oT = document.getElementById('gd-t'), oW = document.getElementById('gd-w'), oB = document.getElementById('gd-b'), oL = document.getElementById('gd-loss'), status = document.getElementById('gd-status');
+    let start = [-2, -2], w, b, t, ups, trail, raf = 0;
+    const eta = () => ETAS[+slider.value];
+    const reset = () => { stop(); w = start[0]; b = start[1]; t = 0; ups = 0; trail = [[w, b]]; draw(); };
+    const step = () => { const prev = loss(w, b), g = grad(w, b); w -= eta() * g[0]; b -= eta() * g[1]; t++; if (loss(w, b) > prev + 1e-12) ups++; trail.push([w, b]); };
+    const draw = () => {
+      line.setAttribute('points', trail.map(p => sx(p[0]).toFixed(1) + ',' + sy(p[1]).toFixed(1)).join(' '));
+      startDot.setAttribute('cx', sx(start[0])); startDot.setAttribute('cy', sy(start[1]));
+      cur.setAttribute('cx', sx(w)); cur.setAttribute('cy', sy(b));
+      const xs = []; for (let i = 0; i <= 100; i++) xs.push(-1 + 5 * i / 100);
+      curve.setAttribute('d', pathOf(xs.map(x => [rx(x), ry(sig(w * x + b))])));
+      const L = loss(w, b), outside = Math.abs(w) > hi || Math.abs(b) > hi;
+      oT.textContent = String(t); oW.textContent = num(w, 2); oB.textContent = num(b, 2); oL.textContent = fmtL(L); out.textContent = String(eta());
+      let s;
+      if (t === 0) s = 'Start at (w, b) = (' + num(w, 2) + ', ' + num(b, 2) + '), loss ' + fmtL(L) + '. Click the surface to start somewhere else.';
+      else {
+        s = 'After ' + t + (t > 1 ? ' steps' : ' step') + ': loss ' + fmtL(L) + '.';
+        s += ups ? ' The loss went up on ' + ups + ' of them: η = ' + eta() + ' is too large here.' : ' The loss has gone down at every step.';
+        if (outside) s += ' The point has left the plotted square.';
+        else if (L < 1e-5) s += ' The sigmoid now passes through both points.';
+      }
+      status.textContent = s;
+    };
+    const stop = () => { if (raf) { cancelAnimationFrame(raf); raf = 0; } };
+    const run = () => {
+      stop();
+      if (reduce) { for (let k = 0; k < 1000; k++) step(); draw(); return; }
+      let k = 0;
+      const tick = () => { for (let j = 0; j < 8 && k < 1000; j++, k++) step(); draw(); raf = k < 1000 ? requestAnimationFrame(tick) : 0; };
+      raf = requestAnimationFrame(tick);
+    };
+    reset();
+    slider.addEventListener('input', () => { out.textContent = String(eta()); });
+    chk.addEventListener('change', () => gGuess.setAttribute('visibility', chk.checked ? 'visible' : 'hidden'));
+    document.getElementById('gd-step').addEventListener('click', () => { stop(); step(); draw(); });
+    document.getElementById('gd-run').addEventListener('click', run);
+    document.getElementById('gd-reset').addEventListener('click', reset);
+    hit.addEventListener('click', e => {
+      const m = svg.getScreenCTM(); if (!m) return;
+      const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
+      start = [lo + (p.x - L0) / S, hi - (p.y - T0) / S].map(v => Math.max(lo, Math.min(hi, v)));
+      reset();
+    });
+  })();
+
+  /* ---------- Towers from pairs of steep sigmoids ---------- */
+  (() => {
+    const svg = document.getElementById('tw-svg'); if (!svg) return;
+    const WS = [5, 10, 20, 50, 100, 200, 500];
+    const f = x => Math.sin(Math.PI * x) * (0.8 + 0.25 * Math.sin(9 * x + 1) + 0.12 * Math.cos(23 * x));
+    const ylo = -0.15, yhi = 1.1;
+    const panel = (x0, x1, y0, y1) => ({ x0, x1, y0, y1, sx: x => x0 + (x1 - x0) * x, sy: y => y0 - (y - ylo) / (yhi - ylo) * (y0 - y1) });
+    const A = panel(40, 300, 292, 62), B = panel(390, 700, 292, 62);
+    const defs = mk('defs', {}, svg);
+    [[A, 'l03-tw-ca'], [B, 'l03-tw-cb']].forEach(([P, id]) => { const c = mk('clipPath', { id }, defs); mk('rect', { x: P.x0, y: P.y1, width: P.x1 - P.x0, height: P.y0 - P.y1 }, c); });
+    const frame = (P, title) => {
+      const g = mk('g', { class: 'c-grid' }, svg);
+      [0, 0.5, 1].forEach(v => {
+        mk('line', { x1: P.x0, x2: P.x1, y1: P.sy(v), y2: P.sy(v) }, g);
+        mk('line', { x1: P.sx(v), x2: P.sx(v), y1: P.y0, y2: P.y1 }, g);
+        mk('text', { x: P.sx(v), y: P.y0 + 16, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = v;
+        mk('text', { x: P.x0 - 6, y: P.sy(v) + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = v;
+      });
+      mk('line', { x1: P.x0, x2: P.x1, y1: P.sy(0), y2: P.sy(0), class: 'c-axis' }, svg);
+      mk('text', { x: (P.x0 + P.x1) / 2, y: P.y0 + 32, 'text-anchor': 'middle', class: 'c-note' }, svg).textContent = 'x';
+      mk('text', { x: P.x0, y: 20, class: 'c-title' }, svg).textContent = title;
+    };
+    const key = (x, y, style, label, box) => { if (box) mk('rect', { x, y: y - 6, width: 18, height: 10, style }, svg); else mk('line', { x1: x, x2: x + 18, y1: y, y2: y, style }, svg); mk('text', { x: x + 24, y: y + 4, class: 'c-tick' }, svg).textContent = label; };
+    frame(A, 'One tower maker (tower k)');
+    frame(B, 'Network output g(x) = sum of scaled towers');
+    key(A.x0, 38, 'stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 3', 'h₁₁');
+    key(A.x0 + 62, 38, 'stroke: var(--ink-2); stroke-width: 2; stroke-dasharray: 2 3', 'h₁₂');
+    key(A.x0 + 124, 38, 'fill: var(--accent-soft); stroke: var(--accent)', 'h₁₁ − h₁₂', true);
+    key(B.x0, 38, 'stroke: var(--ink-2); stroke-width: 2', 'f(x)');
+    key(B.x0 + 72, 38, 'stroke: var(--accent); stroke-width: 2.6', 'g(x)');
+    key(B.x0 + 144, 38, 'fill: var(--accent-soft); stroke: var(--accent)', 'tower k', true);
+    key(B.x0 + 224, 38, 'stroke: var(--muted); stroke-width: 1', 'other towers');
+    const gA = mk('g', { 'clip-path': 'url(#l03-tw-ca)' }, svg), gB = mk('g', { 'clip-path': 'url(#l03-tw-cb)' }, svg);
+    const tA = mk('path', { style: 'fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2' }, gA);
+    const h11 = mk('path', { style: 'fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 3' }, gA);
+    const h12 = mk('path', { style: 'fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-dasharray: 2 3' }, gA);
+    const others = mk('path', { style: 'fill: none; stroke: var(--muted); stroke-width: 1; opacity: .7' }, gB);
+    const tB = mk('path', { style: 'fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2' }, gB);
+    const fx = [], xs = [];
+    for (let i = 0; i <= 240; i++) { xs.push(i / 240); fx.push(f(i / 240)); }
+    mk('path', { d: pathOf(xs.map((x, i) => [B.sx(x), B.sy(fx[i])])), style: 'fill: none; stroke: var(--ink-2); stroke-width: 2' }, gB);
+    const gOut = mk('path', { style: 'fill: none; stroke: var(--accent); stroke-width: 2.6' }, gB);
+    const sW = document.getElementById('tw-w'), sN = document.getElementById('tw-n'), sK = document.getElementById('tw-k');
+    const oW = document.getElementById('tw-w-out'), oN = document.getElementById('tw-n-out'), oK = document.getElementById('tw-k-out');
+    const oB = document.getElementById('tw-b'), oH = document.getElementById('tw-hid'), oE = document.getElementById('tw-err'), status = document.getElementById('tw-status');
+    const lin = (w, b) => 'σ(' + w + 'x' + (Math.abs(b) < 1e-9 ? '' : (b < 0 ? ' − ' : ' + ') + num(Math.abs(b), 1)) + ')';
+    const closeArea = (P, pts) => pathOf(pts) + ' L' + P.sx(1).toFixed(1) + ' ' + P.sy(0).toFixed(1) + ' L' + P.sx(0).toFixed(1) + ' ' + P.sy(0).toFixed(1) + ' Z';
+    const draw = () => {
+      const w = WS[+sW.value], N = +sN.value;
+      sK.max = String(N); if (+sK.value > N) sK.value = String(N);
+      const k = +sK.value, edges = [], hs = [];
+      for (let i = 0; i <= N; i++) edges.push(i / N);
+      for (let i = 0; i < N; i++) hs.push(f((i + 0.5) / N));
+      const tower = (x, i) => sig(w * (x - edges[i])) - sig(w * (x - edges[i + 1]));
+      const a = edges[k - 1], c = edges[k];
+      h11.setAttribute('d', pathOf(xs.map(x => [A.sx(x), A.sy(sig(w * (x - a)))])));
+      h12.setAttribute('d', pathOf(xs.map(x => [A.sx(x), A.sy(sig(w * (x - c)))])));
+      tA.setAttribute('d', closeArea(A, xs.map(x => [A.sx(x), A.sy(tower(x, k - 1))])));
+      let d = '';
+      for (let i = 0; i < N; i++) if (i !== k - 1) d += pathOf(xs.map(x => [B.sx(x), B.sy(hs[i] * tower(x, i))]));
+      others.setAttribute('d', d);
+      tB.setAttribute('d', closeArea(B, xs.map(x => [B.sx(x), B.sy(hs[k - 1] * tower(x, k - 1))])));
+      const g = xs.map(x => { let s = 0; for (let i = 0; i < N; i++) s += hs[i] * tower(x, i); return s; });
+      gOut.setAttribute('d', pathOf(xs.map((x, i) => [B.sx(x), B.sy(g[i])])));
+      let err = 0; g.forEach((v, i) => { err = Math.max(err, Math.abs(v - fx[i])); });
+      oW.textContent = String(w); oN.textContent = String(N); oK.textContent = String(k);
+      oB.textContent = num(-w * a, 1) + ', ' + num(-w * c, 1); oH.textContent = String(2 * N); oE.textContent = err.toFixed(3);
+      let s = 'Tower ' + k + ' covers ' + num(a, 3) + ' ≤ x ≤ ' + num(c, 3) + ': h₁₁ = ' + lin(w, -w * a) + ', h₁₂ = ' + lin(w, -w * c) + ', with output weights +h and −h, h = f(' + num((a + c) / 2, 3) + ') = ' + num(hs[k - 1], 2) + '.';
+      if (w / N < 4) s += ' Each sigmoid needs a distance of about 4/w = ' + num(4 / w, 2) + ' to rise, more than a tower\'s width of ' + num(1 / N, 3) + ', so these towers are blurred.';
+      status.textContent = s;
+    };
+    draw();
+    [sW, sN, sK].forEach(el => el.addEventListener('input', draw));
+    document.getElementById('tw-sharp').addEventListener('click', () => { sW.value = '6'; sN.value = '40'; sK.value = '20'; draw(); });
+  })();
+})();
+</script>
+</body>
+</html>
