@@ -1,0 +1,973 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lecture 9 · Visualizing and fooling CNNs · DL Notes</title>
+<meta name="description" content="CS6910 Deep Learning (IIT Madras) notes, Lecture 9: visualizing CNNs with maximally activating patches, filters, occlusion and guided backpropagation, then optimizing over images for class images, embedding inversion, Deep Dream, Deep Art and fooling.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<style>
+.l09-in { font: 500 13px var(--font-mono); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 9px; width: min(300px, 100%); }
+.l09-in:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.l09-in[aria-invalid="true"] { border-color: var(--ink-2); border-style: dashed; }
+.dg .l09-pos { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2; }
+.dg .l09-neg { fill: var(--mark); stroke: var(--ink-2); stroke-width: 1.2; }
+.dg .l09-nil { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.2; }
+.dg .l09-blk { fill: var(--surface); stroke: var(--muted); stroke-width: 1.1; stroke-dasharray: 3 3; }
+.dg .l09-num { font: 500 12.5px var(--font-mono); fill: var(--ink); }
+.dg .l09-num.off { fill: var(--muted); }
+.dg .l09-px { fill: var(--ink); }
+.dg .l09-heat { fill: var(--accent); }
+.dg .l09-cellgrid { fill: none; stroke: var(--rule); stroke-width: 0.6; }
+.dg .l09-sel { fill: none; stroke: var(--accent); stroke-width: 2.4; }
+.dg .l09-sel-map { fill: none; stroke: var(--ink); stroke-width: 2; }
+#l09-occl-svg { cursor: crosshair; }
+#l09-occl-svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <!-- PARTNAV:START --><nav class="partnav" aria-label="Lectures"><a href="index.html">DL Notes</a><span class="sep">/</span><span>Lecture 9</span></nav><!-- PARTNAV:END -->
+    <div class="eyebrow">CS6910 · Deep Learning · IIT Madras</div>
+    <h1>Visualizing and fooling convolutional networks</h1>
+    <p class="lede">Tools for seeing what a trained CNN has learned: the patches that excite a neuron, its filters, occlusion maps, and pixel gradients sharpened by guided backpropagation. Then the backward pass is pointed at the image itself, which gives class images, reconstructions from embeddings, Deep Dream, Deep Art and images that fool the network.</p>
+    <div class="meta">
+      <span><b>Lecture 9</b></span>
+      <span>Instructor <b>Prof. Mitesh M. Khapra</b></span>
+      <span>About <b>71 min</b> of video</span>
+      <span><b>10</b> modules</span>
+    </div>
+    <div class="watch">
+      <a class="btn solid" href="https://www.cse.iitm.ac.in/~miteshk/CS7015/Slides/Teaching/pdf/Lecture13.pdf" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 0.5 H6.5 L8.5 2.5 V9.5 H2 Z"/></svg>Slides</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=nBxy_vzmO_M" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 6:35</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=XE8O5p5mceA" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 6:30</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=DaLZRH6D7wo" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 6:21</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=SPJnlFtw6h0" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 6:12</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=rcXOEzAuvu4" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 4:52</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=a4k8YorzUdI" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 10:28</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=orTNf_R5odY" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 6:20</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=YHAIrwRVvWg" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 11:18</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=gctnJbUaW08" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 5:48</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=zgfcRJYA_kk" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 6:43</a>
+    </div>
+  </div>
+</header>
+
+<div class="page gutter">
+  <nav class="toc" aria-label="Contents">
+    <div>
+      <h4>Modules 13.1–13.2 · Neurons and filters</h4>
+      <ul>
+        <li><a href="#patches">Patches that fire a neuron</a></li>
+        <li><a href="#filters">Filters as images</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Modules 13.3–13.4 · Which pixels matter</h4>
+      <ul>
+        <li><a href="#occlusion">Occlusion experiments</a></li>
+        <li><a href="#pixel-gradients">Influence by gradients</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Modules 13.5–13.6 · Gradients to pixels</h4>
+      <ul>
+        <li><a href="#guided-backprop">Guided backpropagation</a></li>
+        <li><a href="#class-images">Optimizing over images</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Modules 13.7–13.8 · Embeddings, dreams</h4>
+      <ul>
+        <li><a href="#inversion">Images from embeddings</a></li>
+        <li><a href="#deep-dream">Deep Dream</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Modules 13.9–13.10 · Art, fooling</h4>
+      <ul>
+        <li><a href="#deep-art">Deep Art</a></li>
+        <li><a href="#fooling">Fooling CNNs</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Revision</h4>
+      <ul>
+        <li><a href="#terms">Key terms</a></li>
+        <li><a href="#test">Test yourself</a></li>
+        <li><a href="index.html">All lectures</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="glance" id="glance">
+      <h2>At a glance</h2>
+      <ul>
+        <li>Four ways to look inside a trained CNN: the image <b>patches</b> that make a neuron fire, the first-layer <b>filters</b> drawn as images (the input that excites a neuron most is \(\mathbf{w}/\lVert\mathbf{w}\rVert\)), <b>occlusion</b> maps, and the <b>gradient</b> of a neuron with respect to every pixel.</li>
+        <li>Plain gradient maps are murky. <dfn>Guided backpropagation</dfn> also sets negative gradients to zero at every ReLU, so only positive influences reach the image and the map becomes sharp.</li>
+        <li>Freeze the weights and treat the <b>pixels as parameters</b>. Gradient ascent on a class score draws what the network takes that class to be; matching a layer's embedding reconstructs the image from that layer.</li>
+        <li><dfn>Deep Dream</dfn> starts from a real image and maximizes \(h_{ij}^2\), so whatever a neuron faintly sees gets painted in. <dfn>Deep Art</dfn> matches the activations of a content image and the Gram matrices (style) of a style image.</li>
+        <li>The same machinery <b>fools</b> CNNs: an invisible change turns a bus into an "ostrich", and noise images get 99.6% confidence. Boundaries fitted to a few training points also label huge empty regions of input space.</li>
+      </ul>
+    </div>
+
+    <!-- ============ MODULE 13.1 ============ -->
+    <section id="patches">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=nBxy_vzmO_M&amp;t=42s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 0:42</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=nBxy_vzmO_M&amp;t=223s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 3:43 the pool5 experiment</a>
+        </div>
+        <h2>Patches that make a neuron fire</h2>
+      </div>
+      <p>This lecture is about understanding what a trained CNN has actually learned: what its filters detect, and what kinds of images make each neuron fire. Accuracy alone does not answer that. You may want to know whether any neuron fires for the dog class at all, or whether most neurons fire for every class, which would mean they have no discriminative power. Much of the material follows Andrej Karpathy's Stanford lectures on visualization, Deep Dream, neural style and adversarial examples.</p>
+      <p>The first tool needs no new maths. In <a href="lecture-08.html">Lecture 8</a> we saw that every neuron in every layer depends on a fixed patch of the input, its <dfn>receptive field</dfn> (for some layer, say, a 16 × 16 patch). The mapping is deterministic, so for any neuron we can always find which input pixels contributed to it.</p>
+      <ol class="algo">
+        <li class="algo-title">Find the patches a neuron fires for</li>
+        <li>Pick a neuron in some layer of a trained CNN.</li>
+        <li>Pass as many images as you have (training, test, anything) through the network and record the neuron's output for each.</li>
+        <li>Keep the images where the output is high. These are ReLU neurons, which do not saturate at 1, so "fires" means a large output.</li>
+        <li>For each of them, trace the neuron back to its receptive field and look at that image patch.</li>
+      </ol>
+      <p>Girshick et al. (2014) ran this on 6 neurons of the <b>pool5</b> layer. Each neuron's top patches had a clear theme: one fired for people's faces, one for dog faces, one for flowers (in bouquets, in pots, on tables, in any orientation), one for numbers and text such as addresses, dates and signboards, one for houses, and one for shiny surfaces. Each neuron fired on the patch that contained its object, without reacting to the surroundings, so the network had learned to localize these characteristics.</p>
+      <p class="rule-of-thumb">Treat this as a debugging tool, like feeding a program different inputs. Does the network need more training? Is there a class no neuron fires for? Are two classes being confused?</p>
+    </section>
+
+    <!-- ============ MODULE 13.2 ============ -->
+    <section id="filters">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=XE8O5p5mceA&amp;t=44s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 0:44</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=XE8O5p5mceA&amp;t=202s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 3:22 filters as detectors</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=XE8O5p5mceA&amp;t=268s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 4:28 what they look like</a>
+        </div>
+        <h2>Filters as images</h2>
+      </div>
+      <p>The previous section visualized neurons, which are outputs (entries of feature maps). The weights of a CNN are its filters, and those can be visualized too. The lecture borrows an argument from autoencoders (see <a href="lecture-07.html">Lecture 7</a>): which input excites a given hidden neuron the most? The neuron computes \(\mathbf{w}^\top\mathbf{x}\) (before its activation) with its weight vector \(\mathbf{w}\), and the input is restricted to unit norm so the question has an answer:</p>
+      <div class="eq">\[ \max_{\mathbf{x}} \; \mathbf{w}^\top\mathbf{x} \quad \text{s.t.}\quad \lVert\mathbf{x}\rVert^2 = \mathbf{x}^\top\mathbf{x} = 1 \qquad\Longrightarrow\qquad \mathbf{x}^* = \frac{\mathbf{w}}{\sqrt{\mathbf{w}^\top\mathbf{w}}} = \frac{\mathbf{w}}{\lVert\mathbf{w}\rVert} \]</div>
+      <p class="note">The lecture quotes this result. One line of proof: by Cauchy–Schwarz \(\mathbf{w}^\top\mathbf{x} \le \lVert\mathbf{w}\rVert\,\lVert\mathbf{x}\rVert = \lVert\mathbf{w}\rVert\), with equality exactly when \(\mathbf{x}\) is a positive multiple of \(\mathbf{w}\).</p>
+      <p>For MNIST digits the input has 784 dimensions, and so does \(\mathbf{w}\), because 784 weights connect the pixels to the neuron. So \(\mathbf{w}/\lVert\mathbf{w}\rVert\) can be drawn as a 28 × 28 image. In the autoencoder analysis some of these images showed a curve like the one in 2, 8 or 9, others a cusp like the one in 3 or 9. Each image is the pattern that makes its neuron fire.</p>
+      <p>A CNN filter is much smaller than the image: 3 × 3, 5 × 5 or 7 × 7. Think of the CNN as a feedforward network with <b>sparse connections</b> and <b>weight sharing</b>. In the figure, neuron \(h_{11}\) sees only pixels 1, 2, 5, 6 of a 4 × 4 image and \(h_{12}\) sees pixels 3, 4, 7, 8, both through the same 2 × 2 filter \(W\). Asking what input makes such a neuron fire gives the same answer as before, now for a patch: \(W/\lVert W\rVert\). Because the filter is shared, that patch triggers it wherever it occurs in the image, which is the point of convolution, since a nose should be detected at the top corner, in the centre or at the bottom alike. So filters are <b>pattern detectors</b>.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 680 262" role="img" aria-label="Left: sixteen input pixels of a flattened 4 by 4 image; neuron h11 connects to pixels 1, 2, 5, 6 and neuron h12 to pixels 3, 4, 7, 8, both with the same filter W. Right: an illustrative filter W with entries 1, minus 1, 1, minus 1 is divided by its norm 2, giving the best unit-norm input patch, a vertical edge.">
+            <defs><marker id="l09-f1-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="20" y="22">One filter, many patches</text>
+            <line class="d-ln-acc" x1="100" y1="81" x2="31" y2="150"/><line class="d-ln-acc" x1="100" y1="81" x2="51" y2="150"/><line class="d-ln-acc" x1="100" y1="81" x2="111" y2="150"/><line class="d-ln-acc" x1="100" y1="81" x2="131" y2="150"/>
+            <line class="d-ln" x1="190" y1="81" x2="71" y2="150"/><line class="d-ln" x1="190" y1="81" x2="91" y2="150"/><line class="d-ln" x1="190" y1="81" x2="151" y2="150"/><line class="d-ln" x1="190" y1="81" x2="171" y2="150"/>
+            <circle class="node-acc" cx="100" cy="64" r="17"/><text class="d-s" x="100" y="68" text-anchor="middle">h₁₁</text>
+            <circle class="node" cx="190" cy="64" r="17"/><text class="d-s" x="190" y="68" text-anchor="middle">h₁₂</text>
+            <text class="d-t" x="48" y="112" style="fill: var(--accent)">W</text>
+            <text class="d-t" x="198" y="112">W</text>
+            <rect class="d-box-acc" x="22" y="150" width="18" height="20"/><rect class="d-box-acc" x="42" y="150" width="18" height="20"/>
+            <rect class="d-box" x="62" y="150" width="18" height="20" style="stroke-width:1.8"/><rect class="d-box" x="82" y="150" width="18" height="20" style="stroke-width:1.8"/>
+            <rect class="d-box-acc" x="102" y="150" width="18" height="20"/><rect class="d-box-acc" x="122" y="150" width="18" height="20"/>
+            <rect class="d-box" x="142" y="150" width="18" height="20" style="stroke-width:1.8"/><rect class="d-box" x="162" y="150" width="18" height="20" style="stroke-width:1.8"/>
+            <rect class="d-off" x="182" y="150" width="18" height="20"/><rect class="d-off" x="202" y="150" width="18" height="20"/><rect class="d-off" x="222" y="150" width="18" height="20"/><rect class="d-off" x="242" y="150" width="18" height="20"/>
+            <rect class="d-off" x="262" y="150" width="18" height="20"/><rect class="d-off" x="282" y="150" width="18" height="20"/><rect class="d-off" x="302" y="150" width="18" height="20"/><rect class="d-off" x="322" y="150" width="18" height="20"/>
+            <text class="d-al" x="31" y="186" text-anchor="middle">1</text><text class="d-al" x="51" y="186" text-anchor="middle">2</text><text class="d-al" x="71" y="186" text-anchor="middle">3</text><text class="d-al" x="91" y="186" text-anchor="middle">4</text>
+            <text class="d-al" x="111" y="186" text-anchor="middle">5</text><text class="d-al" x="131" y="186" text-anchor="middle">6</text><text class="d-al" x="151" y="186" text-anchor="middle">7</text><text class="d-al" x="171" y="186" text-anchor="middle">8</text>
+            <text class="d-al" x="191" y="186" text-anchor="middle">9</text><text class="d-al" x="211" y="186" text-anchor="middle">10</text><text class="d-al" x="231" y="186" text-anchor="middle">11</text><text class="d-al" x="251" y="186" text-anchor="middle">12</text>
+            <text class="d-al" x="271" y="186" text-anchor="middle">13</text><text class="d-al" x="291" y="186" text-anchor="middle">14</text><text class="d-al" x="311" y="186" text-anchor="middle">15</text><text class="d-al" x="331" y="186" text-anchor="middle">16</text>
+            <text class="d-s" x="22" y="212">pixels of a 4 × 4 image, flattened row by row</text>
+            <text class="d-s" x="22" y="230">h₁₁ sees 1, 2, 5, 6 and h₁₂ sees 3, 4, 7, 8,</text>
+            <text class="d-s" x="22" y="248">both through the same 2 × 2 filter W</text>
+
+            <line class="d-rule" x1="365" y1="10" x2="365" y2="252"/>
+
+            <text class="d-h" x="390" y="22">Best input patch for a filter</text>
+            <rect class="l09-pos" x="395" y="60" width="40" height="40"/><rect class="l09-neg" x="435" y="60" width="40" height="40"/>
+            <rect class="l09-pos" x="395" y="100" width="40" height="40"/><rect class="l09-neg" x="435" y="100" width="40" height="40"/>
+            <text class="d-t" x="415" y="85" text-anchor="middle">1</text><text class="d-t" x="455" y="85" text-anchor="middle">−1</text>
+            <text class="d-t" x="415" y="125" text-anchor="middle">1</text><text class="d-t" x="455" y="125" text-anchor="middle">−1</text>
+            <text class="d-s" x="435" y="160" text-anchor="middle">filter W (illustrative)</text>
+            <line class="d-ln" x1="488" y1="100" x2="542" y2="100" marker-end="url(#l09-f1-ah)"/>
+            <text class="d-s" x="515" y="90" text-anchor="middle">÷ ‖W‖ = 2</text>
+            <rect class="l09-pos" x="555" y="60" width="40" height="40"/><rect class="l09-neg" x="595" y="60" width="40" height="40"/>
+            <rect class="l09-pos" x="555" y="100" width="40" height="40"/><rect class="l09-neg" x="595" y="100" width="40" height="40"/>
+            <text class="d-t" x="575" y="85" text-anchor="middle">0.5</text><text class="d-t" x="615" y="85" text-anchor="middle">−0.5</text>
+            <text class="d-t" x="575" y="125" text-anchor="middle">0.5</text><text class="d-t" x="615" y="125" text-anchor="middle">−0.5</text>
+            <text class="d-s" x="595" y="160" text-anchor="middle">x* = W / ‖W‖</text>
+            <text class="d-s" x="390" y="200">High values on the left, low on the right:</text>
+            <text class="d-s" x="390" y="218">a vertical edge. Every other unit-norm</text>
+            <text class="d-s" x="390" y="236">patch gives this filter a smaller response.</text>
+          </svg>
+        </div>
+        <figcaption><b>Filters are pattern detectors.</b> Left: as in the slide, two neurons look at different 2 × 2 patches of a 4 × 4 image through the same weights. Right: for an illustrative filter (shaded cells positive, marked cells negative), the unit-norm patch that maximizes the response is \(W/\lVert W\rVert\), here a vertical edge. Because \(W\) is shared, that edge fires the filter wherever it appears.</figcaption>
+      </figure>
+
+      <p>So we can simply plot each \(K \times K\) filter as an image. For the first convolution layer of a trained network the plots show edges at various orientations (slanted, vertical and others), coloured blobs and textures, even a checkerboard pattern. You want this variety. If the filters all look alike, they are not learning to tell different patterns apart, and something is wrong.</p>
+      <p class="callout">The slides add a claim with a question: this view is only interpretable for the filters of the <b>first</b> convolution layer. Why? The lecture leaves it as a quiz; an answer is in <a href="#test">Test yourself</a>.</p>
+    </section>
+
+    <!-- ============ MODULE 13.3 ============ -->
+    <section id="occlusion">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=DaLZRH6D7wo&amp;t=79s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 1:19</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=DaLZRH6D7wo&amp;t=156s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 2:36 the heat map</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=DaLZRH6D7wo&amp;t=224s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 3:44 redundant features</a>
+        </div>
+        <h2>Occlusion experiments</h2>
+      </div>
+      <p>The next debugging tool asks which portions of an image are responsible for the probability of a class. Insights like these help with design choices, for example whether 5 × 5 or 7 × 7 filters suit your data. Most users will train an off-the-shelf CNN and report accuracy; these tools are for understanding what is going on and how to improve it, and some appear in the assignment.</p>
+      <p>The idea is the usual way to judge a factor's influence: remove it and see whether the output changes. In a movie-review classifier, dropping words like "amazing" and "great" should lower the probability of the positive label (say from 0.9 to 0.6), while dropping "the", "and" or "for" should change little.</p>
+      <ol class="algo">
+        <li class="algo-title">Occlusion map</li>
+        <li>Feed the image and note the predicted probability of the true class (for example "Pomeranian").</li>
+        <li>Replace one patch of the image by a gray patch and feed the occluded image again. Record the new probability of the true class.</li>
+        <li>Repeat for patches at every location you like.</li>
+        <li>Plot the probabilities as a heat map over patch positions. In the slide's maps, red regions cause little drop when occluded and blue regions a large drop.</li>
+      </ol>
+      <p>The slide shows three cases, from the figure in Zeiler and Fergus (2014):</p>
+      <ul>
+        <li><b>Pomeranian.</b> Covering the dog's face drops the probability the most. That is what we would want: the network is using facial features and not guessing.</li>
+        <li><b>Car wheel.</b> The instructor expected the wheel itself to matter most, and occluding it does not cause a drastic drop. One reading is that the network has learned <b>redundant features</b>, which is good: a face detector should use the nose, ears, hair and eyes, so hiding one part should not destroy it. Here, though, the drop is concentrated on another single region (he reads it as the rear-view mirror), which suggests heavy reliance on one feature and less robustness.</li>
+        <li><b>Afghan hound.</b> Occluding the <i>woman's face</i> lowers the probability. The network has probably learned a wrong association, for example if many training images showed the dog being held by a woman. Given two networks, prefer the one whose map points at the dog.</li>
+      </ul>
+
+      <figure id="occl-fig">
+        <div class="controls">
+          <label for="occl-k">Gray patch size</label>
+          <input type="range" id="occl-k" min="1" max="6" step="1" value="3">
+          <output id="occl-k-out" for="occl-k">3 × 3</output>
+          <button class="btn" id="occl-best" type="button">Jump to largest drop</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">p(face), clean image</span><span class="v" id="occl-p0">–</span></div>
+          <div><span class="k">p(face), patch here</span><span class="v mine" id="occl-p">–</span></div>
+          <div><span class="k">Drop</span><span class="v" id="occl-drop">–</span></div>
+        </div>
+        <div class="status" id="occl-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="l09-occl-svg" class="dg" viewBox="0 0 640 336" role="img" tabindex="0" aria-label="Left: a synthetic 12 by 12 image with two bright dots for eyes, a bar for a mouth and a small block for a ball, with the occluding gray patch outlined. Right: the occlusion map, where more strongly coloured cells mean a larger drop in the toy scorer's probability when the patch is centred there."></svg></div>
+        <figcaption><b>An occlusion map you can probe (synthetic image, toy scorer).</b> The 12 × 12 image has two eyes, a mouth and a 2 × 2 "ball" in the lower-left corner as a distractor (the slide's Pomeranian has a tennis ball). The scorer, written for these notes, has two hand-set detectors, each max-pooled over the image: an eye detector (a pixel whose value exceeds its left and right neighbours) and a mouth detector (a bar of four high-valued pixels with lower rows above and below). Pixel values are drawn as ink density, and the gray patch has value 0.5. It outputs \(p = \sigma(6\,f_{\text{eye}} + 6\,f_{\text{mouth}} - 5.4)\). Hover over or click either panel (or use the arrow keys) to place the gray patch. Hiding one eye barely matters because the other eye still gives the eye detector its maximum: a redundant feature. Hiding the only mouth always hurts. Make the patch 5 × 5 to cover both eyes at once.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ============ MODULE 13.4 ============ -->
+    <section id="pixel-gradients">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=SPJnlFtw6h0&amp;t=43s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 0:43</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=SPJnlFtw6h0&amp;t=148s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 2:28 gradients as an image</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=SPJnlFtw6h0&amp;t=243s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 4:03 computing them</a>
+        </div>
+        <h2>Influence of input pixels, by backpropagation</h2>
+      </div>
+      <p>So far we have visualized neurons, visualized weights and occluded parts of the input. Now we want a principled measure of how much each <i>pixel</i> influences the output, or any neuron in an intermediate layer. The course's usual tool for influence is the gradient.</p>
+      <p>Flatten the image into \(m \times n\) inputs \(x_0, x_1, \dots, x_{mn}\). The influence of input \(x_i\) on a neuron \(h_j\) is \(\partial h_j / \partial x_i\): if a small change in \(x_i\) causes a large change in \(h_j\), then \(x_i\) has a lot of influence on \(h_j\).</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>\(\partial h_j/\partial x_i\)</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td>\(= 0\)</td><td>no influence</td></tr>
+            <tr><td>small</td><td>low influence</td></tr>
+            <tr><td>large</td><td>high influence</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Compute this partial derivative for all \(mn\) inputs, \(\partial h_j/\partial x_0, \dots, \partial h_j/\partial x_{mn}\), and display the resulting gradient matrix as an image. If gray stands for 0, the image should be <b>mostly gray</b>. A specialized neuron should depend on a small patch of pixels; if every pixel influenced it, it would not be discriminating anything. Standard name: such a picture is often called a <dfn>saliency map</dfn>.</p>
+      <p>How do we get gradients with respect to the input? Backpropagation (<a href="lecture-04.html">Lecture 4</a>) always stopped at the weights of the first layer, but nothing in the chain rule forbids one more link. If we called the input \(\mathbf{h}_0\) instead of \(\mathbf{x}\), it would be just another layer. Treat the CNN as a feedforward network with sparse connections and sum over every path from the pixel to the neuron. For the neuron \(h_{32}\) in the slide and pixel \(x_2\), three first-layer neurons \(h_{1i}\) lie on such paths:</p>
+      <div class="eq">\[ \frac{\partial h_{32}}{\partial x_2} = \sum_{i=1}^{3} \frac{\partial h_{32}}{\partial h_{1i}}\,\frac{\partial h_{1i}}{\partial x_2}, \qquad h_{1i} = \sum_{j=1}^{4} w_{ji}\,x_j \;\;\Longrightarrow\;\; \frac{\partial h_{1i}}{\partial x_2} = w_{2i} \]</div>
+      <p class="note">The slide writes the first layer as a plain weighted sum. With a ReLU on top, each \(\partial h_{1i}/\partial x_2\) also picks up the ReLU's derivative, 1 if the unit was active and 0 if not. That factor is what the next section modifies.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 720 290" role="img" aria-label="Flattened input pixels x0 to x8 at the bottom, six first-layer neurons h11 to h16 in the middle and one neuron h32 at the top. Three highlighted paths go from h32 down through h11, h12 and h13 to x2. The edges from h1i to x2 carry the weights w21, w22 and w23.">
+            <defs><marker id="l09-f2-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <g class="d-ln-mut">
+              <line x1="153" y1="177" x2="60" y2="235"/><line x1="153" y1="177" x2="122" y2="235"/><line x1="153" y1="177" x2="246" y2="235"/>
+              <line x1="215" y1="177" x2="122" y2="235"/><line x1="215" y1="177" x2="246" y2="235"/><line x1="215" y1="177" x2="308" y2="235"/>
+              <line x1="277" y1="177" x2="246" y2="235"/><line x1="277" y1="177" x2="308" y2="235"/><line x1="277" y1="177" x2="370" y2="235"/>
+              <line x1="339" y1="177" x2="246" y2="235"/><line x1="339" y1="177" x2="308" y2="235"/><line x1="339" y1="177" x2="370" y2="235"/><line x1="339" y1="177" x2="432" y2="235"/>
+              <line x1="401" y1="177" x2="308" y2="235"/><line x1="401" y1="177" x2="370" y2="235"/><line x1="401" y1="177" x2="432" y2="235"/><line x1="401" y1="177" x2="494" y2="235"/>
+              <line x1="463" y1="177" x2="370" y2="235"/><line x1="463" y1="177" x2="432" y2="235"/><line x1="463" y1="177" x2="494" y2="235"/><line x1="463" y1="177" x2="556" y2="235"/>
+            </g>
+            <line class="d-ln-acc" x1="153" y1="177" x2="181" y2="233" marker-end="url(#l09-f2-ah)"/>
+            <line class="d-ln-acc" x1="215" y1="177" x2="188" y2="233" marker-end="url(#l09-f2-ah)"/>
+            <line class="d-ln-acc" x1="277" y1="177" x2="194" y2="233" marker-end="url(#l09-f2-ah)"/>
+            <line class="d-ln-acc" x1="215" y1="79" x2="157" y2="142" marker-end="url(#l09-f2-ah)"/>
+            <line class="d-ln-acc" x1="215" y1="79" x2="215" y2="141" marker-end="url(#l09-f2-ah)"/>
+            <line class="d-ln-acc" x1="215" y1="79" x2="272" y2="142" marker-end="url(#l09-f2-ah)"/>
+            <circle class="node" cx="60" cy="250" r="15"/><circle class="node" cx="122" cy="250" r="15"/><circle class="node-acc" cx="184" cy="250" r="15"/><circle class="node" cx="246" cy="250" r="15"/><circle class="node" cx="308" cy="250" r="15"/>
+            <circle class="node" cx="370" cy="250" r="15"/><circle class="node" cx="432" cy="250" r="15"/><circle class="node" cx="494" cy="250" r="15"/><circle class="node" cx="556" cy="250" r="15"/>
+            <text class="d-s" x="60" y="254" text-anchor="middle">x₀</text><text class="d-s" x="122" y="254" text-anchor="middle">x₁</text><text class="d-s" x="184" y="254" text-anchor="middle">x₂</text><text class="d-s" x="246" y="254" text-anchor="middle">x₃</text><text class="d-s" x="308" y="254" text-anchor="middle">x₄</text>
+            <text class="d-s" x="370" y="254" text-anchor="middle">x₅</text><text class="d-s" x="432" y="254" text-anchor="middle">x₆</text><text class="d-s" x="494" y="254" text-anchor="middle">x₇</text><text class="d-s" x="556" y="254" text-anchor="middle">x₈</text>
+            <circle class="node-acc" cx="153" cy="160" r="17"/><circle class="node-acc" cx="215" cy="160" r="17"/><circle class="node-acc" cx="277" cy="160" r="17"/>
+            <circle class="node" cx="339" cy="160" r="17"/><circle class="node" cx="401" cy="160" r="17"/><circle class="node" cx="463" cy="160" r="17"/>
+            <text class="d-s" x="153" y="164" text-anchor="middle">h₁₁</text><text class="d-s" x="215" y="164" text-anchor="middle">h₁₂</text><text class="d-s" x="277" y="164" text-anchor="middle">h₁₃</text>
+            <text class="d-s" x="339" y="164" text-anchor="middle">h₁₄</text><text class="d-s" x="401" y="164" text-anchor="middle">h₁₅</text><text class="d-s" x="463" y="164" text-anchor="middle">h₁₆</text>
+            <circle class="node-acc" cx="215" cy="62" r="17"/><text class="d-s" x="215" y="66" text-anchor="middle">h₃₂</text>
+            <text class="d-s" x="178" y="104" text-anchor="end" style="fill: var(--accent)">∂h₃₂/∂h₁₁</text>
+            <text class="d-s" x="252" y="104" style="fill: var(--accent)">∂h₃₂/∂h₁₃</text>
+            <text class="d-row" x="244" y="58">neuron of interest</text>
+            <text class="d-row" x="492" y="164">first hidden layer</text>
+            <text class="d-row" x="584" y="254">input pixels</text>
+            <text class="d-t" x="470" y="54">Three paths from x₂ up to h₃₂</text>
+            <text class="d-s" x="470" y="74">each contributes (∂h₃₂/∂h₁ᵢ) · w₂ᵢ;</text>
+            <text class="d-s" x="470" y="92">the gradient is their sum</text>
+            <text class="d-s" x="470" y="114">lower accent edges carry w₂₁, w₂₂, w₂₃</text>
+            <text class="d-s" x="470" y="132">arrows: direction of the backward pass</text>
+          </svg>
+        </div>
+        <figcaption><b>One more link in the chain.</b> Gradients already reach the first hidden layer; multiplying by the weights \(w_{2i}\) carries them to pixel \(x_2\). Doing this for every pixel gives the gradient image. Faint lines are the other sparse connections (each first-layer neuron sees four neighbouring pixels).</figcaption>
+      </figure>
+
+      <p>The resulting gradient image of a cat is murky. Most of it is gray, as expected, but nothing stands out. The whole cat region is non-gray, where we would have liked, say, only the eye pixels to light up for some neuron. Plain gradients do not show sharp influences. Springenberg et al. proposed <b>guided backpropagation</b>, which gives a better picture <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=SPJnlFtw6h0&amp;t=280s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:40</a>.</p>
+    </section>
+
+    <!-- ============ MODULE 13.5 ============ -->
+    <section id="guided-backprop">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=rcXOEzAuvu4&amp;t=12s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 0:12</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=rcXOEzAuvu4&amp;t=82s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 1:22 dead ReLUs</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=rcXOEzAuvu4&amp;t=113s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 1:53 the guided rule</a>
+        </div>
+        <h2>Guided backpropagation</h2>
+      </div>
+      <p>The lecture calls the idea a bit hacky and heuristic, but it works well. The setting:</p>
+      <ol class="algo">
+        <li class="algo-title">Influence of the input on one neuron</li>
+        <li>Feed an image to the CNN and do a forward pass.</li>
+        <li>Pick one neuron in some feature map at some layer (the slide uses a 2 × 2 feature map \(\begin{bmatrix}1&amp;0\\3&amp;2\end{bmatrix}\) and the entry 2).</li>
+        <li>Keep that neuron and set all other neurons in the layer to zero, giving \(\begin{bmatrix}0&amp;0\\0&amp;2\end{bmatrix}\). We care only about this neuron's influence.</li>
+        <li>Backpropagate all the way to the image, giving \(\partial h / \partial i_1, \partial h / \partial i_2, \dots\) for every pixel.</li>
+      </ol>
+      <p>On the way back, every ReLU matters. In the forward pass a ReLU lets positive values through and clamps negative values to zero. In the backward pass no gradient flows through such dead ReLU units (<a href="lecture-07.html">Lecture 7</a>), so only the gradients at positions whose forward input was positive pass down. That is ordinary backpropagation.</p>
+      <p>Guided backpropagation applies the same idea to the gradients themselves: the forward pass does not let negative values go forward, so in the backward pass do not let <b>negative gradients</b> go back. Any gradient arriving from the layer above that is negative is also clamped to zero. Here is the slide's example at one ReLU layer, with \(f^l\) the ReLU's input and \(R^{l+1}\) the gradient arriving from above:</p>
+      <div class="eq">\[ f^{l} = \begin{bmatrix} 1 &amp; -1 &amp; 5\\ 2 &amp; -5 &amp; -7\\ -3 &amp; 2 &amp; 4 \end{bmatrix} \;\xrightarrow{\ \text{ReLU}\ }\; f^{l+1} = \begin{bmatrix} 1 &amp; 0 &amp; 5\\ 2 &amp; 0 &amp; 0\\ 0 &amp; 2 &amp; 4 \end{bmatrix}, \qquad R^{l+1} = \begin{bmatrix} -2 &amp; 3 &amp; -1\\ 6 &amp; -3 &amp; 1\\ 2 &amp; -1 &amp; 3 \end{bmatrix} \]</div>
+      <div class="eq">\[ R^{l}_{\text{backprop}} = \begin{bmatrix} -2 &amp; 0 &amp; -1\\ 6 &amp; 0 &amp; 0\\ 0 &amp; -1 &amp; 3 \end{bmatrix}, \qquad R^{l}_{\text{guided}} = \begin{bmatrix} 0 &amp; 0 &amp; 0\\ 6 &amp; 0 &amp; 0\\ 0 &amp; 0 &amp; 3 \end{bmatrix} \]</div>
+      <p>Backprop zeroes the entries where \(f^l \le 0\) (the dead units). Guided backprop also zeroes the entries where \(R^{l+1} \le 0\), so of the slide's nine gradients only 6 and 3 survive.</p>
+      <div class="result">
+        <span class="lbl">The backward rules through a ReLU, entry by entry (\(\mathbb{I}[\cdot]\) is 1 when true, 0 otherwise)</span>
+        \[ \text{backprop: } R^{l}_i = \mathbb{I}[f^{l}_i &gt; 0]\; R^{l+1}_i \qquad\quad \text{guided: } R^{l}_i = \mathbb{I}[f^{l}_i &gt; 0]\;\mathbb{I}[R^{l+1}_i &gt; 0]\; R^{l+1}_i \]
+        <p>Guided backpropagation is applied at every ReLU on the way down to the image.</p>
+      </div>
+      <p class="note">Not in the video: the figure this slide borrows from Springenberg et al. (2014) also has a "deconvnet" row (the method of Zeiler and Fergus), which keeps only the positive gradients and ignores the forward pass: \(R^{l}_i = \mathbb{I}[R^{l+1}_i &gt; 0]\,R^{l+1}_i\). On the slide's numbers it gives \(\begin{bmatrix}0&amp;3&amp;0\\6&amp;0&amp;1\\2&amp;0&amp;3\end{bmatrix}\). Guided backpropagation is the combination of both masks.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 690 214" role="img" aria-label="Three two-by-two tables, one per rule. Rows: forward input f positive or not. Columns: upstream gradient R positive or not. Backprop keeps R in the f positive row. Deconvnet keeps R in the R positive column. Guided backprop keeps R only when both are positive.">
+            <text class="d-h" x="15" y="22">Backpropagation</text>
+            <text class="d-al" x="118" y="56" text-anchor="middle">R &gt; 0</text><text class="d-al" x="182" y="56" text-anchor="middle">R ≤ 0</text>
+            <text class="d-al" x="80" y="90" text-anchor="end">f &gt; 0</text><text class="d-al" x="80" y="134" text-anchor="end">f ≤ 0</text>
+            <rect class="b-ok" x="88" y="64" width="60" height="40"/><rect class="b-ok" x="152" y="64" width="60" height="40"/>
+            <rect class="d-off" x="88" y="108" width="60" height="40"/><rect class="d-off" x="152" y="108" width="60" height="40"/>
+            <text class="d-t" x="118" y="89" text-anchor="middle">keep R</text><text class="d-t" x="182" y="89" text-anchor="middle">keep R</text>
+            <text class="d-t t-off" x="118" y="133" text-anchor="middle">0</text><text class="d-t t-off" x="182" y="133" text-anchor="middle">0</text>
+            <text class="d-s" x="15" y="176">keeps R where the ReLU was on</text>
+            <text class="d-s" x="15" y="194">(the true gradient)</text>
+
+            <line class="d-rule" x1="232" y1="10" x2="232" y2="204"/>
+
+            <text class="d-h" x="247" y="22">Deconvnet</text>
+            <text class="d-al" x="350" y="56" text-anchor="middle">R &gt; 0</text><text class="d-al" x="414" y="56" text-anchor="middle">R ≤ 0</text>
+            <text class="d-al" x="312" y="90" text-anchor="end">f &gt; 0</text><text class="d-al" x="312" y="134" text-anchor="end">f ≤ 0</text>
+            <rect class="b-ok" x="320" y="64" width="60" height="40"/><rect class="d-off" x="384" y="64" width="60" height="40"/>
+            <rect class="b-ok" x="320" y="108" width="60" height="40"/><rect class="d-off" x="384" y="108" width="60" height="40"/>
+            <text class="d-t" x="350" y="89" text-anchor="middle">keep R</text><text class="d-t t-off" x="414" y="89" text-anchor="middle">0</text>
+            <text class="d-t" x="350" y="133" text-anchor="middle">keep R</text><text class="d-t t-off" x="414" y="133" text-anchor="middle">0</text>
+            <text class="d-s" x="247" y="176">keeps R where R is positive</text>
+            <text class="d-s" x="247" y="194">(ignores the forward pass)</text>
+
+            <line class="d-rule" x1="464" y1="10" x2="464" y2="204"/>
+
+            <text class="d-h" x="479" y="22">Guided backpropagation</text>
+            <text class="d-al" x="582" y="56" text-anchor="middle">R &gt; 0</text><text class="d-al" x="646" y="56" text-anchor="middle">R ≤ 0</text>
+            <text class="d-al" x="544" y="90" text-anchor="end">f &gt; 0</text><text class="d-al" x="544" y="134" text-anchor="end">f ≤ 0</text>
+            <rect class="b-ok" x="552" y="64" width="60" height="40"/><rect class="d-off" x="616" y="64" width="60" height="40"/>
+            <rect class="d-off" x="552" y="108" width="60" height="40"/><rect class="d-off" x="616" y="108" width="60" height="40"/>
+            <text class="d-t" x="582" y="89" text-anchor="middle">keep R</text><text class="d-t t-off" x="646" y="89" text-anchor="middle">0</text>
+            <text class="d-t t-off" x="582" y="133" text-anchor="middle">0</text><text class="d-t t-off" x="646" y="133" text-anchor="middle">0</text>
+            <text class="d-s" x="479" y="176">keeps R only where both hold</text>
+            <text class="d-s" x="479" y="194">(backprop, then drop negatives)</text>
+          </svg>
+        </div>
+        <figcaption><b>The ReLU gradient rule, three ways.</b> \(f\) is the ReLU's input in the forward pass and \(R\) the gradient arriving from the layer above. Each cell says whether \(R\) is passed down unchanged or replaced by 0. Only the left table is the true derivative.</figcaption>
+      </figure>
+
+      <figure id="relu-fig">
+        <div class="controls">
+          <label for="relu-f">Forward input fˡ (9 numbers, row by row)</label>
+          <input type="text" class="l09-in" id="relu-f" value="1, -1, 5, 2, -5, -7, -3, 2, 4" spellcheck="false" autocomplete="off">
+          <output id="relu-f-out" for="relu-f">9 values</output>
+          <label for="relu-r">Gradient from above Rˡ⁺¹</label>
+          <input type="text" class="l09-in" id="relu-r" value="-2, 3, -1, 6, -3, 1, 2, -1, 3" spellcheck="false" autocomplete="off">
+          <output id="relu-r-out" for="relu-r">9 values</output>
+          <button class="btn" id="relu-slide" type="button">Slide example</button>
+          <button class="btn" id="relu-rand" type="button">Random values</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">Backprop passes</span><span class="v" id="relu-n-bp">–</span></div>
+          <div><span class="k">Deconvnet passes</span><span class="v" id="relu-n-dc">–</span></div>
+          <div><span class="k">Guided passes</span><span class="v mine" id="relu-n-gb">–</span></div>
+        </div>
+        <div class="status" id="relu-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="l09-relu-svg" class="dg" viewBox="0 0 680 372" role="img" aria-label="Top row: the forward input to a ReLU, its output, and the gradient arriving from the layer above, each a 3 by 3 grid. Bottom row: the gradient passed down by plain backpropagation, by the deconvnet rule and by guided backpropagation, with blocked entries drawn dashed."></svg></div>
+        <figcaption><b>Edit the numbers and compare the three rules.</b> It starts from the slide's example. Colours follow the legend, and dashed cells were blocked (set to 0) by that rule. Guided backpropagation always passes a subset of what plain backpropagation passes: the positive part.</figcaption>
+      </figure>
+
+      <p>The intuition: there may be pixels that really influence the neuron, but positive and negative gradients flowing back through many paths cancel each other, so most influences come out near zero (the mostly gray image). Neglecting all negative influences and keeping only the positive ones should give a better picture of the true influence of the input <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=rcXOEzAuvu4&amp;t=154s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:34</a>.</p>
+      <p>The lecture calls this heuristic because it messes with the maths: the correct gradient must flow back whether it is positive or negative, so the guided map is no longer \(\partial h/\partial \mathbf{x}\). Its justification is the analogy with the forward ReLU plus the cancellation argument. In practice the result on the cat is much sharper. It concentrates on the eyes, and the layout of the cat is far clearer than in the plain gradient image. Guided backpropagation is a popular tool for understanding what a CNN does, and one you implement in the assignment.</p>
+    </section>
+
+    <!-- ============ MODULE 13.6 ============ -->
+    <section id="class-images">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=a4k8YorzUdI&amp;t=12s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 0:12</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=a4k8YorzUdI&amp;t=214s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 3:34 the objective</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=a4k8YorzUdI&amp;t=277s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 4:37 the algorithm</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=a4k8YorzUdI&amp;t=379s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 6:19 results</a>
+        </div>
+        <h2>Optimization over images</h2>
+      </div>
+      <p>Take a trained CNN that distinguishes \(k\) classes. What image should we feed it so that it is recognized as a <b>dumbbell</b> (or an ostrich, or a car)? This sounds like an odd goal, but it is the seed of <b>adversarial machine learning</b>. If the \(k\) classes were \(k\) people in a face-recognition system, someone might want to know what image gets them recognized as a famous person. A milder use: an automatic check of whether a product looks like a dumbbell.</p>
+      <p>The answer reuses everything we know about training, with the roles swapped. Training keeps the image fixed and changes the weights, \(W \leftarrow W - \eta\,\partial\mathcal{L}/\partial W\). Here we <b>keep the weights of the trained network fixed</b> and treat the image itself as the parameter matrix: start from a blank (zero, gray) image and adjust its pixels \(I = (i_0, i_1, \dots, i_{mn})\) so that the score of the class goes up.</p>
+      <div class="result">
+        <span class="lbl">Optimization problem over the pixels</span>
+        \[ I^* = \arg\max_{I}\; \big(S_c(I) - \lambda\,\Omega(I)\big) \]
+        <p>\(S_c(I)\) is the score of class \(c\) <b>before</b> the softmax, and \(\Omega(I)\) is some regularizer that makes \(I\) look like an image. This is the usual training objective plus a regularizer, with \(I\) as the parameters where we used to have \(W, \mathbf{b}\).</p>
+      </div>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 640 292" role="img" aria-label="Top row, training: a fixed image goes into a network whose weights are updated by the gradient of the loss. Bottom row, optimizing over the image: the image pixels are the parameters, the same network is frozen, and the gradient of the class score flows all the way back to the pixels.">
+            <defs>
+              <marker id="l09-f4-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="l09-f4-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <text class="d-row" x="20" y="26">Training the network (Lectures 3–4)</text>
+            <rect class="d-box" x="20" y="38" width="150" height="54" rx="6"/>
+            <text class="d-t" x="95" y="61" text-anchor="middle">image x</text><text class="d-s" x="95" y="80" text-anchor="middle">fixed training data</text>
+            <line class="d-ln" x1="170" y1="65" x2="208" y2="65" marker-end="url(#l09-f4-ah)"/>
+            <rect class="d-box-acc" x="210" y="38" width="190" height="54" rx="6"/>
+            <text class="d-t" x="305" y="61" text-anchor="middle">network weights W</text><text class="d-s" x="305" y="80" text-anchor="middle">updated</text>
+            <line class="d-ln" x1="400" y1="65" x2="438" y2="65" marker-end="url(#l09-f4-ah)"/>
+            <rect class="d-box" x="440" y="38" width="150" height="54" rx="6"/>
+            <text class="d-t" x="515" y="61" text-anchor="middle">loss L</text><text class="d-s" x="515" y="80" text-anchor="middle">e.g. cross-entropy</text>
+            <path class="d-ln-acc d-dash" d="M515 92 L515 110 L305 110 L305 95" marker-end="url(#l09-f4-aha)"/>
+            <text class="d-s" x="410" y="128" text-anchor="middle" style="fill: var(--accent)">W ← W − η ∂L/∂W</text>
+
+            <line class="d-rule" x1="20" y1="146" x2="620" y2="146"/>
+
+            <text class="d-row" x="20" y="172">Optimizing over the image (this lecture)</text>
+            <rect class="d-box-acc" x="20" y="184" width="150" height="54" rx="6"/>
+            <text class="d-t" x="95" y="207" text-anchor="middle">image I</text><text class="d-s" x="95" y="226" text-anchor="middle">pixels = parameters</text>
+            <line class="d-ln" x1="170" y1="211" x2="208" y2="211" marker-end="url(#l09-f4-ah)"/>
+            <rect class="d-off" x="210" y="184" width="190" height="54" rx="6"/>
+            <text class="d-t" x="305" y="207" text-anchor="middle">same network</text><text class="d-s t-off" x="305" y="226" text-anchor="middle">weights frozen</text>
+            <line class="d-ln" x1="400" y1="211" x2="438" y2="211" marker-end="url(#l09-f4-ah)"/>
+            <rect class="d-box" x="440" y="184" width="150" height="54" rx="6"/>
+            <text class="d-t" x="515" y="207" text-anchor="middle">objective</text><text class="d-s" x="515" y="226" text-anchor="middle">e.g. class score S<tspan dy="3" style="font-size:9px">c</tspan><tspan dy="-3">(I)</tspan></text>
+            <path class="d-ln-acc d-dash" d="M515 238 L515 258 L95 258 L95 241" marker-end="url(#l09-f4-aha)"/>
+            <text class="d-s" x="305" y="278" text-anchor="middle" style="fill: var(--accent)">I ← I + η ∂S<tspan dy="3" style="font-size:9px">c</tspan><tspan dy="-3">/∂I  (ascent; the network is only passed through)</tspan></text>
+          </svg>
+        </div>
+        <figcaption><b>Same backward pass, different parameters.</b> Top: training moves the weights. Bottom: the network is frozen and the gradient continues past the first layer into the pixels, exactly as in the gradient image of the previous sections. Everything from here to the end of the lecture uses the bottom row with a different objective.</figcaption>
+      </figure>
+
+      <ol class="algo">
+        <li class="algo-title">Class image by gradient steps on the pixels (slide version)</li>
+        <li>Start with a zero image.</li>
+        <li>Set the score vector to \([0, 0, \dots, 1, \dots, 0, 0]\): 1 for the class of interest, 0 elsewhere. This seeds the backward pass so that it computes the gradient of \(S_c\) alone.</li>
+        <li>Compute the gradient \(\partial S_c(I)/\partial i_k\) for every pixel \(i_k\).</li>
+        <li>Update every pixel, \(i_k \leftarrow i_k + \eta\,\partial S_c(I)/\partial i_k\).</li>
+        <li>Do a forward pass through the network again with the modified image.</li>
+        <li>Go to step 2. Stop at convergence, whatever you define it to be, for example once the class gets a score of 0.9 or 0.95 instead of 1.</li>
+      </ol>
+      <p class="note">The slide writes step 4 as \(i_k = i_k - \eta\,\partial S_c(I)/\partial i_k\), the gradient descent form. Since the score is to be maximized, the step must go along the gradient (equivalently, descend on \(-S_c\)); the same applies to the neuron version below.</p>
+      <p>The results are strange (the images are from Simonyan et al., 2013, a source the slide does not name). For <b>dumbbell</b>, starting from the zero image, many dumbbell-like shapes appear in different orientations. The colours are nothing like real dumbbells, and the network is being redundant: it draws many dumbbells so that some of them make the output fire. <b>Cup</b> gives several trophy-like cups, <b>dalmatian</b> gives black and white spots and dog-like shapes, and <b>bell pepper</b>, <b>lemon</b> and <b>husky</b> are similar. The shapes of the object show up, but nowhere is there a clear image a person would call that object <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=a4k8YorzUdI&amp;t=418s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>6:58</a>.</p>
+      <p>This is nothing to be impressed by. The network assigns these arbitrary images to "dalmatian", so anyone could upload such an image as a dalmatian and an automated system would accept it. These images can later be used to fool the network (<a href="#fooling">Module 13.10</a>).</p>
+
+      <h3>Any neuron, not just a class <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=a4k8YorzUdI&amp;t=514s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 8:34</a></h3>
+      <p>The output score is just one neuron. The same procedure works for an arbitrary neuron anywhere in the CNN, with \(A(I)\) the activation of the chosen neuron in some layer:</p>
+      <ol class="algo">
+        <li class="algo-title">Image that excites one neuron</li>
+        <li>Feed an image through the network.</li>
+        <li>Set the activations in the layer of interest to zero, except for the neuron of interest.</li>
+        <li>Backpropagate to the image.</li>
+        <li>Update each pixel, \(i_k \leftarrow i_k + \eta\,\partial A(I)/\partial i_k\), and repeat.</li>
+      </ol>
+      <p>Starting from different initializations instead of the zero image gives different insights. The slide shows four images, each obtained by focusing on the same neuron in layer 8 and starting from a different initialization, and a similar analysis for layer 7, where some neuron's image looks like a ship with several layers of structure. Different neurons fire for different kinds of patterns, and making such images is a good way to learn more about your network.</p>
+    </section>
+
+    <!-- ============ MODULE 13.7 ============ -->
+    <section id="inversion">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=orTNf_R5odY&amp;t=13s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 0:13</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=orTNf_R5odY&amp;t=145s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 2:25 the algorithm</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=orTNf_R5odY&amp;t=187s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 3:07 layer by layer</a>
+        </div>
+        <h2>Creating images from embeddings</h2>
+      </div>
+      <p>Every layer's output can be thought of as an <dfn>embedding</dfn> of the image. The input is 227 × 227 × 3; the <b>fc7</b> layer gives a 4096-dimensional vector for it, and a convolution volume can be flattened into a vector too. Think of autoencoders: a good embedding should capture all the important characteristics of the image, so we should be able to <b>reconstruct</b> the image from it. Can we?</p>
+      <p>Pose it as optimization over the pixels again. Pass the image of interest (the slide's example is a monkey) through the network and store its embedding \(\phi_0\). Then look for an image that (1) has an embedding close to \(\phi_0\) and (2) looks natural, which is the job of a regularizer. For squared closeness, compare the embeddings dimension by dimension and add up the squared differences.</p>
+      <ol class="algo">
+        <li class="algo-title">Reconstruct an image from its embedding</li>
+        <li>\(\phi_0\): embedding of the image of interest. \(X\): a random image, say the zero image.</li>
+        <li>Forward pass with \(X\) and compute its embedding \(\phi(X)\).</li>
+        <li>Compute \(\mathcal{L}(I) = \lVert\phi(X) - \phi_0\rVert^2 + \lambda\,\lVert\phi(X)\rVert_6^6\).</li>
+        <li>Update every pixel by gradient descent, \(i_k \leftarrow i_k - \eta\,\partial\mathcal{L}(I)/\partial i_k\), and repeat until convergence.</li>
+      </ol>
+      <p class="note">\(\lVert\mathbf{v}\rVert_6^6 = \sum_k v_k^6\). The slide puts this penalty on \(\phi(X)\). In the original work (Mahendran and Vedaldi, 2015) the 6-norm penalty is applied to the image \(X\) itself, which is what makes it an image prior. It discourages a few extreme pixel values.</p>
+      <p>The slides then reconstruct the monkey from each layer of the network in turn: Conv-1, ReLU-1, max-pool-1, Norm-1, Conv-2, ReLU-2, max-pool-2, Norm-2, Conv-3, ReLU-3, Conv-4, ReLU-4, Conv-5, ReLU-5, max-pool-5, FC-6, ReLU-6, FC-7, ReLU-7, FC-8.</p>
+      <ul>
+        <li>From <b>Conv-1</b> the reconstruction is almost the same image as the original.</li>
+        <li>Going deeper, reconstructions become more and more abstract and the monkey stops coming back. Apart from the Conv-1 and Conv-2 layers, they are not accurate reconstructions.</li>
+        <li>From <b>FC-6 / FC-7</b> they look very weird. By then the network has abstracted the image away: perhaps something like a nose or eyes is kept here and there, but the shape and other characteristics are lost <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=orTNf_R5odY&amp;t=285s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:45</a>.</li>
+        <li>Max-pooling makes it harder still. It is just another embedding, but a much stronger compression: of each pooling window only the maximum survives.</li>
+      </ul>
+      <p>So the deeper representations lose much of the information needed to rebuild the input, which is expected from layers built to abstract.</p>
+    </section>
+
+    <!-- ============ MODULE 13.8 ============ -->
+    <section id="deep-dream">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=YHAIrwRVvWg&amp;t=46s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 0:46</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=YHAIrwRVvWg&amp;t=146s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 2:26 the objective</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=YHAIrwRVvWg&amp;t=342s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 5:42 castles in the air</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=YHAIrwRVvWg&amp;t=607s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 10:07 why</a>
+        </div>
+        <h2>Deep Dream</h2>
+      </div>
+      <p>So far the optimization started from a blank image and pushed it towards a class. Deep Dream starts instead from an <b>actual image</b>, say a picture of the sky. Focus on some layer, check the activations of its neurons, and change the image so that a chosen neuron \(h_{ij}\) fires <b>even more</b> (the slides draw several neurons, but think of a single one).</p>
+      <p>The parameters are again the pixels. To make "fire more" a neat differentiable objective, maximize the square of the activation, and split the gradient for a pixel \(i_{mn}\) with the chain rule:</p>
+      <div class="eq">\[ \max_{I}\; \mathcal{L}(I) = h_{ij}^2, \qquad \frac{\partial\mathcal{L}(I)}{\partial i_{mn}} = \frac{\partial\mathcal{L}(I)}{\partial h_{ij}}\,\frac{\partial h_{ij}}{\partial i_{mn}} = 2\,h_{ij}\,\frac{\partial h_{ij}}{\partial i_{mn}} \]</div>
+      <p>The first factor is immediate, and \(\partial h_{ij}/\partial i_{mn}\) is backpropagation with one more link of the chain, as in <a href="#pixel-gradients">Module 13.4</a>. Then update the image and feed it back:</p>
+      <div class="eq">\[ i_{mn} \leftarrow i_{mn} + \frac{\partial\mathcal{L}(I)}{\partial i_{mn}} \]</div>
+      <p class="note">The slide writes the step without a learning rate; a step size \(\eta\) can multiply the gradient, as in the other updates.</p>
+      <p>On the next pass \(h_{ij}\) fires a bit more, because we modified the image for exactly that purpose. Now recall what \(h_{ij}\) captures: certain <b>patterns</b>. If it fires more and more, the image must contain more and more of those patterns. Iterating makes the image look increasingly like whatever makes the neuron fire.</p>
+      <p>The demos on the slides:</p>
+      <ul>
+        <li><b>A sky with clouds</b> fills up with <b>castles</b>: literally castles in the air. In the training data a castle usually has the sky as its background, so the network has learned the correlation. Seeing sky, some castle neurons fire a little, and pushing them harder makes castles appear <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=YHAIrwRVvWg&amp;t=409s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>6:49</a>.</li>
+        <li><b>A landscape with mountains and green regions</b> sprouts fish eyes and fish-like shapes, and birds and animals on the mountains and green areas, which in the data set appear against such green and brown backgrounds.</li>
+        <li><b>A still from the film <i>Inception</i></b> (men in brown suits) produces dogs everywhere: in this data set, brown things were mostly dogs. The network cannot dream beyond its data set.</li>
+      </ul>
+      <p>What is happening: the network was trained to detect patterns (dogs, cats, birds and so on) that appear frequently in ImageNet, and it starts seeing them even where they hardly exist. Google's blog post on "inceptionism" describes the loop: a cloud that looks slightly like a bird is made to look more like a bird, so the network recognizes the bird more strongly on the next pass, and so on, until a detailed bird appears seemingly from nowhere.</p>
+    </section>
+
+    <!-- ============ MODULE 13.9 ============ -->
+    <section id="deep-art">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=gctnJbUaW08&amp;t=40s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 0:40</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=gctnJbUaW08&amp;t=151s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 2:31 style and the Gram matrix</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=gctnJbUaW08&amp;t=282s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 4:42 total loss</a>
+        </div>
+        <h2>Deep Art</h2>
+      </div>
+      <p>Take a camera image (the <b>content image</b>, in the slides a picture of Gandalf) and an artwork (the <b>style image</b>), and render the content in that art form. The instructor flags one step as a leap of faith. The method defines two targets and optimizes the pixels of a new image to meet both.</p>
+      <h3>Content</h3>
+      <p>The <b>content targets</b> are the activations of all layers for the content image. The assumption is that the hidden representations capture the essence of the image (the face and its attributes), so a new image in a different style should produce activations close to these. Let \(\mathbf{p}\) and \(\mathbf{x}\) be the activations of the content image and the new image at a layer, indexed by position and channel:</p>
+      <div class="eq">\[ \mathcal{L}_{\text{content}}(\mathbf{p}, \mathbf{x}) = \sum_{i,j,k} \big(p_{ijk} - x_{ijk}\big)^2 \]</div>
+      <p>Every entry of the activation volume of the new image should match the content image. The slide shows one layer; the same term can be used for every layer.</p>
+      <h3>Style</h3>
+      <p>How do we capture the style of an image? The lecture takes this on faith from the original paper: if \(V\) holds the activations of a layer with 64 channels of size 256 × 256, then the 64 × 64 matrix \(V^\top V\) captures the style of the image, and deeper layers capture more of it. This matrix is the <dfn>Gram matrix</dfn> of the layer.</p>
+      <p class="note">The slide writes \(V \in \mathbb{R}^{64\times(256\times256)}\) and \(V^\top V \in \mathbb{R}^{64\times 64}\). For the product to be 64 × 64, lay \(V\) out with one column per channel, \(V \in \mathbb{R}^{(256\cdot256)\times 64}\); then \((V^\top V)_{ij} = \sum_k V_{ki}V_{kj}\) is the dot product of feature maps \(i\) and \(j\) over all positions.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 680 268" role="img" aria-label="A layer's activations, three channel maps of 4 by 4, are flattened into the columns of a 16 by 3 matrix V. The Gram matrix G equals V transpose V, a 3 by 3 matrix whose entry G12 is the dot product of channels 1 and 2 summed over all positions.">
+            <defs><marker id="l09-f5-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="20" y="22">From a layer's activations to its Gram matrix</text>
+            <rect class="d-box" x="70" y="52" width="64" height="64"/>
+            <rect class="d-box" x="58" y="64" width="64" height="64"/>
+            <rect class="d-box-acc" x="46" y="76" width="64" height="64"/>
+            <path class="d-rule" d="M62 76 V140 M78 76 V140 M94 76 V140 M46 92 H110 M46 108 H110 M46 124 H110"/>
+            <text class="d-al" x="78" y="112" text-anchor="middle">ch 1</text>
+            <text class="d-al" x="140" y="58">ch 3</text>
+            <text class="d-s" x="30" y="166">C channels, each H × W</text>
+            <text class="d-al" x="30" y="184">(slide: C=64, H=W=256)</text>
+            <line class="d-ln" x1="146" y1="100" x2="206" y2="100" marker-end="url(#l09-f5-ah)"/>
+            <text class="d-al" x="178" y="122" text-anchor="middle">flatten</text>
+            <text class="d-al" x="178" y="136" text-anchor="middle">channels</text>
+            <text class="d-al" x="178" y="150" text-anchor="middle">to columns</text>
+            <text class="d-t" x="242" y="44" text-anchor="middle">V</text>
+            <rect class="d-box-acc" x="215" y="52" width="18" height="112"/>
+            <rect class="d-box" x="233" y="52" width="18" height="112"/>
+            <rect class="d-box" x="251" y="52" width="18" height="112"/>
+            <path class="d-rule" d="M215 66 H269 M215 80 H269 M215 94 H269 M215 108 H269 M215 122 H269 M215 136 H269 M215 150 H269"/>
+            <text class="d-al" x="242" y="182" text-anchor="middle">(H·W) × C</text>
+            <line class="d-ln" x1="280" y1="108" x2="336" y2="108" marker-end="url(#l09-f5-ah)"/>
+            <text class="d-s" x="308" y="98" text-anchor="middle">Vᵀ V</text>
+            <text class="d-t" x="399" y="44" text-anchor="middle">G = VᵀV</text>
+            <rect class="d-box" x="348" y="56" width="34" height="34"/><rect class="d-box-acc" x="382" y="56" width="34" height="34"/><rect class="d-box" x="416" y="56" width="34" height="34"/>
+            <rect class="d-box" x="348" y="90" width="34" height="34"/><rect class="d-box" x="382" y="90" width="34" height="34"/><rect class="d-box" x="416" y="90" width="34" height="34"/>
+            <rect class="d-box" x="348" y="124" width="34" height="34"/><rect class="d-box" x="382" y="124" width="34" height="34"/><rect class="d-box" x="416" y="124" width="34" height="34"/>
+            <text class="d-s" x="365" y="77" text-anchor="middle">G₁₁</text><text class="d-s" x="399" y="77" text-anchor="middle">G₁₂</text><text class="d-s" x="433" y="77" text-anchor="middle">G₁₃</text>
+            <text class="d-s" x="365" y="111" text-anchor="middle">G₂₁</text><text class="d-s" x="399" y="111" text-anchor="middle">G₂₂</text><text class="d-s" x="433" y="111" text-anchor="middle">G₂₃</text>
+            <text class="d-s" x="365" y="145" text-anchor="middle">G₃₁</text><text class="d-s" x="399" y="145" text-anchor="middle">G₃₂</text><text class="d-s" x="433" y="145" text-anchor="middle">G₃₃</text>
+            <text class="d-al" x="399" y="182" text-anchor="middle">C × C</text>
+            <text class="d-t" x="472" y="64">G₁₂ = Σₖ Vₖ₁ Vₖ₂</text>
+            <text class="d-s" x="472" y="84">channel 1 · channel 2,</text>
+            <text class="d-s" x="472" y="100">summed over all positions</text>
+            <text class="d-s" x="472" y="128">diagonal: how strongly</text>
+            <text class="d-s" x="472" y="144">each feature fires</text>
+            <text class="d-s" x="472" y="166">off-diagonal: which features</text>
+            <text class="d-s" x="472" y="182">fire together</text>
+            <line class="d-rule" x1="20" y1="202" x2="660" y2="202"/>
+            <text class="d-s" x="20" y="226"><tspan style="font-weight:600">content loss:</tspan> compare activations p (content image) and x (new image) entry by entry</text>
+            <text class="d-s" x="20" y="250"><tspan style="font-weight:600">style loss:</tspan> compare Gram matrices G (style image) and A (new image) entry by entry</text>
+          </svg>
+        </div>
+        <figcaption><b>The Gram matrix sums positions out.</b> Each entry is an inner product between two channels' feature maps, so it records which features co-occur and how strongly, while where they occur is summed away. That reading is the standard one; the lecture itself takes the claim that this captures style on trust. Illustrative sizes: 3 channels of 4 × 4.</figcaption>
+      </figure>
+
+      <p>To make the new image's style at layer \(\ell\) match the style image, compare the two Gram matrices. With \(G^\ell\) and \(A^\ell\) the Gram matrices at layer \(\ell\) for the style image and the new image respectively, and \(\mathbf{a}\) the style image's activations:</p>
+      <div class="eq">\[ E_\ell = \sum_{i,j} \big(G^\ell_{ij} - A^\ell_{ij}\big)^2, \qquad \mathcal{L}_{\text{style}}(\mathbf{a}, \mathbf{x}) = \sum_{\ell=0}^{L} w_\ell\,E_\ell \]</div>
+      <p>The weights \(w_\ell\) choose how much each layer counts; you can use one layer or all of them.</p>
+      <div class="result">
+        <span class="lbl">Total loss, minimized over the pixels of the new image</span>
+        \[ \mathcal{L}_{\text{total}}(\mathbf{p}, \mathbf{a}, \mathbf{x}) = \alpha\,\mathcal{L}_{\text{content}}(\mathbf{p}, \mathbf{x}) + \beta\,\mathcal{L}_{\text{style}}(\mathbf{a}, \mathbf{x}) \]
+        <p>\(\alpha\) and \(\beta\) are hyperparameters that balance matching the content against matching the style.</p>
+      </div>
+      <p>Optimizing the pixels with this objective (plus a bunch of other tricks) renders Gandalf in the given style. Code for it is available to try. Standard name: this is <b>neural style transfer</b> (Gatys et al., 2015). The broader point is that once you can write an objective over pixels, you can combine two images in whatever way you can imagine.</p>
+    </section>
+
+    <!-- ============ MODULE 13.10 ============ -->
+    <section id="fooling">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=zgfcRJYA_kk&amp;t=48s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 0:48</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=zgfcRJYA_kk&amp;t=153s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 2:33 from noise</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=zgfcRJYA_kk&amp;t=222s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 3:42 why it happens</a>
+        </div>
+        <h2>Fooling deep convolutional networks</h2>
+      </div>
+      <p>We have changed images to suit three needs: to make a class fire, to make neurons see patterns that were not really there (Deep Dream), and to produce artistic images (Deep Art). The same idea of optimizing over the input can also <b>fool</b> a CNN.</p>
+      <p>Feed an image of a <b>bus</b> to a trained network. Instead of setting up the cross-entropy loss for the correct class, set it up for an incorrect class, say <b>ostrich</b>. Backpropagate, leave every weight alone, and change only the image so that the likelihood of "ostrich" increases:</p>
+      <div class="eq">\[ I \leftarrow I + \eta\,\frac{\partial \log P(\text{ostrich} \mid I)}{\partial I} \qquad (\text{weights fixed}) \]</div>
+      <p>With very minimal changes to the image, the network is soon convinced it is looking at an ostrich (Szegedy et al., 2013). The slide shows triples: the original, the change (magnified to be visible) and their sum. The original and the sum are indistinguishable to a human, yet the network calls every sum an ostrich. The same happens for the other examples: a soap dispenser, a bird, an insect, a temple and a dog.</p>
+      <p>You do not even need a real starting image. Start from random images and optimize them until the network predicts some class: the results look like noise to us, yet the classifier labels them robin, cheetah, armadillo and so on, and it is <b>99.6% confident</b> in all these cases (Nguyen, Yosinski and Clune, 2014). That is worse than a random classifier, which over 1000 classes would give each about 1/1000.</p>
+
+      <h3>An intuitive explanation <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=zgfcRJYA_kk&amp;t=291s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 4:51</a></h3>
+      <p>The explanation is due to Andrej Karpathy.</p>
+      <ul>
+        <li>Images are extremely high-dimensional objects, points in \(\mathbb{R}^{227\times227}\) on the slide. That space holds an enormous number of points.</li>
+        <li>Only a tiny fraction of them are natural images; most are random matrices that look like the noise images above. Even 1 or 10 million training images are a small sample of the natural ones.</li>
+        <li>From the training images we fit decision boundaries, for some 1000 classes.</li>
+        <li>In doing so we also make decisions for the vast number of points we never saw. Whole regions without a single training point get a class. A boundary drawn around a few cheetah images also encloses many random points that have nothing to do with cheetahs.</li>
+        <li>To fool the network, start from a random image and move just far enough to land inside such a region. The classifier was aggressive in fitting the training data and has already labelled it.</li>
+      </ul>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 304" role="img" aria-label="Left: a square input space split into large cheetah regions and other regions; the training points cluster near the centre, and a noise image far from every training point lies deep inside a cheetah region. Right: a bus image close to the boundary with the ostrich region; a tiny step delta crosses the boundary.">
+            <defs><marker id="l09-f6-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="20" y="20">Decisions far from the data</text>
+            <rect x="20" y="32" width="260" height="260" style="fill: var(--surface); stroke: var(--rule)"/>
+            <path d="M150 162 L280 70 L280 292 L205 292 Z" style="fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2"/>
+            <path d="M150 162 L20 32 L110 32 Z" style="fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.2"/>
+            <text class="d-t" x="272" y="140" text-anchor="end" style="fill: var(--accent)">cheetah</text>
+            <text class="d-t" x="64" y="50" text-anchor="middle" style="fill: var(--accent)">cheetah</text>
+            <text class="d-s" x="34" y="280">other classes</text>
+            <text class="d-s" x="200" y="56" text-anchor="middle">other classes</text>
+            <circle class="pt-tree" cx="175" cy="175" r="4.5"/><circle class="pt-tree" cx="190" cy="190" r="4.5"/><circle class="pt-tree" cx="184" cy="206" r="4.5"/><circle class="pt-tree" cx="205" cy="168" r="4.5"/>
+            <circle class="pt-tree" cx="125" cy="120" r="4.5"/><circle class="pt-tree" cx="135" cy="135" r="4.5"/>
+            <circle class="pt-no" cx="120" cy="175" r="4.5"/><circle class="pt-no" cx="140" cy="205" r="4.5"/><circle class="pt-no" cx="155" cy="128" r="4.5"/><circle class="pt-no" cx="168" cy="142" r="4.5"/><circle class="pt-no" cx="105" cy="150" r="4.5"/>
+            <circle class="pt-new" cx="255" cy="262" r="6"/>
+            <text class="d-s" x="194" y="238">noise image:</text>
+            <text class="d-s" x="194" y="254">"cheetah"</text>
+
+            <line class="d-rule" x1="296" y1="10" x2="296" y2="296"/>
+
+            <text class="d-h" x="316" y="20">A tiny step across a boundary</text>
+            <path d="M400 40 C470 120 450 200 520 292 L650 292 L650 40 Z" style="fill: var(--accent-soft)"/>
+            <path class="d-ln" d="M400 40 C470 120 450 200 520 292"/>
+            <text class="d-t" x="350" y="80" text-anchor="middle">bus</text>
+            <text class="d-t" x="590" y="80" text-anchor="middle" style="fill: var(--accent)">ostrich</text>
+            <circle class="pt-plain" cx="438" cy="161" r="5"/>
+            <line class="d-ln-acc" x1="443" y1="161" x2="476" y2="161" marker-end="url(#l09-f6-ah)"/>
+            <circle class="pt-new" cx="482" cy="161" r="5"/>
+            <text class="d-t" x="459" y="150" text-anchor="middle" style="fill: var(--accent)">δ</text>
+            <text class="d-s" x="430" y="186" text-anchor="end">x: bus photo</text>
+            <text class="d-s" x="490" y="186">x + δ: "ostrich"</text>
+            <text class="d-s" x="316" y="250">δ is tiny in every pixel,</text>
+            <text class="d-s" x="316" y="268">invisible to a person</text>
+          </svg>
+        </div>
+        <figcaption><b>Why fooling is easy (illustrative cartoon).</b> Left, after the slide: filled dots are cheetah training images, hollow dots other classes. The fitted boundaries also hand out huge empty regions, so a noise image deep inside one is called "cheetah" with high confidence. Right: a real photo near a boundary needs only a tiny change \(\delta\) to cross it.</figcaption>
+      </figure>
+
+      <h3>One recipe, six objectives</h3>
+      <p>Every method from Module 13.6 onward freezes the network and takes gradient steps on the pixels. Only the objective changes:</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Method</th><th>Start from</th><th>Objective over the pixels</th></tr></thead>
+          <tbody>
+            <tr><td>Class image (13.6)</td><td>zero image</td><td>maximize \(S_c(I) - \lambda\Omega(I)\)</td></tr>
+            <tr><td>Neuron image (13.6)</td><td>zero or other initializations</td><td>maximize the activation \(A(I)\)</td></tr>
+            <tr><td>Inversion (13.7)</td><td>random or zero image</td><td>minimize \(\lVert\phi(X) - \phi_0\rVert^2\) + regularizer</td></tr>
+            <tr><td>Deep Dream (13.8)</td><td>a natural image</td><td>maximize \(h_{ij}^2\)</td></tr>
+            <tr><td>Deep Art (13.9)</td><td>a new image</td><td>minimize \(\alpha\mathcal{L}_{\text{content}} + \beta\mathcal{L}_{\text{style}}\)</td></tr>
+            <tr><td>Fooling (13.10)</td><td>a real image, or noise</td><td>maximize the probability of a wrong class</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>This ends the discussion of convolutional networks. <a href="lecture-10.html">Lecture 10</a> turns to learning vector representations of words.</p>
+    </section>
+
+    <!-- ============ REVISION ============ -->
+    <section id="terms">
+      <div class="sec-head"><h2>Key terms</h2></div>
+      <dl class="terms">
+        <div><dt>Receptive field</dt><dd>The input patch a neuron depends on; it can be traced back deterministically through the layers.</dd></div>
+        <div><dt>Maximally activating input</dt><dd>For weights \(\mathbf{w}\) and a unit-norm input, \(\mathbf{w}^\top\mathbf{x}\) is largest at \(\mathbf{x}^* = \mathbf{w}/\lVert\mathbf{w}\rVert\).</dd></div>
+        <div><dt>Filter visualization</dt><dd>Plotting each \(K\times K\) first-layer filter as an image to see the pattern it detects.</dd></div>
+        <div><dt>Occlusion experiment</dt><dd>Gray out a patch, reclassify, and map the probability of the true class over patch positions.</dd></div>
+        <div><dt>Gradient (saliency) map</dt><dd>\(\partial h_j/\partial x_i\) for every pixel, shown as an image; gray means no influence.</dd></div>
+        <div><dt>Dead ReLU</dt><dd>A ReLU whose forward input was not positive; no gradient flows back through it.</dd></div>
+        <div><dt>Guided backpropagation</dt><dd>Backprop that also zeroes negative gradients from the layer above at every ReLU; gives sharper maps.</dd></div>
+        <div><dt>Deconvnet rule</dt><dd>Passes only positive gradients and ignores the forward sign (in the slide's source figure, not the video).</dd></div>
+        <div><dt>Optimization over images</dt><dd>Weights frozen, pixels treated as parameters, gradient steps on an objective such as \(S_c(I) - \lambda\Omega(I)\).</dd></div>
+        <div><dt>Embedding inversion</dt><dd>Finding an image whose embedding at some layer matches a given one; works well only from early layers.</dd></div>
+        <div><dt>Deep Dream</dt><dd>Gradient ascent on \(h_{ij}^2\) from a natural image, amplifying patterns the neuron already half-sees.</dd></div>
+        <div><dt>Content loss</dt><dd>\(\sum_{ijk}(p_{ijk} - x_{ijk})^2\) between the activations of the content image and the new image.</dd></div>
+        <div><dt>Gram matrix</dt><dd>\(V^\top V\) of a layer's flattened channels: channel-by-channel inner products, used as the style.</dd></div>
+        <div><dt>Fooling (adversarial) image</dt><dd>An image changed imperceptibly, or built from noise, that the network classifies wrongly with high confidence.</dd></div>
+      </dl>
+    </section>
+
+    <section id="test">
+      <div class="sec-head"><h2>Test yourself</h2></div>
+      <div class="quiz">
+        <details><summary><span class="q">Q1</span><span>A neuron has weights \(\mathbf{w} = [3, 4]^\top\). Which unit-norm input excites it most, and what is its pre-activation then?</span><span class="tog"></span></summary>
+          <p>\(\lVert\mathbf{w}\rVert = 5\), so \(\mathbf{x}^* = \mathbf{w}/\lVert\mathbf{w}\rVert = [0.6, 0.8]^\top\) and \(\mathbf{w}^\top\mathbf{x}^* = 1.8 + 3.2 = 5 = \lVert\mathbf{w}\rVert\). By Cauchy–Schwarz no other unit vector does better.</p></details>
+        <details><summary><span class="q">Q2</span><span>Why is plotting filters as images only interpretable for the first convolution layer?</span><span class="tog"></span></summary>
+          <p>The lecture leaves this as a quiz; the standard answer: a first-layer filter multiplies pixels directly, so \(W/\lVert W\rVert\) is a pixel patch you can look at. A deeper filter multiplies the previous layer's feature maps (for example a 3 × 3 × 256 block of activations), so its \(W/\lVert W\rVert\) is a pattern over feature channels with no direct meaning as an image.</p></details>
+        <details><summary><span class="q">Q3</span><span>In an occlusion map for "Afghan hound", the biggest drop comes from covering the woman's face. What does that tell you?</span><span class="tog"></span></summary>
+          <p>The network relies on a region that is not the dog: probably a spurious association learned because many training images showed the dog with a woman. A network whose largest drop sits on the dog has learned something more meaningful, and you should prefer it.</p></details>
+        <details><summary><span class="q">Q4</span><span>At one ReLU, the forward inputs are \(f = [3, -2, 0.5, 4]\) and the gradients from above are \(R = [-1, 5, 2, -3]\). What do backprop, the deconvnet rule and guided backprop pass down? Which one is the true gradient?</span><span class="tog"></span></summary>
+          <p>Backprop keeps \(R\) where \(f &gt; 0\): \([-1, 0, 2, -3]\). Deconvnet keeps \(R\) where \(R &gt; 0\): \([0, 5, 2, 0]\). Guided keeps \(R\) where both hold: \([0, 0, 2, 0]\). Only backprop gives the true derivative; guided backprop is a heuristic that drops the negative influences to avoid cancellation and get a sharper map.</p></details>
+        <details><summary><span class="q">Q5</span><span>When generating a "dumbbell" image, what are the parameters, what stays fixed, and which way does the update go?</span><span class="tog"></span></summary>
+          <p>The pixels \(i_k\) are the parameters and the trained weights stay fixed. Maximize \(S_c(I) - \lambda\Omega(I)\), with \(S_c\) the pre-softmax score, by stepping along the gradient: \(i_k \leftarrow i_k + \eta\,\partial S_c/\partial i_k\) (descent on \(-S_c\)). The result contains many dumbbells in different orientations because that raises the score; it does not need to look like a real dumbbell.</p></details>
+        <details><summary><span class="q">Q6</span><span>In Deep Dream, what is \(\partial\mathcal{L}/\partial i_{mn}\) for \(\mathcal{L} = h_{ij}^2\), and why does a sky photo fill with castles?</span><span class="tog"></span></summary>
+          <p>\(\partial\mathcal{L}/\partial i_{mn} = 2h_{ij}\,\partial h_{ij}/\partial i_{mn}\). In the training data castles usually appear against the sky, so sky makes castle-detecting neurons fire a little. Each ascent step strengthens whatever made them fire, they fire more on the next pass, and the loop paints castles in.</p></details>
+        <details><summary><span class="q">Q7</span><span>A layer has 128 channels of size 56 × 56. What are the sizes of \(V\) and of its Gram matrix, and how does the style loss differ from the content loss?</span><span class="tog"></span></summary>
+          <p>With one column per channel, \(V\) is \(3136 \times 128\) (since \(56 \cdot 56 = 3136\)) and \(G = V^\top V\) is \(128 \times 128\). The content loss compares activations position by position; the style loss compares Gram matrices, whose entries are summed over all positions, so it matches which features co-occur and not where they are.</p></details>
+        <details><summary><span class="q">Q8</span><span>Why can a CNN label a noise image "cheetah" with 99.6% confidence?</span><span class="tog"></span></summary>
+          <p>Images live in a huge space (\(\mathbb{R}^{227\times227}\) on the slide) and natural images, let alone training images, fill a tiny part of it. Decision boundaries fitted to the training points also assign classes to vast regions that contain no data. Optimizing a noise image just moves it into the cheetah region, where the classifier is confident although it has never seen anything like it.</p></details>
+      </div>
+    </section>
+
+    <!-- PAGER:START --><nav class="pager" aria-label="Previous and next lecture"><a href="index.html"><span class="dir">← All lectures</span><span class="nm">Course map</span></a><a class="next" href="index.html"><span class="dir">Lecture 10 · coming</span><span class="nm">Word representations</span></a></nav><!-- PAGER:END -->
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the official lecture slides and the module videos' NPTEL captions. Timestamp links open the video at that moment. Charts marked synthetic use data generated for these notes. Not an official IIT Madras resource.</div>
+</footer>
+
+<script src="notes.js"></script>
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let seed = 909;
+  const rand = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+
+  /* ---------- Three backward rules through a ReLU ---------- */
+  (() => {
+    const svg = document.getElementById('l09-relu-svg'); if (!svg) return;
+    const SLIDE_F = [1, -1, 5, 2, -5, -7, -3, 2, 4], SLIDE_R = [-2, 3, -1, 6, -3, 1, 2, -1, 3];
+    let f = SLIDE_F.slice(), R = SLIDE_R.slice();
+    const fIn = document.getElementById('relu-f'), rIn = document.getElementById('relu-r');
+    const fOut = document.getElementById('relu-f-out'), rOut = document.getElementById('relu-r-out');
+    const status = document.getElementById('relu-status');
+    const nBp = document.getElementById('relu-n-bp'), nDc = document.getElementById('relu-n-dc'), nGb = document.getElementById('relu-n-gb');
+    const C = 30;
+    const defs = mk('defs', {}, svg);
+    const mkr = mk('marker', { id: 'l09-relu-ah', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse' }, defs);
+    mk('path', { d: 'M0,0 L10,5 L0,10 z', class: 'd-ah' }, mkr);
+    const grid = (x, y, title, rule) => {
+      mk('text', { x, y: y - 12, class: 'd-t' }, svg).textContent = title;
+      if (rule) mk('text', { x, y: y + 3 * C + 20, class: 'd-s' }, svg).textContent = rule;
+      const cells = [];
+      for (let i = 0; i < 9; i++) {
+        const cx = x + (i % 3) * C, cy = y + Math.floor(i / 3) * C;
+        const r = mk('rect', { x: cx, y: cy, width: C, height: C }, svg);
+        const t = mk('text', { x: cx + C / 2, y: cy + C / 2 + 4.5, 'text-anchor': 'middle', class: 'l09-num' }, svg);
+        cells.push([r, t]);
+      }
+      return cells;
+    };
+    const G = {
+      f: grid(30, 44, 'Forward input fˡ'),
+      out: grid(210, 44, 'ReLU output fˡ⁺¹'),
+      r: grid(470, 44, 'Gradient from above Rˡ⁺¹'),
+      bp: grid(30, 214, 'Backprop Rˡ', 'keep where f > 0'),
+      dc: grid(250, 214, 'Deconvnet Rˡ', 'keep where R > 0'),
+      gb: grid(470, 214, 'Guided Rˡ', 'keep where f > 0 and R > 0')
+    };
+    mk('line', { x1: 128, y1: 89, x2: 202, y2: 89, class: 'd-ln', 'marker-end': 'url(#l09-relu-ah)' }, svg);
+    mk('text', { x: 165, y: 81, 'text-anchor': 'middle', class: 'd-s' }, svg).textContent = 'ReLU';
+    mk('text', { x: 370, y: 84, 'text-anchor': 'middle', class: 'd-al' }, svg).textContent = 'forward pass →';
+    mk('text', { x: 370, y: 100, 'text-anchor': 'middle', class: 'd-al' }, svg).textContent = '← backward pass';
+    mk('path', { d: 'M515 136 L515 160 M75 160 L515 160', class: 'd-ln' }, svg);
+    [75, 295, 515].forEach(x => mk('line', { x1: x, y1: 160, x2: x, y2: 182, class: 'd-ln', 'marker-end': 'url(#l09-relu-ah)' }, svg));
+    mk('text', { x: 530, y: 156, class: 'd-al' }, svg).textContent = 'Rˡ⁺¹ meets each rule';
+    const lg = [[30, 'l09-pos', 'positive'], [140, 'l09-neg', 'negative'], [250, 'l09-nil', 'zero'], [340, 'l09-blk', 'blocked by the rule (passes 0)']];
+    lg.forEach(([x, cls, label]) => { mk('rect', { x, y: 352, width: 14, height: 14, class: cls }, svg); mk('text', { x: x + 20, y: 363, class: 'd-s' }, svg).textContent = label; });
+    const fmt = v => { if (Object.is(v, -0) || v === 0) return '0'; const s = Number.isInteger(v) ? String(v) : (Math.abs(v) < 10 ? v.toFixed(1) : v.toFixed(0)); return s.replace('-', '−'); };
+    const paint = (cells, vals, pass) => cells.forEach(([r, t], i) => {
+      const blocked = pass && !pass[i];
+      r.setAttribute('class', blocked ? 'l09-blk' : vals[i] > 0 ? 'l09-pos' : vals[i] < 0 ? 'l09-neg' : 'l09-nil');
+      t.setAttribute('class', blocked ? 'l09-num off' : 'l09-num');
+      t.textContent = blocked ? '0' : fmt(vals[i]);
+    });
+    const draw = () => {
+      const mBp = f.map(v => v > 0), mDc = R.map(v => v > 0), mGb = f.map((v, i) => v > 0 && R[i] > 0);
+      paint(G.f, f); paint(G.out, f.map(v => Math.max(v, 0))); paint(G.r, R);
+      paint(G.bp, R, mBp); paint(G.dc, R, mDc); paint(G.gb, R, mGb);
+      const cnt = m => m.filter(Boolean).length;
+      nBp.textContent = cnt(mBp) + ' of 9'; nDc.textContent = cnt(mDc) + ' of 9'; nGb.textContent = cnt(mGb) + ' of 9';
+      const dropped = f.filter((v, i) => v > 0 && R[i] < 0).length;
+      status.textContent = dropped === 0
+        ? 'Every gradient that survives the forward mask is non-negative here, so guided backprop and backprop agree.'
+        : `Guided backprop removed ${dropped} negative gradient${dropped > 1 ? 's' : ''} that plain backprop let through.`;
+    };
+    const parse = s => { const v = s.trim().split(/[\s,;]+/).filter(Boolean).map(Number); return v.length === 9 && v.every(Number.isFinite) ? v : null; };
+    const bind = (inp, out, set) => inp.addEventListener('input', () => {
+      const v = parse(inp.value);
+      if (v) { set(v); out.textContent = '9 values'; inp.removeAttribute('aria-invalid'); draw(); }
+      else { out.textContent = 'needs 9 numbers'; inp.setAttribute('aria-invalid', 'true'); }
+    });
+    bind(fIn, fOut, v => { f = v; }); bind(rIn, rOut, v => { R = v; });
+    const show = () => { fIn.value = f.join(', '); rIn.value = R.join(', '); [fIn, rIn].forEach(x => x.removeAttribute('aria-invalid')); fOut.textContent = rOut.textContent = '9 values'; draw(); };
+    document.getElementById('relu-slide').addEventListener('click', () => { f = SLIDE_F.slice(); R = SLIDE_R.slice(); show(); });
+    document.getElementById('relu-rand').addEventListener('click', () => { const ri = () => Math.round(rand() * 14 - 7); f = Array.from({ length: 9 }, ri); R = Array.from({ length: 9 }, ri); show(); });
+    draw();
+  })();
+
+  /* ---------- Occlusion map on a synthetic image with a toy scorer ---------- */
+  (() => {
+    const svg = document.getElementById('l09-occl-svg'); if (!svg) return;
+    seed = 909;
+    const N = 12, CS = 22, OY = 44, IX = 30, MX = 352, GRAY = 0.5;
+    const img = [];
+    for (let r = 0; r < N; r++) { img.push([]); for (let c = 0; c < N; c++) img[r].push(0.1 + 0.12 * rand()); }
+    const EYES = [[4, 3], [4, 7]], MOUTH = [[8, 4], [8, 5], [8, 6], [8, 7]], BALL = [[9, 0], [9, 1], [10, 0], [10, 1]];
+    EYES.forEach(([r, c]) => { img[r][c] = 0.95; });
+    MOUTH.forEach(([r, c]) => { img[r][c] = 0.8; });
+    BALL.forEach(([r, c]) => { img[r][c] = 0.75; });
+    const feats = im => {
+      let fe = 0, fm = 0;
+      for (let r = 0; r < N; r++) for (let c = 1; c < N - 1; c++) fe = Math.max(fe, im[r][c] - 0.5 * (im[r][c - 1] + im[r][c + 1]));
+      for (let r = 1; r < N - 1; r++) for (let c = 0; c <= N - 4; c++) {
+        let mid = 0, ring = 0;
+        for (let k = 0; k < 4; k++) { mid += im[r][c + k]; ring += im[r - 1][c + k] + im[r + 1][c + k]; }
+        fm = Math.max(fm, mid / 4 - ring / 8);
+      }
+      return [fe, fm];
+    };
+    const prob = im => { const [fe, fm] = feats(im); return 1 / (1 + Math.exp(-(6 * fe + 6 * fm - 5.4))); };
+    const span = (r, c, k) => { const o = Math.floor((k - 1) / 2); return [Math.max(0, r - o), Math.min(N - 1, r - o + k - 1), Math.max(0, c - o), Math.min(N - 1, c - o + k - 1)]; };
+    const occlude = (r, c, k) => { const im = img.map(x => x.slice()); const [r0, r1, c0, c1] = span(r, c, k); for (let a = r0; a <= r1; a++) for (let b = c0; b <= c1; b++) im[a][b] = GRAY; return im; };
+    const p0 = prob(img);
+    const maps = {};
+    const mapFor = k => {
+      if (maps[k]) return maps[k];
+      const d = []; let best = [-1, 0, 0];
+      for (let r = 0; r < N; r++) { d.push([]); for (let c = 0; c < N; c++) { const v = p0 - prob(occlude(r, c, k)); d[r].push(v); if (v > best[0]) best = [v, r, c]; } }
+      return (maps[k] = { d, best, max: Math.max(best[0], 1e-9) });
+    };
+
+    mk('text', { x: IX, y: 26, class: 'd-t' }, svg).textContent = 'Image with the gray patch';
+    mk('text', { x: MX, y: 26, class: 'd-t' }, svg).textContent = 'Occlusion map: drop in p(face)';
+    mk('rect', { x: IX, y: OY, width: N * CS, height: N * CS, style: 'fill: var(--surface); stroke: var(--rule)' }, svg);
+    mk('rect', { x: MX, y: OY, width: N * CS, height: N * CS, style: 'fill: var(--surface); stroke: var(--rule)' }, svg);
+    const px = [], hm = [];
+    for (let r = 0; r < N; r++) { px.push([]); hm.push([]); for (let c = 0; c < N; c++) {
+      px[r].push(mk('rect', { x: IX + c * CS, y: OY + r * CS, width: CS, height: CS, class: 'l09-px' }, svg));
+      hm[r].push(mk('rect', { x: MX + c * CS, y: OY + r * CS, width: CS, height: CS, class: 'l09-heat' }, svg));
+    } }
+    const gl = (ox) => { let d = ''; for (let i = 1; i < N; i++) { d += `M${ox + i * CS} ${OY} V${OY + N * CS} M${ox} ${OY + i * CS} H${ox + N * CS} `; } mk('path', { d, class: 'l09-cellgrid' }, svg); };
+    gl(MX);
+    const selImg = mk('rect', { class: 'l09-sel' }, svg);
+    const selMap = mk('rect', { width: CS, height: CS, class: 'l09-sel-map' }, svg);
+    mk('text', { x: IX, y: OY + N * CS + 22, class: 'd-s' }, svg).textContent = 'eyes in row 5, mouth in row 9, ball at lower left';
+    mk('text', { x: MX, y: OY + N * CS + 22, class: 'd-s' }, svg).textContent = 'cell = patch centre · stronger = larger drop';
+
+    const slider = document.getElementById('occl-k'), kOut = document.getElementById('occl-k-out');
+    const oP0 = document.getElementById('occl-p0'), oP = document.getElementById('occl-p'), oD = document.getElementById('occl-drop'), status = document.getElementById('occl-status');
+    oP0.textContent = p0.toFixed(3);
+    let k = parseInt(slider.value, 10), sel = [4, 3];
+    const inside = (cells, s) => cells.filter(([r, c]) => r >= s[0] && r <= s[1] && c >= s[2] && c <= s[3]).length;
+    const describe = s => {
+      const e = inside(EYES, s), m = inside(MOUTH, s), b = inside(BALL, s);
+      if (e === 2 && m > 0) return 'Most of the face is hidden: both detectors lose their best match and p(face) collapses.';
+      if (e === 2) return 'Both eyes hidden: the eye detector falls back to weak look-alikes (the end of the mouth, the ball), so p(face) drops.';
+      if (m > 0 && e === 1) return 'Part of the mouth is hidden. Hiding one eye costs nothing extra, because the other eye is still visible.';
+      if (m > 0) return 'Part of the mouth is hidden. There is only one mouth, so the mouth detector’s best match weakens and p(face) falls.';
+      if (e === 1) return 'One eye hidden: the other eye gives the eye detector the same maximum, so p(face) barely moves. A redundant feature.';
+      if (b > 0) return 'The ball is hidden. The scorer never relied on it, so nothing changes.';
+      return 'Only background is hidden: little or no change.';
+    };
+    const draw = () => {
+      const M = mapFor(k), [r, c] = sel, s = span(r, c, k);
+      const im = occlude(r, c, k);
+      for (let a = 0; a < N; a++) for (let b = 0; b < N; b++) {
+        px[a][b].setAttribute('fill-opacity', im[a][b].toFixed(3));
+        hm[a][b].setAttribute('fill-opacity', Math.max(0, M.d[a][b] / M.max).toFixed(3));
+      }
+      selImg.setAttribute('x', IX + s[2] * CS); selImg.setAttribute('y', OY + s[0] * CS);
+      selImg.setAttribute('width', (s[3] - s[2] + 1) * CS); selImg.setAttribute('height', (s[1] - s[0] + 1) * CS);
+      selMap.setAttribute('x', MX + c * CS); selMap.setAttribute('y', OY + r * CS);
+      const p = prob(im);
+      oP.textContent = p.toFixed(3); oD.textContent = Math.max(0, p0 - p).toFixed(3);
+      kOut.textContent = `${k} × ${k}`;
+      status.textContent = describe(s);
+    };
+    const toCell = e => {
+      const m = svg.getScreenCTM(); if (!m) return null;
+      const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+      const q = pt.matrixTransform(m.inverse());
+      for (const ox of [IX, MX]) { const c = Math.floor((q.x - ox) / CS), r = Math.floor((q.y - OY) / CS); if (c >= 0 && c < N && r >= 0 && r < N) return [r, c]; }
+      return null;
+    };
+    let timer = null;
+    const pick = e => { const rc = toCell(e); if (rc && (rc[0] !== sel[0] || rc[1] !== sel[1])) { clearInterval(timer); sel = rc; draw(); } };
+    svg.addEventListener('click', pick);
+    svg.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') pick(e); });
+    svg.addEventListener('keydown', e => {
+      const mv = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key];
+      if (!mv) return;
+      e.preventDefault();
+      clearInterval(timer);
+      sel = [Math.min(N - 1, Math.max(0, sel[0] + mv[0])), Math.min(N - 1, Math.max(0, sel[1] + mv[1]))];
+      draw();
+    });
+    slider.addEventListener('input', () => { k = parseInt(slider.value, 10); draw(); });
+    document.getElementById('occl-best').addEventListener('click', () => {
+      const b = mapFor(k).best, target = [b[1], b[2]];
+      clearInterval(timer);
+      if (reduce) { sel = target; draw(); return; }
+      timer = setInterval(() => {
+        if (sel[0] !== target[0]) sel = [sel[0] + Math.sign(target[0] - sel[0]), sel[1]];
+        else if (sel[1] !== target[1]) sel = [sel[0], sel[1] + Math.sign(target[1] - sel[1])];
+        draw();
+        if (sel[0] === target[0] && sel[1] === target[1]) clearInterval(timer);
+      }, 45);
+    });
+    draw();
+  })();
+})();
+</script>
+</body>
+</html>
