@@ -1,0 +1,1344 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lecture 13 · Encoder–decoder models and attention · DL Notes</title>
+<meta name="description" content="CS6910 Deep Learning (IIT Madras) notes, Lecture 13: encoder–decoder models for captioning, translation and other tasks, the attention mechanism, attention over images and hierarchical attention.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<style>
+.l13-scores input[type="range"] { width: 112px; }
+.l13-scores output { min-width: 5ch; }
+.app-table { min-width: 760px; }
+.app-table td { font-size: 13.5px; }
+.app-table td:first-child { font-family: var(--font-head); font-weight: 600; white-space: nowrap; }
+.dg .l13-fm { fill: var(--accent); fill-opacity: .45; }
+.c-l13-bar { fill: var(--accent); }
+.c-l13-cellbg { fill: var(--surface); stroke: var(--rule); stroke-width: 1; }
+.c-l13-cell { fill: var(--accent); }
+.c-l13-row { cursor: pointer; }
+.c-l13-pull { stroke: var(--accent); fill: none; stroke-linecap: round; }
+.c-l13-val { font: 500 11px var(--font-mono); fill: var(--ink); }
+.c-l13-val.inv { fill: var(--surface); }
+.c-l13-word { font: 600 12.5px var(--font-head); fill: var(--ink); }
+.c-l13-score { font: 11px var(--font-mono); fill: var(--muted); }
+.c-l13-h { fill: var(--ink-2); stroke: var(--surface); stroke-width: 1.5; }
+</style>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <!-- PARTNAV:START --><nav class="partnav" aria-label="Lectures"><a href="index.html">DL Notes</a><span class="sep">/</span><span>Lecture 13</span><span class="sep">·</span><a href="lecture-11.html">← Lecture 11</a></nav><!-- PARTNAV:END -->
+    <div class="eyebrow">CS6910 · Deep Learning · IIT Madras</div>
+    <h1>Encoder–decoder models and attention</h1>
+    <p class="lede">One recipe covers captioning, translation, question answering and more: an encoder network turns the input into vectors, and a decoder generates the output from them. Attention then lets the decoder choose, at every step, which parts of a sentence, an image or a document to read.</p>
+    <div class="meta">
+      <span><b>Lecture 13</b></span>
+      <span>Instructor <b>Prof. Mitesh M. Khapra</b></span>
+      <span>About <b>67 min</b> of video</span>
+      <span><b>3</b> modules</span>
+    </div>
+    <div class="watch">
+      <a class="btn solid" href="https://www.cse.iitm.ac.in/~miteshk/CS7015/Slides/Teaching/pdf/Lecture16.pdf" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 0.5 H6.5 L8.5 2.5 V9.5 H2 Z"/></svg>Slides</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=7Np_5Q-P8eo" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 21:55</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=dC_d3iVw6sc" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 17:33</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=yInilk6x-OY" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 27:37</a>
+    </div>
+  </div>
+</header>
+
+<div class="page gutter">
+  <nav class="toc" aria-label="Contents">
+    <div>
+      <h4>Module 16.1 · Encoder–decoder</h4>
+      <ul>
+        <li><a href="#language-model">Language modelling, revisited</a></li>
+        <li><a href="#decoder-input">What goes in at each step</a></li>
+        <li><a href="#compact">RNN, GRU, LSTM as functions</a></li>
+        <li><a href="#image-conditioning">Conditioning on an image</a></li>
+        <li><a href="#enc-dec">The encoder–decoder idea</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 16.2 · Applications</h4>
+      <ul>
+        <li><a href="#recipe">Four questions; captioning</a></li>
+        <li><a href="#seq2seq">Entailment, translation, transliteration</a></li>
+        <li><a href="#image-qa">Image question answering</a></li>
+        <li><a href="#more-tasks">Summaries, videos, dialog</a></li>
+        <li><a href="#app-table">Summary table</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 16.3 · Attention</h4>
+      <ul>
+        <li><a href="#why-attention">Why attention</a></li>
+        <li><a href="#oracle">If an oracle gave the weights</a></li>
+        <li><a href="#learn-weights">Scores, softmax, f_ATT</a></li>
+        <li><a href="#no-supervision">Learning without α labels</a></li>
+        <li><a href="#attn-mt">Encode, attend, decode</a></li>
+        <li><a href="#heatmaps">Heat maps</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Modules 16.4–16.5 · Images, hierarchy</h4>
+      <ul>
+        <li><a href="#image-attention">Attention over images</a></li>
+        <li><a href="#hierarchical">Hierarchical encoders</a></li>
+        <li><a href="#han">Hierarchical attention</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Revision</h4>
+      <ul>
+        <li><a href="#terms">Key terms</a></li>
+        <li><a href="#test">Test yourself</a></li>
+        <li><a href="index.html">All lectures</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="glance" id="glance">
+      <h2>At a glance</h2>
+      <ul>
+        <li>An RNN language model computes the next-word distribution as \(\operatorname{softmax}(V\mathbf{s}_t + \mathbf{c})\). The state \(\mathbf{s}_t\) stands in for all previous words.</li>
+        <li>An <dfn>encoder–decoder</dfn> model adds an encoder (CNN for images, RNN for text, RNN of CNNs for video) whose output conditions the decoder, either as its initial state \(\mathbf{s}_0\) or as an extra input at every step.</li>
+        <li>Every application is described by the same list: data, encoder, decoder, parameters, loss (usually a sum of cross-entropies) and algorithm (gradient descent with backpropagation).</li>
+        <li><dfn>Attention</dfn> replaces the single encoding with a fresh context vector at each decoder step, \(\mathbf{c}_t = \sum_j \alpha_{jt}\mathbf{h}_j\). The weights \(\alpha_{jt}\) are a softmax over \(j\) of scores \(e_{jt} = \mathbf{v}^\top\tanh(U\mathbf{s}_{t-1} + W\mathbf{h}_j)\). No one labels the true weights; they are learned end to end, and heat maps show they align sensibly.</li>
+        <li>For images, attend over the 196 locations of a 14 × 14 × 512 convolutional feature map. For dialogs and documents (sequences of sequences), use a hierarchical encoder, with attention over words and then over sentences.</li>
+      </ul>
+    </div>
+
+    <!-- ============ MODULE 16.1 ============ -->
+    <section id="language-model">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=7Np_5Q-P8eo&amp;t=53s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 0:53</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=7Np_5Q-P8eo&amp;t=190s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 3:10 the output layer</a>
+        </div>
+        <h2>Language modelling with an RNN, revisited</h2>
+      </div>
+      <p>So far the course has built three kinds of networks (feedforward, convolutional and recurrent) and used each on its own. This lecture combines them. It starts from a problem seen before, <dfn>language modelling</dfn>: given the first \(t-1\) words (or characters) of a sentence, predict the \(t\)-th one. Autocomplete is the everyday example.</p>
+      <div class="eq">\[ y^* = \arg\max_{j \in \mathcal{V}} \; P(y_t = j \mid y_1, y_2, \dots, y_{t-1}), \qquad \text{shorthand: } P(y_t \mid y_1^{t-1}) \]</div>
+      <p>\(\mathcal{V}\) is the vocabulary, say 10,000 to 20,000 English words. At every step the network outputs a probability distribution over all of \(\mathcal{V}\), we pick the most probable word, and we continue until the end of the sentence. An RNN computes this distribution from its state:</p>
+      <div class="eq">\[ P(y_t = j \mid y_1^{t-1}) = P(y_t = j \mid \mathbf{s}_t) = \operatorname{softmax}(V\mathbf{s}_t + \mathbf{c})_j \]</div>
+      <p>Read it from the inside out. \(V\mathbf{s}_t + \mathbf{c}\) is a linear transformation of the state plus a bias, a vector with one entry per vocabulary word. The softmax turns it into a probability distribution, and its \(j\)-th entry is the probability of the \(j\)-th word. The state replaces the whole history \(y_1, \dots, y_{t-1}\) in the condition. That is fair: each step receives only one word as input, but the recurrent connections carry everything seen so far into \(\mathbf{s}_t\).</p>
+
+      <h3>The five ingredients <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=7Np_5Q-P8eo&amp;t=259s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 4:19</a></h3>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <tbody>
+            <tr><td><b>Data</b></td><td>All sentences from a large corpus, say Wikipedia.</td></tr>
+            <tr><td><b>Model</b></td><td>\(\mathbf{s}_t = \sigma(W\mathbf{s}_{t-1} + U\mathbf{x}_t + \mathbf{b})\), \(\;P(y_t = j \mid y_1^{t-1}) = \operatorname{softmax}(V\mathbf{s}_t + \mathbf{c})_j\)</td></tr>
+            <tr><td><b>Parameters</b></td><td>\(U, V, W, \mathbf{b}, \mathbf{c}\)</td></tr>
+            <tr><td><b>Loss</b></td><td>\(\mathscr{L}(\theta) = \sum_{t=1}^{T} \mathscr{L}_t(\theta)\), \(\;\mathscr{L}_t(\theta) = -\log P(y_t = \ell_t \mid y_1^{t-1})\), where \(\ell_t\) is the true word at step \(t\): a sum of cross-entropies</td></tr>
+            <tr><td><b>Algorithm</b></td><td>Backpropagation through time (<a href="lecture-11.html">Lecture 11</a>)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The output at each step is a composite function of the inputs, so the model is trainable end to end: gradients flow from the loss back to every parameter. Vanishing and exploding gradients are dealt with by replacing the RNN with an LSTM (<a href="lecture-12.html">Lecture 12</a>).</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 740 290" role="img" aria-label="An RNN language model unrolled over six steps. Inputs GO, I, am, at, home, today enter through U; states s1 to s6 are chained by W starting from a learned s0; each state produces a softmax distribution over the vocabulary through V, giving I, am, at, home, today, stop. A dashed arrow shows the predicted word I being fed in as the next input.">
+            <defs><marker id="l13-f1-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker><marker id="l13-f1-aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-row" x="12" y="66">softmax</text>
+            <text class="d-row" x="12" y="160">state</text>
+            <text class="d-row" x="12" y="245">input</text>
+            <rect class="d-off" x="62" y="138" width="36" height="34" rx="4"/>
+            <text class="d-s" x="80" y="160" text-anchor="middle">s₀</text>
+            <text class="d-al" x="80" y="190" text-anchor="middle">learned</text>
+            <line class="d-ln" x1="98" y1="155" x2="138" y2="155" marker-end="url(#l13-f1-ah)"/>
+            <text class="d-al" x="114" y="149" text-anchor="middle">W</text>
+            <text class="d-t" x="160" y="34" text-anchor="middle">I</text>
+            <rect class="d-box-acc" x="136" y="46" width="48" height="32" rx="4"/>
+            <rect x="143" y="68" width="5" height="6" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="150" y="65" width="5" height="9" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="157" y="52" width="5" height="22" style="fill: var(--accent)"/>
+            <rect x="164" y="67" width="5" height="7" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="171" y="69" width="5" height="5" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <line class="d-ln" x1="160" y1="136" x2="160" y2="80" marker-end="url(#l13-f1-ah)"/>
+            <text class="d-al" x="166" y="113">V</text>
+            <rect class="d-box" x="140" y="138" width="40" height="34" rx="4"/>
+            <text class="d-s" x="160" y="160" text-anchor="middle">s₁</text>
+            <line class="d-ln" x1="160" y1="224" x2="160" y2="176" marker-end="url(#l13-f1-ah)"/>
+            <text class="d-al" x="166" y="205">U</text>
+            <rect class="d-box" x="130" y="226" width="60" height="28" rx="4"/>
+            <text class="d-s" x="160" y="245" text-anchor="middle">&lt;GO&gt;</text>
+            <line class="d-ln" x1="180" y1="155" x2="238" y2="155" marker-end="url(#l13-f1-ah)"/>
+            <text class="d-al" x="196" y="149" text-anchor="middle">W</text>
+            <text class="d-t" x="260" y="34" text-anchor="middle">am</text>
+            <rect class="d-box-acc" x="236" y="46" width="48" height="32" rx="4"/>
+            <rect x="243" y="52" width="5" height="22" style="fill: var(--accent)"/>
+            <rect x="250" y="70" width="5" height="4" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="257" y="67" width="5" height="7" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="264" y="69" width="5" height="5" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="271" y="68" width="5" height="6" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <line class="d-ln" x1="260" y1="136" x2="260" y2="80" marker-end="url(#l13-f1-ah)"/>
+            <text class="d-al" x="266" y="113">V</text>
+            <rect class="d-box" x="240" y="138" width="40" height="34" rx="4"/>
+            <text class="d-s" x="260" y="160" text-anchor="middle">s₂</text>
+            <line class="d-ln" x1="260" y1="224" x2="260" y2="176" marker-end="url(#l13-f1-ah)"/>
+            <text class="d-al" x="266" y="205">U</text>
+            <rect class="d-box" x="230" y="226" width="60" height="28" rx="4"/>
+            <text class="d-s" x="260" y="245" text-anchor="middle">I</text>
+            <line class="d-ln" x1="280" y1="155" x2="338" y2="155" marker-end="url(#l13-f1-ah)"/>
+            <text class="d-al" x="296" y="149" text-anchor="middle">W</text>
+            <text class="d-t" x="360" y="34" text-anchor="middle">at</text>
+            <rect class="d-box-acc" x="336" y="46" width="48" height="32" rx="4"/>
+            <rect x="343" y="70" width="5" height="4" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="350" y="67" width="5" height="7" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="357" y="69" width="5" height="5" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="364" y="52" width="5" height="22" style="fill: var(--accent)"/>
+            <rect x="371" y="65" width="5" height="9" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <line class="d-ln" x1="360" y1="136" x2="360" y2="80" marker-end="url(#l13-f1-ah)"/>
+            <text class="d-al" x="366" y="113">V</text>
+            <rect class="d-box" x="340" y="138" width="40" height="34" rx="4"/>
+            <text class="d-s" x="360" y="160" text-anchor="middle">s₃</text>
+            <line class="d-ln" x1="360" y1="224" x2="360" y2="176" marker-end="url(#l13-f1-ah)"/>
+            <text class="d-al" x="366" y="205">U</text>
+            <rect class="d-box" x="330" y="226" width="60" height="28" rx="4"/>
+            <text class="d-s" x="360" y="245" text-anchor="middle">am</text>
+            <line class="d-ln" x1="380" y1="155" x2="438" y2="155" marker-end="url(#l13-f1-ah)"/>
+            <text class="d-al" x="396" y="149" text-anchor="middle">W</text>
+            <text class="d-t" x="460" y="34" text-anchor="middle">home</text>
+            <rect class="d-box-acc" x="436" y="46" width="48" height="32" rx="4"/>
+            <rect x="443" y="67" width="5" height="7" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="450" y="52" width="5" height="22" style="fill: var(--accent)"/>
+            <rect x="457" y="68" width="5" height="6" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="464" y="65" width="5" height="9" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="471" y="70" width="5" height="4" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <line class="d-ln" x1="460" y1="136" x2="460" y2="80" marker-end="url(#l13-f1-ah)"/>
+            <text class="d-al" x="466" y="113">V</text>
+            <rect class="d-box" x="440" y="138" width="40" height="34" rx="4"/>
+            <text class="d-s" x="460" y="160" text-anchor="middle">s₄</text>
+            <line class="d-ln" x1="460" y1="224" x2="460" y2="176" marker-end="url(#l13-f1-ah)"/>
+            <text class="d-al" x="466" y="205">U</text>
+            <rect class="d-box" x="430" y="226" width="60" height="28" rx="4"/>
+            <text class="d-s" x="460" y="245" text-anchor="middle">at</text>
+            <line class="d-ln" x1="480" y1="155" x2="538" y2="155" marker-end="url(#l13-f1-ah)"/>
+            <text class="d-al" x="496" y="149" text-anchor="middle">W</text>
+            <text class="d-t" x="560" y="34" text-anchor="middle">today</text>
+            <rect class="d-box-acc" x="536" y="46" width="48" height="32" rx="4"/>
+            <rect x="543" y="69" width="5" height="5" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="550" y="68" width="5" height="6" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="557" y="65" width="5" height="9" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="564" y="70" width="5" height="4" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="571" y="52" width="5" height="22" style="fill: var(--accent)"/>
+            <line class="d-ln" x1="560" y1="136" x2="560" y2="80" marker-end="url(#l13-f1-ah)"/>
+            <text class="d-al" x="566" y="113">V</text>
+            <rect class="d-box" x="540" y="138" width="40" height="34" rx="4"/>
+            <text class="d-s" x="560" y="160" text-anchor="middle">s₅</text>
+            <line class="d-ln" x1="560" y1="224" x2="560" y2="176" marker-end="url(#l13-f1-ah)"/>
+            <text class="d-al" x="566" y="205">U</text>
+            <rect class="d-box" x="530" y="226" width="60" height="28" rx="4"/>
+            <text class="d-s" x="560" y="245" text-anchor="middle">home</text>
+            <line class="d-ln" x1="580" y1="155" x2="638" y2="155" marker-end="url(#l13-f1-ah)"/>
+            <text class="d-al" x="596" y="149" text-anchor="middle">W</text>
+            <text class="d-t" x="660" y="34" text-anchor="middle">&lt;stop&gt;</text>
+            <rect class="d-box-acc" x="636" y="46" width="48" height="32" rx="4"/>
+            <rect x="643" y="68" width="5" height="6" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="650" y="65" width="5" height="9" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="657" y="52" width="5" height="22" style="fill: var(--accent)"/>
+            <rect x="664" y="67" width="5" height="7" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <rect x="671" y="69" width="5" height="5" style="fill: var(--ink-2); fill-opacity: .55"/>
+            <line class="d-ln" x1="660" y1="136" x2="660" y2="80" marker-end="url(#l13-f1-ah)"/>
+            <text class="d-al" x="666" y="113">V</text>
+            <rect class="d-box" x="640" y="138" width="40" height="34" rx="4"/>
+            <text class="d-s" x="660" y="160" text-anchor="middle">s₆</text>
+            <line class="d-ln" x1="660" y1="224" x2="660" y2="176" marker-end="url(#l13-f1-ah)"/>
+            <text class="d-al" x="666" y="205">U</text>
+            <rect class="d-box" x="630" y="226" width="60" height="28" rx="4"/>
+            <text class="d-s" x="660" y="245" text-anchor="middle">today</text>
+            <path class="d-ln-acc d-dash" d="M184 62 H222 V240 H228" marker-end="url(#l13-f1-aa)"/>
+            <text class="d-s" x="160" y="280">the same U, W and V at every step · dashed: the predicted word becomes the next input</text>
+          </svg>
+        </div>
+        <figcaption><b>An RNN language model, unrolled.</b> Every step uses the same \(U\), \(W\) and \(V\). Each state produces a distribution over the vocabulary (the bars), and the most probable word is the output. \(\mathbf{s}_0\) is a learned parameter. At test time the word predicted at step \(t-1\) is fed in as the input at step \(t\) (dashed arrow, drawn once).</figcaption>
+      </figure>
+    </section>
+
+    <section id="decoder-input">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=7Np_5Q-P8eo&amp;t=452s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 7:32</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=7Np_5Q-P8eo&amp;t=584s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 9:44 the initial state</a>
+        </div>
+        <h2>What the network reads at each step</h2>
+      </div>
+      <p>When generating, the input \(\mathbf{x}_t\) is simply the word predicted at the previous step. If word \(j\) received the highest probability at step \(t-1\), then</p>
+      <div class="eq">\[ \mathbf{x}_t = \mathbf{e}(v_j), \]</div>
+      <p>the one-hot vector of the \(j\)-th vocabulary word. Generation starts from a special \(\langle\text{GO}\rangle\) symbol and ends when the network outputs \(\langle\text{stop}\rangle\); both are added to the vocabulary as extra words. During training the true sentence is known, so the true previous word is used as the input. (Standard name, not used in the lecture: <i>teacher forcing</i>.)</p>
+      <p>One-hot is only one possible representation of a word <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=7Np_5Q-P8eo&amp;t=553s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>9:13</a>. In practice the input is a pre-trained embedding of the \(j\)-th word, for example its word2vec vector from <a href="lecture-10.html">Lecture 10</a>.</p>
+      <p>The initial state \(\mathbf{s}_0\) is not computed from anything. Nobody can say what the state "before the first word" should mean, so it is initialized randomly and learned along with the other parameters of the RNN (or LSTM, or GRU). The lecture promises to come back to it; image captioning will give it a meaning.</p>
+    </section>
+
+    <section id="compact">
+      <div class="sec-head">
+        <a class="ts" href="https://www.youtube.com/watch?v=7Np_5Q-P8eo&amp;t=616s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 10:16</a>
+        <h2>RNN, GRU and LSTM written as functions</h2>
+      </div>
+      <p>The models below would be unreadable if every cell were written out with its gates. From here on each cell is a function of its previous state and current input. The gate equations are in <a href="lecture-12.html">Lecture 12</a>.</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Cell</th><th>Equations</th><th>Written as</th></tr></thead>
+          <tbody>
+            <tr><td>RNN</td><td>\(\mathbf{s}_t = \sigma(U\mathbf{x}_t + W\mathbf{s}_{t-1} + \mathbf{b})\)</td><td>\(\mathbf{s}_t = \text{RNN}(\mathbf{s}_{t-1}, \mathbf{x}_t)\)</td></tr>
+            <tr><td>GRU</td><td>\(\tilde{\mathbf{s}}_t = \sigma(W(\mathbf{o}_t \odot \mathbf{s}_{t-1}) + U\mathbf{x}_t + \mathbf{b})\), \(\;\mathbf{s}_t = \mathbf{i}_t \odot \mathbf{s}_{t-1} + (1 - \mathbf{i}_t) \odot \tilde{\mathbf{s}}_t\)</td><td>\(\mathbf{s}_t = \text{GRU}(\mathbf{s}_{t-1}, \mathbf{x}_t)\)</td></tr>
+            <tr><td>LSTM</td><td>\(\tilde{\mathbf{s}}_t = \sigma(W\mathbf{h}_{t-1} + U\mathbf{x}_t + \mathbf{b})\), \(\;\mathbf{s}_t = \mathbf{f}_t \odot \mathbf{s}_{t-1} + \mathbf{i}_t \odot \tilde{\mathbf{s}}_t\), \(\;\mathbf{h}_t = \mathbf{o}_t \odot \sigma(\mathbf{s}_t)\)</td><td>\(\mathbf{h}_t, \mathbf{s}_t = \text{LSTM}(\mathbf{h}_{t-1}, \mathbf{s}_{t-1}, \mathbf{x}_t)\)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Any of the three can stand wherever "RNN" appears below. For the LSTM the lecture uses \(\mathbf{s}_t\), or both \(\mathbf{h}_t\) and \(\mathbf{s}_t\), as convenient.</p>
+    </section>
+
+    <section id="image-conditioning">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=7Np_5Q-P8eo&amp;t=682s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 11:22</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=7Np_5Q-P8eo&amp;t=847s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 14:07 fc7</a>
+        </div>
+        <h2>Generating a sentence from an image</h2>
+      </div>
+      <p>A language model generates a sentence given the previous words. Image captioning generates it given the previous words <i>and</i> an image \(I\): for a photo, "A man throwing a frisbee in a park", one word at a time. The quantity of interest becomes \(P(y_t \mid y_1^{t-1}, I)\), which is again a conditional distribution with one more thing to condition on.</p>
+      <p>Earlier the history \(y_1^{t-1}\) was replaced by the vector \(\mathbf{s}_t\). The image can be replaced by a vector too. Every layer of a CNN learns an abstract representation of the image, and we trust such a representation to contain the image's information, just as \(\mathbf{s}_t\) contains the history. By convention the representation is taken from <dfn>fc7</dfn>, the fully connected layer just before the output layer of a network like VGG-16 (<a href="lecture-08.html">Lecture 8</a>); it is numbered 7 because the five convolutional blocks are counted first. So we model</p>
+      <div class="eq">\[ P(y_t = j \mid y_1^{t-1}, I) \quad \text{as} \quad P(y_t = j \mid \mathbf{s}_t, \text{fc7}(I)). \]</div>
+      <p>This is one choice among several. A student suggested a non-neural one in class: detect the objects first (man, frisbee) and condition on their names. Conditioning on \(\text{fc7}(I)\) is the neural way, and there are still two ways to wire it in.</p>
+
+      <h3>Option 1: the image is the initial state <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=7Np_5Q-P8eo&amp;t=1013s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 16:53</a></h3>
+      <p>Set \(\mathbf{s}_0 = \text{fc7}(I)\). The mysterious learned \(\mathbf{s}_0\) now has a meaning: the starting point of the description is the image. Then \(\mathbf{s}_1\) depends on \(\mathbf{s}_0\), every later state depends on the one before, and so every \(P(y_t = j)\) depends on \(\text{fc7}(I)\). This computes \(P(y_t = j \mid \mathbf{s}_t, \text{fc7}(I))\). There is one practical detail <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=7Np_5Q-P8eo&amp;t=1051s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>17:31</a>. fc7 has 4096 numbers and the state has \(d\), so the image vector is first projected by a learnable \(d \times 4096\) matrix. The first input \(\mathbf{x}_1\) is \(\langle\text{GO}\rangle\).</p>
+
+      <h3>Option 2: the image at every step <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=7Np_5Q-P8eo&amp;t=1115s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 18:35</a></h3>
+      <p>Feeding the image only once looks slightly inefficient. The more explicit alternative concatenates it with the input at every step, so each state is computed directly from the image:</p>
+      <div class="eq">\[ \mathbf{s}_t = \text{RNN}\big(\mathbf{s}_{t-1}, [\mathbf{x}_t, \text{fc7}(I)]\big) \]</div>
+      <p>You could think of other ways of conditioning \(P(y_t = j)\) on fc7.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 760 300" role="img" aria-label="Two image-captioning decoders. Left, option 1: a CNN reads the image and its fc7 vector becomes the initial state s0 of an RNN that generates A, man, throwing. Right, option 2: the fc7 vector is carried along a line to every decoder step and concatenated with that step's word input.">
+            <defs><marker id="l13-f2-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker><marker id="l13-f2-aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="16" y="22">Option 1 · s₀ = fc7(I)</text>
+            <text class="d-t" x="150" y="50" text-anchor="middle">A</text>
+            <rect class="d-box-acc" x="132" y="58" width="36" height="24" rx="4"/>
+            <line class="d-ln" x1="150" y1="118" x2="150" y2="84" marker-end="url(#l13-f2-ah)"/>
+            <rect class="d-box" x="133" y="120" width="34" height="30" rx="4"/>
+            <text class="d-s" x="150" y="140" text-anchor="middle">s₁</text>
+            <line class="d-ln" x1="150" y1="192" x2="150" y2="152" marker-end="url(#l13-f2-ah)"/>
+            <rect class="d-box" x="126" y="194" width="48" height="24" rx="4"/>
+            <text class="d-s" x="150" y="210" text-anchor="middle">&lt;GO&gt;</text>
+            <line class="d-ln" x1="167" y1="135" x2="206" y2="135" marker-end="url(#l13-f2-ah)"/>
+            <text class="d-t" x="225" y="50" text-anchor="middle">man</text>
+            <rect class="d-box-acc" x="207" y="58" width="36" height="24" rx="4"/>
+            <line class="d-ln" x1="225" y1="118" x2="225" y2="84" marker-end="url(#l13-f2-ah)"/>
+            <rect class="d-box" x="208" y="120" width="34" height="30" rx="4"/>
+            <text class="d-s" x="225" y="140" text-anchor="middle">s₂</text>
+            <line class="d-ln" x1="225" y1="192" x2="225" y2="152" marker-end="url(#l13-f2-ah)"/>
+            <rect class="d-box" x="201" y="194" width="48" height="24" rx="4"/>
+            <text class="d-s" x="225" y="210" text-anchor="middle">A</text>
+            <line class="d-ln" x1="242" y1="135" x2="281" y2="135" marker-end="url(#l13-f2-ah)"/>
+            <text class="d-t" x="300" y="50" text-anchor="middle">throwing</text>
+            <rect class="d-box-acc" x="282" y="58" width="36" height="24" rx="4"/>
+            <line class="d-ln" x1="300" y1="118" x2="300" y2="84" marker-end="url(#l13-f2-ah)"/>
+            <rect class="d-box" x="283" y="120" width="34" height="30" rx="4"/>
+            <text class="d-s" x="300" y="140" text-anchor="middle">s₃</text>
+            <line class="d-ln" x1="300" y1="192" x2="300" y2="152" marker-end="url(#l13-f2-ah)"/>
+            <rect class="d-box" x="276" y="194" width="48" height="24" rx="4"/>
+            <text class="d-s" x="300" y="210" text-anchor="middle">man</text>
+            <text class="d-t" x="345" y="139" text-anchor="middle">…</text>
+            <rect class="d-box-acc" x="58" y="120" width="40" height="30" rx="4"/>
+            <text class="d-s" x="78" y="140" text-anchor="middle">s₀</text>
+            <line class="d-ln" x1="98" y1="135" x2="131" y2="135" marker-end="url(#l13-f2-ah)"/>
+            <rect class="d-box" x="8" y="246" width="32" height="32" rx="3"/>
+            <path class="d-ln" d="M11 274 L20 260 L27 268 L32 262 L37 274"/>
+            <circle class="pt-plain" cx="30" cy="254" r="3"/>
+            <line class="d-ln" x1="41" y1="262" x2="48" y2="262" marker-end="url(#l13-f2-ah)"/>
+            <rect class="d-box" x="50" y="244" width="56" height="36" rx="4"/>
+            <text class="d-t" x="78" y="267" text-anchor="middle">CNN</text>
+            <line class="d-ln-acc" x1="78" y1="242" x2="78" y2="154" marker-end="url(#l13-f2-aa)"/>
+            <text class="d-s" x="84" y="205" style="fill: var(--accent)">fc7(I)</text>
+            <line class="d-rule" x1="372" y1="10" x2="372" y2="292"/>
+            <text class="d-h" x="392" y="22">Option 2 · fc7(I) at every step</text>
+            <text class="d-t" x="530" y="50" text-anchor="middle">A</text>
+            <rect class="d-box-acc" x="512" y="58" width="36" height="24" rx="4"/>
+            <line class="d-ln" x1="530" y1="118" x2="530" y2="84" marker-end="url(#l13-f2-ah)"/>
+            <rect class="d-box" x="513" y="120" width="34" height="30" rx="4"/>
+            <text class="d-s" x="530" y="140" text-anchor="middle">s₁</text>
+            <line class="d-ln" x1="530" y1="192" x2="530" y2="152" marker-end="url(#l13-f2-ah)"/>
+            <rect class="d-box" x="500" y="194" width="36" height="24" rx="3"/>
+            <text class="d-s" x="518" y="210" text-anchor="middle">&lt;GO&gt;</text>
+            <rect class="d-box-acc" x="536" y="194" width="18" height="24" rx="3"/>
+            <line class="d-ln" x1="547" y1="135" x2="586" y2="135" marker-end="url(#l13-f2-ah)"/>
+            <text class="d-t" x="605" y="50" text-anchor="middle">man</text>
+            <rect class="d-box-acc" x="587" y="58" width="36" height="24" rx="4"/>
+            <line class="d-ln" x1="605" y1="118" x2="605" y2="84" marker-end="url(#l13-f2-ah)"/>
+            <rect class="d-box" x="588" y="120" width="34" height="30" rx="4"/>
+            <text class="d-s" x="605" y="140" text-anchor="middle">s₂</text>
+            <line class="d-ln" x1="605" y1="192" x2="605" y2="152" marker-end="url(#l13-f2-ah)"/>
+            <rect class="d-box" x="575" y="194" width="36" height="24" rx="3"/>
+            <text class="d-s" x="593" y="210" text-anchor="middle">A</text>
+            <rect class="d-box-acc" x="611" y="194" width="18" height="24" rx="3"/>
+            <line class="d-ln" x1="622" y1="135" x2="661" y2="135" marker-end="url(#l13-f2-ah)"/>
+            <text class="d-t" x="680" y="50" text-anchor="middle">throwing</text>
+            <rect class="d-box-acc" x="662" y="58" width="36" height="24" rx="4"/>
+            <line class="d-ln" x1="680" y1="118" x2="680" y2="84" marker-end="url(#l13-f2-ah)"/>
+            <rect class="d-box" x="663" y="120" width="34" height="30" rx="4"/>
+            <text class="d-s" x="680" y="140" text-anchor="middle">s₃</text>
+            <line class="d-ln" x1="680" y1="192" x2="680" y2="152" marker-end="url(#l13-f2-ah)"/>
+            <rect class="d-box" x="650" y="194" width="36" height="24" rx="3"/>
+            <text class="d-s" x="668" y="210" text-anchor="middle">man</text>
+            <rect class="d-box-acc" x="686" y="194" width="18" height="24" rx="3"/>
+            <text class="d-t" x="722" y="139" text-anchor="middle">…</text>
+            <rect class="d-box" x="438" y="120" width="40" height="30" rx="4"/>
+            <text class="d-s" x="458" y="140" text-anchor="middle">s₀</text>
+            <line class="d-ln" x1="478" y1="135" x2="511" y2="135" marker-end="url(#l13-f2-ah)"/>
+            <rect class="d-box" x="386" y="246" width="32" height="32" rx="3"/>
+            <path class="d-ln" d="M389 274 L398 260 L405 268 L410 262 L415 274"/>
+            <circle class="pt-plain" cx="408" cy="254" r="3"/>
+            <line class="d-ln" x1="419" y1="262" x2="426" y2="262" marker-end="url(#l13-f2-ah)"/>
+            <rect class="d-box" x="428" y="244" width="56" height="36" rx="4"/>
+            <text class="d-t" x="456" y="267" text-anchor="middle">CNN</text>
+            <path class="d-ln-acc" d="M484 262 H695"/>
+            <line class="d-ln-acc" x1="545" y1="262" x2="545" y2="220" marker-end="url(#l13-f2-aa)"/>
+            <line class="d-ln-acc" x1="620" y1="262" x2="620" y2="220" marker-end="url(#l13-f2-aa)"/>
+            <line class="d-ln-acc" x1="695" y1="262" x2="695" y2="220" marker-end="url(#l13-f2-aa)"/>
+            <text class="d-s" x="490" y="256" style="fill: var(--accent)">fc7(I)</text>
+            <text class="d-s" x="392" y="292">input at step t: [xₜ, fc7(I)]</text>
+          </svg>
+        </div>
+        <figcaption><b>Two ways to condition the decoder on the image.</b> Left: the CNN's fc7 vector becomes \(\mathbf{s}_0\), and the image reaches later steps only through the recurrence. Right: \(\text{fc7}(I)\) (accent boxes) is concatenated with the word input at every step. In both, the CNN is the encoder and the RNN the decoder.</figcaption>
+      </figure>
+    </section>
+
+    <section id="enc-dec">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=7Np_5Q-P8eo&amp;t=1145s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 19:05</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=7Np_5Q-P8eo&amp;t=1214s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 20:14 beyond the diagram</a>
+        </div>
+        <h2>The encoder–decoder architecture</h2>
+      </div>
+      <p>The captioning model has two parts. An <dfn>encoder</dfn>, here a CNN, reads the input and encodes it as a representation. A <dfn>decoder</dfn>, here an RNN, generates (decodes) the output sentence from that encoding. Both are neural networks. This is the <dfn>encoder–decoder architecture</dfn>; such models became extremely popular, and the lecture credits them with much of deep learning's popularity. The encoder's output can go in once, as \(\mathbf{s}_0\), or be fed to every step of the decoder.</p>
+      <p>The diagram, with one box wired to another, is the easy part. What matters is the function behind it. The output \(y_t\) is the output layer applied to the RNN applied to the CNN applied to \(x\), so you should be able to write \(y\) as a function of \(x\), and the gradient can flow back through every piece.</p>
+      <p class="rule-of-thumb">For any encoder–decoder model, write down the chain of equations from the input \(x\) to the output distribution. If you can, you understand the model.</p>
+    </section>
+
+    <!-- ============ MODULE 16.2 ============ -->
+    <section id="recipe">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=dC_d3iVw6sc&amp;t=12s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 0:12</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=dC_d3iVw6sc&amp;t=44s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 0:44 captioning</a>
+        </div>
+        <h2>Four questions for every application</h2>
+      </div>
+      <p>Module 16.2 runs through a series of tasks and asks the same four questions of each:</p>
+      <ol>
+        <li>What kind of network can encode the input(s)? (What is an appropriate encoder?)</li>
+        <li>What kind of network can decode the output? (What is an appropriate decoder?)</li>
+        <li>What are the parameters of the model?</li>
+        <li>What is an appropriate loss function?</li>
+      </ol>
+      <p>With the data and the training algorithm, these give the full description of a model.</p>
+
+      <h3>Image captioning, written out</h3>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <tbody>
+            <tr><td><b>Data</b></td><td>\(\{x_i = \text{image}_i,\ y_i = \text{caption}_i\}_{i=1}^N\); each caption is itself a sequence \(y_{i1}, \dots, y_{iT}\).</td></tr>
+            <tr><td><b>Encoder</b></td><td>\(\mathbf{s}_0 = \text{CNN}(x_i)\). "CNN" stands for whichever representation you take: fc7, conv5, max-pool 5.</td></tr>
+            <tr><td><b>Decoder</b></td><td>\(\mathbf{s}_t = \text{RNN}(\mathbf{s}_{t-1}, \mathbf{e}(\hat y_{t-1}))\), \(\;P(y_t \mid y_1^{t-1}, I) = \operatorname{softmax}(V\mathbf{s}_t + \mathbf{b})\). \(\mathbf{e}(\hat y_{t-1})\) is the embedding (one-hot or word2vec) of the word predicted at the previous step.</td></tr>
+            <tr><td><b>Parameters</b></td><td>\(U_{\text{dec}}, V, W_{\text{dec}}, W_{\text{conv}}, \mathbf{b}\): the CNN's filters, the RNN's weights and the output layer.</td></tr>
+            <tr><td><b>Loss</b></td><td>\(\mathscr{L}(\theta) = \sum_{t=1}^{T} \mathscr{L}_t(\theta) = -\sum_{t=1}^{T} \log P(y_t = \ell_t \mid y_1^{t-1}, I)\)</td></tr>
+            <tr><td><b>Algorithm</b></td><td>Gradient descent with backpropagation: through time in the decoder, and on into the CNN.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">The slides write the outer sum with index \(i\); it runs over the time steps \(t\) of one caption. The total training loss adds this over the \(N\) training pairs.</p>
+      <p>The final \(y\) is a composite function of the image: many computations sit in between, but there is a path from \(x\) to \(y\), so the whole model is one network.</p>
+    </section>
+
+    <section id="seq2seq">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=dC_d3iVw6sc&amp;t=217s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 3:37</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=dC_d3iVw6sc&amp;t=426s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 7:06 translation</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=dC_d3iVw6sc&amp;t=497s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 8:17 transliteration</a>
+        </div>
+        <h2>Sequence in, sequence out: entailment, translation, transliteration</h2>
+      </div>
+      <p><dfn>Textual entailment</dfn>: given a premise, generate a hypothesis that follows from it. The premise "It is raining outside" entails "The ground is wet". The data is \(\{x_i = \text{premise}_i,\ y_i = \text{hypothesis}_i\}_{i=1}^N\). Both input and output are word sequences, so the encoder and decoder are both RNNs (replace them with LSTMs if you like). The model becomes one network by handing the encoder's last state to the decoder.</p>
+      <div class="eq">\[ \begin{aligned} &\text{Encoder:} && \mathbf{h}_t = \text{RNN}(\mathbf{h}_{t-1}, \mathbf{x}_{it}) \\ &\text{Decoder (option 1):} && \mathbf{s}_0 = \mathbf{h}_T \;\; (T = \text{length of the input}), \quad \mathbf{s}_t = \text{RNN}(\mathbf{s}_{t-1}, \mathbf{e}(\hat y_{t-1})) \\ &&& P(y_t \mid y_1^{t-1}, x) = \operatorname{softmax}(V\mathbf{s}_t + \mathbf{b}) \end{aligned} \]</div>
+      <p>Parameters \(U_{\text{dec}}, V, W_{\text{dec}}, U_{\text{enc}}, W_{\text{enc}}, \mathbf{b}\). The loss is the sum of cross-entropies \(-\sum_t \log P(y_t = \ell_t \mid y_1^{t-1}, x)\), and training is gradient descent with backpropagation, through the decoder, across the hand-off \(\mathbf{s}_0 = \mathbf{h}_T\) and all the way back through the encoder.</p>
+      <p><b>Option 2</b> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=dC_d3iVw6sc&amp;t=392s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>6:32</a> feeds the encoding at every step. An RNN takes exactly two inputs, the previous state and the current input, so \(\mathbf{h}_T\) is concatenated with the word embedding:</p>
+      <div class="eq">\[ \mathbf{s}_t = \text{RNN}\big(\mathbf{s}_{t-1}, [\mathbf{h}_T, \mathbf{e}(\hat y_{t-1})]\big) \]</div>
+      <p>Parameters, loss and training algorithm stay the same. From here on the lecture states only option 1, since option 2 is the same small change each time.</p>
+      <p><dfn>Machine translation</dfn>: the English sentence "I am going home" becomes the Hindi "Mein ghar ja raha hoon". The data is \(\{x_i = \text{source}_i,\ y_i = \text{target}_i\}_{i=1}^N\), and the model, parameters, loss and algorithm are exactly the entailment ones, with the same two options.</p>
+      <p><dfn>Transliteration</dfn>: write a word in another script. It is typically used for names: translating "Thomas" into Hindi means writing "Thomas" in Devanagari. The slides' example takes the characters I-N-D-I-A to इंडिया. Input and output are sequences of characters, so again an RNN encoder and an RNN decoder with the same equations. (The option 2 slide writes the concatenation as \([\mathbf{e}(\hat y_{t-1}), \mathbf{h}_T]\); the order does not matter.)</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 740 300" role="img" aria-label="Encoder-decoder for translation. An encoder RNN reads I am going home into states h1 to hT. hT becomes the decoder's initial state s0, and the decoder RNN, fed GO, Mein, ghar, ja, raha, outputs Mein ghar ja raha hoon. A dashed line shows option 2, where hT is also fed to every decoder step.">
+            <defs><marker id="l13-f3-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker><marker id="l13-f3-aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <rect class="d-plot" x="24" y="96" width="282" height="146" rx="10"/>
+            <text class="d-h" x="34" y="88">Encoder</text>
+            <rect class="d-plot" x="360" y="26" width="360" height="216" rx="10"/>
+            <text class="d-h" x="370" y="18">Decoder</text>
+            <rect class="d-box" x="48" y="130" width="36" height="30" rx="4"/>
+            <text class="d-s" x="66" y="150" text-anchor="middle">h₁</text>
+            <rect class="d-box" x="38" y="198" width="56" height="24" rx="4"/>
+            <text class="d-s" x="66" y="214" text-anchor="middle">I</text>
+            <line class="d-ln" x1="66" y1="196" x2="66" y2="162" marker-end="url(#l13-f3-ah)"/>
+            <line class="d-ln" x1="84" y1="145" x2="116" y2="145" marker-end="url(#l13-f3-ah)"/>
+            <rect class="d-box" x="118" y="130" width="36" height="30" rx="4"/>
+            <text class="d-s" x="136" y="150" text-anchor="middle">h₂</text>
+            <rect class="d-box" x="108" y="198" width="56" height="24" rx="4"/>
+            <text class="d-s" x="136" y="214" text-anchor="middle">am</text>
+            <line class="d-ln" x1="136" y1="196" x2="136" y2="162" marker-end="url(#l13-f3-ah)"/>
+            <line class="d-ln" x1="154" y1="145" x2="186" y2="145" marker-end="url(#l13-f3-ah)"/>
+            <rect class="d-box" x="188" y="130" width="36" height="30" rx="4"/>
+            <text class="d-s" x="206" y="150" text-anchor="middle">h₃</text>
+            <rect class="d-box" x="178" y="198" width="56" height="24" rx="4"/>
+            <text class="d-s" x="206" y="214" text-anchor="middle">going</text>
+            <line class="d-ln" x1="206" y1="196" x2="206" y2="162" marker-end="url(#l13-f3-ah)"/>
+            <line class="d-ln" x1="224" y1="145" x2="256" y2="145" marker-end="url(#l13-f3-ah)"/>
+            <rect class="d-box" x="258" y="130" width="36" height="30" rx="4"/>
+            <text class="d-s" x="276" y="150" text-anchor="middle">h<tspan dy="3" style="font-size: 9px">T</tspan><tspan dy="-3"></tspan></text>
+            <rect class="d-box" x="248" y="198" width="56" height="24" rx="4"/>
+            <text class="d-s" x="276" y="214" text-anchor="middle">home</text>
+            <line class="d-ln" x1="276" y1="196" x2="276" y2="162" marker-end="url(#l13-f3-ah)"/>
+            <line class="d-ln-acc" x1="294" y1="140" x2="380" y2="140" marker-end="url(#l13-f3-aa)"/>
+            <text class="d-s" x="337" y="132" text-anchor="middle" style="fill: var(--accent)">s₀ = h<tspan dy="3" style="font-size: 9px">T</tspan><tspan dy="-3"></tspan></text>
+            <text class="d-t" x="400" y="46" text-anchor="middle">Mein</text>
+            <rect class="d-box-acc" x="383" y="56" width="34" height="24" rx="4"/>
+            <line class="d-ln" x1="400" y1="128" x2="400" y2="82" marker-end="url(#l13-f3-ah)"/>
+            <rect class="d-box" x="383" y="130" width="34" height="30" rx="4"/>
+            <text class="d-s" x="400" y="150" text-anchor="middle">s₁</text>
+            <rect class="d-box" x="372" y="198" width="56" height="24" rx="4"/>
+            <text class="d-s" x="400" y="214" text-anchor="middle">&lt;GO&gt;</text>
+            <line class="d-ln" x1="400" y1="196" x2="400" y2="162" marker-end="url(#l13-f3-ah)"/>
+            <line class="d-ln" x1="417" y1="145" x2="446" y2="145" marker-end="url(#l13-f3-ah)"/>
+            <text class="d-t" x="465" y="46" text-anchor="middle">ghar</text>
+            <rect class="d-box-acc" x="448" y="56" width="34" height="24" rx="4"/>
+            <line class="d-ln" x1="465" y1="128" x2="465" y2="82" marker-end="url(#l13-f3-ah)"/>
+            <rect class="d-box" x="448" y="130" width="34" height="30" rx="4"/>
+            <text class="d-s" x="465" y="150" text-anchor="middle">s₂</text>
+            <rect class="d-box" x="437" y="198" width="56" height="24" rx="4"/>
+            <text class="d-s" x="465" y="214" text-anchor="middle">Mein</text>
+            <line class="d-ln" x1="465" y1="196" x2="465" y2="162" marker-end="url(#l13-f3-ah)"/>
+            <line class="d-ln" x1="482" y1="145" x2="511" y2="145" marker-end="url(#l13-f3-ah)"/>
+            <text class="d-t" x="530" y="46" text-anchor="middle">ja</text>
+            <rect class="d-box-acc" x="513" y="56" width="34" height="24" rx="4"/>
+            <line class="d-ln" x1="530" y1="128" x2="530" y2="82" marker-end="url(#l13-f3-ah)"/>
+            <rect class="d-box" x="513" y="130" width="34" height="30" rx="4"/>
+            <text class="d-s" x="530" y="150" text-anchor="middle">s₃</text>
+            <rect class="d-box" x="502" y="198" width="56" height="24" rx="4"/>
+            <text class="d-s" x="530" y="214" text-anchor="middle">ghar</text>
+            <line class="d-ln" x1="530" y1="196" x2="530" y2="162" marker-end="url(#l13-f3-ah)"/>
+            <line class="d-ln" x1="547" y1="145" x2="576" y2="145" marker-end="url(#l13-f3-ah)"/>
+            <text class="d-t" x="595" y="46" text-anchor="middle">raha</text>
+            <rect class="d-box-acc" x="578" y="56" width="34" height="24" rx="4"/>
+            <line class="d-ln" x1="595" y1="128" x2="595" y2="82" marker-end="url(#l13-f3-ah)"/>
+            <rect class="d-box" x="578" y="130" width="34" height="30" rx="4"/>
+            <text class="d-s" x="595" y="150" text-anchor="middle">s₄</text>
+            <rect class="d-box" x="567" y="198" width="56" height="24" rx="4"/>
+            <text class="d-s" x="595" y="214" text-anchor="middle">ja</text>
+            <line class="d-ln" x1="595" y1="196" x2="595" y2="162" marker-end="url(#l13-f3-ah)"/>
+            <line class="d-ln" x1="612" y1="145" x2="641" y2="145" marker-end="url(#l13-f3-ah)"/>
+            <text class="d-t" x="660" y="46" text-anchor="middle">hoon</text>
+            <rect class="d-box-acc" x="643" y="56" width="34" height="24" rx="4"/>
+            <line class="d-ln" x1="660" y1="128" x2="660" y2="82" marker-end="url(#l13-f3-ah)"/>
+            <rect class="d-box" x="643" y="130" width="34" height="30" rx="4"/>
+            <text class="d-s" x="660" y="150" text-anchor="middle">s₅</text>
+            <rect class="d-box" x="632" y="198" width="56" height="24" rx="4"/>
+            <text class="d-s" x="660" y="214" text-anchor="middle">raha</text>
+            <line class="d-ln" x1="660" y1="196" x2="660" y2="162" marker-end="url(#l13-f3-ah)"/>
+            <path class="d-ln-acc d-dash" d="M294 152 H330 V262 H674"/>
+            <line class="d-ln-acc d-dash" x1="414" y1="262" x2="414" y2="224" marker-end="url(#l13-f3-aa)"/>
+            <line class="d-ln-acc d-dash" x1="479" y1="262" x2="479" y2="224" marker-end="url(#l13-f3-aa)"/>
+            <line class="d-ln-acc d-dash" x1="544" y1="262" x2="544" y2="224" marker-end="url(#l13-f3-aa)"/>
+            <line class="d-ln-acc d-dash" x1="609" y1="262" x2="609" y2="224" marker-end="url(#l13-f3-aa)"/>
+            <line class="d-ln-acc d-dash" x1="674" y1="262" x2="674" y2="224" marker-end="url(#l13-f3-aa)"/>
+            <text class="d-s" x="344" y="286" style="fill: var(--accent)">option 2 (dashed): h<tspan dy="3" style="font-size: 9px">T</tspan><tspan dy="-3"></tspan> is also concatenated with every decoder input</text>
+          </svg>
+        </div>
+        <figcaption><b>Encoder–decoder for translation.</b> The encoder RNN reads "I am going home" and its last state \(\mathbf{h}_T\) initializes the decoder (option 1). Option 2 (dashed) also concatenates \(\mathbf{h}_T\) with the previous word's embedding at every decoder step. Each decoder input is the previous output word; the decoder stops after it emits \(\langle\text{stop}\rangle\) (not drawn).</figcaption>
+      </figure>
+    </section>
+
+    <section id="image-qa">
+      <div class="sec-head">
+        <a class="ts" href="https://www.youtube.com/watch?v=dC_d3iVw6sc&amp;t=566s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 9:26</a>
+        <h2>Two inputs, one answer: image question answering</h2>
+      </div>
+      <p>Given an image and a question about it ("What is the bird's color?"), produce the answer ("White"). To keep it simple the answer is a single word from a fixed vocabulary, so the output is a single probability distribution over the possible answers.</p>
+      <p>The recipe is to encode each input with the network that suits it, concatenate the encodings, and pass the result to a feed-forward layer that predicts the distribution.</p>
+      <div class="eq">\[ \hat{\mathbf{h}}_I = \text{CNN}(I), \qquad \tilde{\mathbf{h}}_t = \text{RNN}(\tilde{\mathbf{h}}_{t-1}, \mathbf{q}_{it}), \qquad \mathbf{s} = [\tilde{\mathbf{h}}_T;\ \hat{\mathbf{h}}_I], \qquad P(y \mid q, I) = \operatorname{softmax}(V\mathbf{s} + \mathbf{b}) \]</div>
+      <p>The data is \(\{x_i = \{I, q\}_i,\ y_i = \text{answer}_i\}_{i=1}^N\). The parameters are \(V, \mathbf{b}\) of the output layer, \(U_q, W_q\) of the question RNN and \(W_{\text{conv}}\) of the CNN (the slide lists \(\mathbf{b}\) twice). The loss is a single cross-entropy, \(\mathscr{L}(\theta) = -\log P(y = \ell \mid I, q)\), and gradient descent with backpropagation trains it, back through the question RNN and back into the CNN.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 700 300" role="img" aria-label="Image question answering. An RNN reads the question What is the bird's color word by word; a CNN encodes the image. The question's last state and the image encoding are concatenated into s, and a softmax layer on s outputs the answer White.">
+            <defs><marker id="l13-f4-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker><marker id="l13-f4-aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-row" x="30" y="150">question encoder (RNN)</text>
+            <rect class="d-box" x="30" y="236" width="60" height="24" rx="4"/>
+            <text class="d-s" x="60" y="252" text-anchor="middle">What</text>
+            <rect class="d-box" x="43" y="164" width="34" height="30" rx="4"/>
+            <text class="d-s" x="60" y="184" text-anchor="middle">h̃₁</text>
+            <line class="d-ln" x1="60" y1="234" x2="60" y2="196" marker-end="url(#l13-f4-ah)"/>
+            <line class="d-ln" x1="77" y1="179" x2="111" y2="179" marker-end="url(#l13-f4-ah)"/>
+            <rect class="d-box" x="100" y="236" width="60" height="24" rx="4"/>
+            <text class="d-s" x="130" y="252" text-anchor="middle">is</text>
+            <rect class="d-box" x="113" y="164" width="34" height="30" rx="4"/>
+            <text class="d-s" x="130" y="184" text-anchor="middle">h̃₂</text>
+            <line class="d-ln" x1="130" y1="234" x2="130" y2="196" marker-end="url(#l13-f4-ah)"/>
+            <line class="d-ln" x1="147" y1="179" x2="181" y2="179" marker-end="url(#l13-f4-ah)"/>
+            <rect class="d-box" x="170" y="236" width="60" height="24" rx="4"/>
+            <text class="d-s" x="200" y="252" text-anchor="middle">the</text>
+            <rect class="d-box" x="183" y="164" width="34" height="30" rx="4"/>
+            <text class="d-s" x="200" y="184" text-anchor="middle">h̃₃</text>
+            <line class="d-ln" x1="200" y1="234" x2="200" y2="196" marker-end="url(#l13-f4-ah)"/>
+            <line class="d-ln" x1="217" y1="179" x2="251" y2="179" marker-end="url(#l13-f4-ah)"/>
+            <rect class="d-box" x="240" y="236" width="60" height="24" rx="4"/>
+            <text class="d-s" x="270" y="252" text-anchor="middle">bird’s</text>
+            <rect class="d-box" x="253" y="164" width="34" height="30" rx="4"/>
+            <text class="d-s" x="270" y="184" text-anchor="middle">h̃₄</text>
+            <line class="d-ln" x1="270" y1="234" x2="270" y2="196" marker-end="url(#l13-f4-ah)"/>
+            <line class="d-ln" x1="287" y1="179" x2="321" y2="179" marker-end="url(#l13-f4-ah)"/>
+            <rect class="d-box" x="310" y="236" width="60" height="24" rx="4"/>
+            <text class="d-s" x="340" y="252" text-anchor="middle">color</text>
+            <rect class="d-box" x="323" y="164" width="34" height="30" rx="4"/>
+            <text class="d-s" x="340" y="184" text-anchor="middle">h̃<tspan dy="3" style="font-size: 9px">T</tspan><tspan dy="-3"></tspan></text>
+            <line class="d-ln" x1="340" y1="234" x2="340" y2="196" marker-end="url(#l13-f4-ah)"/>
+            <line class="d-ln" x1="357" y1="179" x2="428" y2="179" marker-end="url(#l13-f4-ah)"/>
+            <rect class="d-box-acc" x="430" y="160" width="80" height="36" rx="3"/>
+            <text class="d-s" x="470" y="183" text-anchor="middle">h̃<tspan dy="3" style="font-size: 9px">T</tspan><tspan dy="-3"></tspan></text>
+            <rect class="d-box-acc" x="510" y="160" width="80" height="36" rx="3"/>
+            <text class="d-s" x="550" y="183" text-anchor="middle">ĥ<tspan dy="3" style="font-size: 9px">I</tspan><tspan dy="-3"></tspan></text>
+            <text class="d-t" x="598" y="183">s</text>
+            <rect class="d-box" x="444" y="238" width="32" height="32" rx="3"/>
+            <path class="d-ln" d="M447 266 L456 252 L463 260 L468 254 L473 266"/>
+            <circle class="pt-plain" cx="466" cy="246" r="3"/>
+            <line class="d-ln" x1="477" y1="254" x2="513" y2="254" marker-end="url(#l13-f4-ah)"/>
+            <rect class="d-box" x="515" y="237" width="70" height="34" rx="4"/>
+            <text class="d-t" x="550" y="259" text-anchor="middle">CNN</text>
+            <line class="d-ln" x1="550" y1="235" x2="550" y2="198" marker-end="url(#l13-f4-ah)"/>
+            <text class="d-row" x="515" y="290">image encoder (CNN)</text>
+            <line class="d-ln" x1="510" y1="158" x2="510" y2="108" marker-end="url(#l13-f4-ah)"/>
+            <rect class="d-box-acc" x="440" y="76" width="140" height="30" rx="4"/>
+            <text class="d-s" x="510" y="96" text-anchor="middle">softmax(V s + b)</text>
+            <line class="d-ln" x1="510" y1="74" x2="510" y2="60" marker-end="url(#l13-f4-ah)"/>
+            <text class="d-t" x="510" y="52" text-anchor="middle">White</text>
+            <text class="d-al" x="540" y="52">answer (one word)</text>
+          </svg>
+        </div>
+        <figcaption><b>Image question answering.</b> Two encoders, one per input: an RNN over the question and a CNN over the image. Their outputs are concatenated into \(\mathbf{s}\), and a softmax layer picks the answer from a fixed vocabulary.</figcaption>
+      </figure>
+    </section>
+
+    <section id="more-tasks">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=dC_d3iVw6sc&amp;t=707s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 11:47</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=dC_d3iVw6sc&amp;t=739s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 12:19 video</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=dC_d3iVw6sc&amp;t=807s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 13:27 classification, dialog</a>
+        </div>
+        <h2>Summaries, videos and dialog</h2>
+      </div>
+      <ul>
+        <li><b>Document summarization.</b> "India beats Srilanka to win ICC WC 2011. Dhoni and Gambhir's half centuries help beat SL" becomes "India won the world cup". An RNN encoder reads the document word by word, \(\mathbf{s}_0 = \mathbf{h}_T\), and an RNN decoder writes the summary. Parameters, loss and algorithm are those of translation.</li>
+        <li><b>Video captioning.</b> A video is a sequence of frames, and each frame is an image. So encode every frame with a CNN and run an RNN over the frame encodings, \(\mathbf{h}_t = \text{RNN}(\mathbf{h}_{t-1}, \text{CNN}(x_{it}))\). In class this always gets called an <dfn>RNN of CNNs</dfn>. Then \(\mathbf{s}_0 = \mathbf{h}_T\) and an RNN decoder writes "A man walking on a rope". Parameters \(U_{\text{dec}}, W_{\text{dec}}, V, \mathbf{b}, W_{\text{conv}}, U_{\text{enc}}, W_{\text{enc}}\); the loss is the sum of cross-entropies, and backpropagation goes through time and through the CNNs.</li>
+        <li><b>Video classification.</b> The same RNN-of-CNNs encoder, but the output is one activity label ("Surya Namaskar"), so the decoder is a feed-forward softmax: \(\mathbf{s} = \mathbf{h}_T\), \(P(y \mid \text{video}) = \operatorname{softmax}(V\mathbf{s} + \mathbf{b})\), with loss \(-\log P(y = \ell \mid \text{video})\). Parameters \(V, \mathbf{b}, W_{\text{conv}}, U_{\text{enc}}, W_{\text{enc}}\).</li>
+        <li><b>Dialog.</b> The utterance "How are you" gets the response "I am fine". RNN encoder, \(\mathbf{s}_0 = \mathbf{h}_T\), RNN decoder, as in translation.</li>
+      </ul>
+      <p>Why has this framework become so popular <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=dC_d3iVw6sc&amp;t=840s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>14:00</a>? The tasks above span different modalities (images, videos, sentences and combinations of them), and every one is modelled by a single end-to-end network built only from neural components: convolutional, recurrent and feed-forward layers. The lecture stretches it further to <b>video question answering</b>: an RNN for the question, an RNN of CNNs for the video, concatenate the two, and a feed-forward network predicts an answer from a fixed vocabulary. How well each model works is a separate question. Before this framework, many of them could not be written as one end-to-end network at all.</p>
+      <p>The module ends with a challenge <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=dC_d3iVw6sc&amp;t=933s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>15:33</a>. Pick a machine learning problem from your own field and model it in the encoder–decoder framework. The example from class: treat a person's DNA as a sequence of genes, encode it with an RNN, and predict a probability distribution over diseases the person may be susceptible to.</p>
+      <p>The story is not complete. A very important piece is still missing from all these models, <b>attention</b>, and the next module adds it <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=dC_d3iVw6sc&amp;t=1000s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>16:40</a>.</p>
+    </section>
+
+    <section id="app-table">
+      <div class="sec-head">
+        <a class="ts" href="https://www.youtube.com/watch?v=dC_d3iVw6sc&amp;t=840s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 14:00</a>
+        <h2>All the applications in one table</h2>
+      </div>
+      <p>Every model in Module 16.2 is trained with gradient descent and backpropagation (through time, and into the CNN where there is one). "RNN dec." means \(\mathbf{s}_t = \text{RNN}(\mathbf{s}_{t-1}, \mathbf{e}(\hat y_{t-1}))\) with output \(\operatorname{softmax}(V\mathbf{s}_t + \mathbf{b})\); "sum of CE" means \(-\sum_t \log P(y_t = \ell_t \mid y_1^{t-1}, x)\).</p>
+      <div class="tbl-wrap">
+        <table class="mini app-table">
+          <thead><tr><th>Task</th><th>Data \(x \to y\)</th><th>Encoder</th><th>Decoder</th><th>Parameters</th><th>Loss</th></tr></thead>
+          <tbody>
+            <tr><td>Image captioning</td><td>image → caption</td><td>\(\mathbf{s}_0 = \text{CNN}(x_i)\)</td><td>RNN dec.</td><td>\(U_{\text{dec}}, V, W_{\text{dec}}, W_{\text{conv}}, \mathbf{b}\)</td><td>sum of CE</td></tr>
+            <tr><td>Textual entailment</td><td>premise → hypothesis</td><td>\(\mathbf{h}_t = \text{RNN}(\mathbf{h}_{t-1}, \mathbf{x}_{it})\), \(\mathbf{s}_0 = \mathbf{h}_T\)</td><td>RNN dec.; option 2 adds \(\mathbf{h}_T\) to every input</td><td>\(U_{\text{dec}}, V, W_{\text{dec}}, U_{\text{enc}}, W_{\text{enc}}, \mathbf{b}\)</td><td>sum of CE</td></tr>
+            <tr><td>Machine translation</td><td>source → target sentence</td><td>as entailment</td><td>as entailment</td><td>as entailment</td><td>sum of CE</td></tr>
+            <tr><td>Transliteration</td><td>source → target word (characters)</td><td>as entailment, over characters</td><td>as entailment, over characters</td><td>as entailment</td><td>sum of CE</td></tr>
+            <tr><td>Image QA</td><td>{image, question} → answer word</td><td>\(\hat{\mathbf{h}}_I = \text{CNN}(I)\), \(\tilde{\mathbf{h}}_t = \text{RNN}(\tilde{\mathbf{h}}_{t-1}, \mathbf{q}_{it})\), \(\mathbf{s} = [\tilde{\mathbf{h}}_T; \hat{\mathbf{h}}_I]\)</td><td>\(\operatorname{softmax}(V\mathbf{s} + \mathbf{b})\)</td><td>\(V, \mathbf{b}, U_q, W_q, W_{\text{conv}}\)</td><td>\(-\log P(y = \ell \mid I, q)\)</td></tr>
+            <tr><td>Summarization</td><td>document → summary</td><td>RNN over words, \(\mathbf{s}_0 = \mathbf{h}_T\)</td><td>RNN dec.</td><td>\(U_{\text{dec}}, V, W_{\text{dec}}, U_{\text{enc}}, W_{\text{enc}}, \mathbf{b}\)</td><td>sum of CE</td></tr>
+            <tr><td>Video captioning</td><td>video → description</td><td>\(\mathbf{h}_t = \text{RNN}(\mathbf{h}_{t-1}, \text{CNN}(x_{it}))\), \(\mathbf{s}_0 = \mathbf{h}_T\)</td><td>RNN dec.</td><td>\(U_{\text{dec}}, W_{\text{dec}}, V, \mathbf{b}, W_{\text{conv}}, U_{\text{enc}}, W_{\text{enc}}\)</td><td>sum of CE</td></tr>
+            <tr><td>Video classification</td><td>video → activity</td><td>RNN of CNNs, \(\mathbf{s} = \mathbf{h}_T\)</td><td>\(\operatorname{softmax}(V\mathbf{s} + \mathbf{b})\)</td><td>\(V, \mathbf{b}, W_{\text{conv}}, U_{\text{enc}}, W_{\text{enc}}\)</td><td>\(-\log P(y = \ell \mid \text{video})\)</td></tr>
+            <tr><td>Dialog</td><td>utterance → response</td><td>RNN, \(\mathbf{s}_0 = \mathbf{h}_T\)</td><td>RNN dec.</td><td>\(U_{\text{dec}}, V, W_{\text{dec}}, U_{\text{enc}}, W_{\text{enc}}, \mathbf{b}\)</td><td>sum of CE</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ MODULE 16.3 ============ -->
+    <section id="why-attention">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=yInilk6x-OY&amp;t=42s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 0:42</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yInilk6x-OY&amp;t=103s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 1:43 how people translate</a>
+        </div>
+        <h2>Why the plain encoder–decoder falls short</h2>
+      </div>
+      <p>The lecture motivates attention with translation, now from Hindi to English: "Main ghar ja raha hoon" becomes "I am going home". In every model so far, the encoder reads the sentence once and encodes it. At each step the decoder then uses that same encoding to produce a new word, whether it was given once as \(\mathbf{s}_0\) or at every step. All the models of Module 16.2 are incomplete in this sense.</p>
+      <p>People do not translate like this. Reading a sentence once and holding all of it in mind while writing the translation invites forgetting, especially for a typical 25-word Wikipedia sentence. And most input words are irrelevant to any particular output word. A person produces each output word by focusing on only a few input words. At each step there is a distribution over the input words that says how much attention each one gets:</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Output step</th><th>Word produced</th><th class="num">Main</th><th class="num">ghar</th><th class="num">ja</th><th class="num">raha</th><th class="num">hoon</th></tr></thead>
+          <tbody>
+            <tr><td>\(t = 1\)</td><td>I</td><td class="num">1</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+            <tr><td>\(t = 2\)</td><td>am</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">1</td></tr>
+            <tr><td>\(t = 3\)</td><td>going</td><td class="num">0</td><td class="num">0</td><td class="num">0.5</td><td class="num">0.5</td><td class="num">0</td></tr>
+            <tr><td>\(t = 4\)</td><td>home</td><td class="num">0</td><td class="num">1</td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>To write "I" it does not matter that you have forgotten the translation of "ghar", as long as you know "Main". "going" draws on both "ja" and "raha"; every other output word comes from one input word. Ideally the decoder would be fed only this relevant information, the encodings of the relevant words, at each step. The vanilla model makes every step look at the entire sentence, and that is the conceptual error to correct.</p>
+    </section>
+
+    <section id="oracle">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=yInilk6x-OY&amp;t=202s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 3:22</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yInilk6x-OY&amp;t=271s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 4:31 a weighted sum</a>
+        </div>
+        <h2>If an oracle gave us the weights</h2>
+      </div>
+      <p>Suppose an oracle told us which input words matter at decoder step \(t\), and assume the encoder has already run, giving one vector \(\mathbf{h}_j\) per input word. If one word matters, feed its vector to the decoder and nothing else. If two matter, we could concatenate their vectors, but at another step four words might matter, and the input size would keep changing. A weighted average solves this: whatever the weights, it has the same dimension as each \(\mathbf{h}_j\).</p>
+      <div class="eq">\[ \mathbf{c}_t = \sum_{j=1}^{T} \alpha_{jt}\,\mathbf{h}_j, \qquad \alpha_{jt} \ge 0, \quad \sum_{j=1}^{T}\alpha_{jt} = 1 \]</div>
+      <p>At step 3 the oracle's weights are 0.5 on "ja" and 0.5 on "raha", so \(\mathbf{c}_3 = 0.5\,\mathbf{h}_3 + 0.5\,\mathbf{h}_4\). In general we take a weighted combination of <i>all</i> the encoder vectors, with weights from the oracle. Intuitively this should work better than the vanilla model, which overloads the decoder with the whole sentence at every step. Now the decoder gets only the information it needs to produce the current word.</p>
+    </section>
+
+    <section id="learn-weights">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=yInilk6x-OY&amp;t=373s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 6:13</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yInilk6x-OY&amp;t=580s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 9:40 softmax</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yInilk6x-OY&amp;t=647s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 10:47 the form of f_ATT</a>
+        </div>
+        <h2>Learning the weights: scores, softmax and \(f_{\text{ATT}}\)</h2>
+      </div>
+      <p>In practice there is no oracle, so the machine has to learn the weights from data, and learning means introducing parameters. First define a score \(e_{jt}\) for how important the \(j\)-th input word is for decoding the \(t\)-th output word. Two things should affect it <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=yInilk6x-OY&amp;t=406s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>6:46</a>:</p>
+      <ul>
+        <li><b>The input word itself</b>, represented by its encoder state \(\mathbf{h}_j\). This is a contextual representation: the encoder RNN computed it knowing the neighbouring words.</li>
+        <li><b>What the decoder has done so far</b>, summarized by its state \(\mathbf{s}_{t-1}\). Once the decoder has produced "home" it has no reason to look at "ghar" again.</li>
+      </ul>
+      <div class="eq">\[ e_{jt} = f_{\text{ATT}}(\mathbf{s}_{t-1}, \mathbf{h}_j) \]</div>
+      <p>The scores can be any real numbers, but we want weights that form a distribution over the input words. A softmax over \(j\) does this:</p>
+      <div class="eq">\[ \alpha_{jt} = \frac{\exp(e_{jt})}{\sum_{j'=1}^{T} \exp(e_{j't})} \]</div>
+      <p>\(\alpha_{jt}\) is the probability of focusing on the \(j\)-th input word to produce the \(t\)-th output word. We now learn the \(\alpha\)s instead of being told them, and that needs a parametric form for \(f_{\text{ATT}}\). One choice among many:</p>
+      <div class="eq">\[ e_{jt} = \mathbf{v}_{\text{att}}^\top \tanh\big(U_{\text{att}}\,\mathbf{s}_{t-1} + W_{\text{att}}\,\mathbf{h}_j\big) \]</div>
+      <p>Check the shapes. \(U_{\text{att}}\mathbf{s}_{t-1}\) and \(W_{\text{att}}\mathbf{h}_j\) are added, so both matrices must map to the same size, say \(d_1\): \(U_{\text{att}}, W_{\text{att}} \in \mathbb{R}^{d_1 \times d}\). The tanh then gives a vector in \(\mathbb{R}^{d_1}\). But \(e_{jt}\) is a scalar (it has two indices, yet it is one number: the importance of input \(j\) at step \(t\)), so \(\mathbf{v}_{\text{att}} \in \mathbb{R}^{d_1}\) turns the vector into a number by a dot product. That is the job of the three parameters: let the score depend on \(\mathbf{s}_{t-1}\) and \(\mathbf{h}_j\), and make the output a scalar. The slides take \(d_1 = d\): \(\mathbf{v}_{\text{att}} \in \mathbb{R}^d\), \(U_{\text{att}}, W_{\text{att}} \in \mathbb{R}^{d \times d}\). They are learned with the other parameters of the encoder and decoder.</p>
+      <div class="result">
+        <span class="lbl">Attention at decoder step t</span>
+        \[ e_{jt} = \mathbf{v}_{\text{att}}^\top \tanh\big(U_{\text{att}}\mathbf{s}_{t-1} + W_{\text{att}}\mathbf{h}_j\big), \qquad \alpha_{jt} = \frac{\exp(e_{jt})}{\sum_{j'} \exp(e_{j't})}, \qquad \mathbf{c}_t = \sum_{j=1}^{T}\alpha_{jt}\,\mathbf{h}_j \]
+        <p>The scoring function is a small feed-forward network: a linear map, a tanh, and a second linear map to a scalar. (Standard name, not used in the lecture: <i>additive</i> or Bahdanau attention.)</p>
+      </div>
+      <p class="note">Notation. One slide writes the encoder states as \(\mathbf{c}_j\); the lecture then fixes \(\mathbf{s}_t\) for decoder states and \(\mathbf{h}_j\) for encoder states, which these notes use throughout, with \(\mathbf{c}_t\) for the context vector. The slides write \(\mathbf{v}_{\text{att}}\) as \(V_{att}\), and call the number of input words \(M\) in one place and \(T\) in another.</p>
+    </section>
+
+    <section id="no-supervision">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=yInilk6x-OY&amp;t=749s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 12:29</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yInilk6x-OY&amp;t=884s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 14:44 the bicycle</a>
+        </div>
+        <h2>Learning attention without being told where to look</h2>
+      </div>
+      <p>The model would make complete sense if the true weights were given at training time. Say that at the step producing "going" the true weights are \(\boldsymbol{\alpha}^{\text{true}} = [0, 0, 0.5, 0.5, 0]\) and the model predicts \(\boldsymbol{\alpha}^{\text{pred}} = [0.1, 0.1, 0.35, 0.35, 0.1]\). We could add a loss \(\mathscr{L}(\boldsymbol{\alpha}^{\text{true}}, \boldsymbol{\alpha}^{\text{pred}})\), squared error for example, to the usual \(\mathscr{L}(\theta)\) and minimize both. Then \(U_{\text{att}}, W_{\text{att}}, \mathbf{v}_{\text{att}}\) would be tuned to bring the predicted weights close to the true ones.</p>
+      <p>In practice \(\boldsymbol{\alpha}^{\text{true}}\) is very hard to get <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=yInilk6x-OY&amp;t=847s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>14:07</a>. Someone would have to annotate, for every target word of every training sentence, which source words it came from, and nobody can collect that much annotated data. The data stays pairs of source and target sentences. So why should the model work without this supervision?</p>
+      <p>Because it is a better modelling choice. The lecture explains this with an analogy. Suppose you decide to learn to ride a bicycle without holding the handlebar. It is conceivable that after years of trying you manage it. Now someone suggests you hold the handlebar. That suggestion gives no supervision about how much force to put on the left or right hand; you still find that out yourself by falling to one side and then the other. But the second model, with hands on the handlebar, has extra controls to adjust and is closer to how people actually learn, so you learn better. Attention plays the role of the handlebar. The model is told only that it may focus on different words at different steps; which words, it must discover.</p>
+      <p>The attention parameters are trained like all the others. If the output at some step is wrong, the cause may be \(V\), the recurrent weights or poor attention weights, and backpropagation adjusts all of them. People learning to translate are not given word-by-word alignments either; they see many translations and work out what to focus on. With enough data the model should learn the attention weights the same way. In the lecture's words, that is the hope, "and hope is a good thing". In practice attention models do work better than vanilla encoder–decoder models.</p>
+    </section>
+
+    <section id="attn-mt">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=yInilk6x-OY&amp;t=1113s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 18:33</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yInilk6x-OY&amp;t=1208s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 20:08 the decoder step</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yInilk6x-OY&amp;t=1385s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 23:05 a generic framework</a>
+        </div>
+        <h2>Encode, attend, decode: the full translation model</h2>
+      </div>
+      <p>Now put attention into the translation model and answer the same questions again. The data does not change: source and target sentences, with no information about which words to attend to.</p>
+      <div class="eq">\[ \begin{aligned} &\text{Data:} && \{x_i = \text{source}_i,\ y_i = \text{target}_i\}_{i=1}^N \\ &\text{Encoder:} && \mathbf{h}_t = \text{RNN}(\mathbf{h}_{t-1}, \mathbf{x}_t), \qquad \mathbf{s}_0 = \mathbf{h}_T \\ &\text{Decoder:} && e_{jt} = \mathbf{v}_{\text{attn}}^\top \tanh(U_{\text{attn}}\mathbf{h}_j + W_{\text{attn}}\mathbf{s}_{t-1}) \\ &&& \alpha_{jt} = \operatorname{softmax}_j(e_{jt}), \qquad \mathbf{c}_t = \sum_{j=1}^{T}\alpha_{jt}\,\mathbf{h}_j \\ &&& \mathbf{s}_t = \text{RNN}\big(\mathbf{s}_{t-1}, [\mathbf{e}(\hat y_{t-1}), \mathbf{c}_t]\big) \\ &&& P(y_t \mid y_1^{t-1}, x) = \operatorname{softmax}(V\mathbf{s}_t + \mathbf{b}) \end{aligned} \]</div>
+      <p>Parameters: \(U_{\text{dec}}, V, W_{\text{dec}}, U_{\text{enc}}, W_{\text{enc}}, \mathbf{b}\), plus the attention parameters \(U_{\text{attn}}, W_{\text{attn}}, \mathbf{v}_{\text{attn}}\). The loss (sum of cross-entropies) and the algorithm (gradient descent with backpropagation) remain the same.</p>
+      <ol class="algo">
+        <li class="algo-title">One decoder step with attention</li>
+        <li>Score every input word against the decoder's state so far: \(e_{jt}\) from \(\mathbf{h}_j\) and \(\mathbf{s}_{t-1}\), for \(j = 1, \dots, T\).</li>
+        <li>Turn the scores into attention weights: \(\alpha_{jt} = \operatorname{softmax}_j(e_{jt})\).</li>
+        <li>Take the weighted combination of the encoder states: \(\mathbf{c}_t = \sum_j \alpha_{jt}\mathbf{h}_j\).</li>
+        <li>Update the decoder with the previous word and the context: \(\mathbf{s}_t = \text{RNN}(\mathbf{s}_{t-1}, [\mathbf{e}(\hat y_{t-1}), \mathbf{c}_t])\).</li>
+        <li>Output the distribution \(\operatorname{softmax}(V\mathbf{s}_t + \mathbf{b})\); when generating, its most probable word becomes \(\hat y_t\), the next step's input.</li>
+      </ol>
+      <p class="note">The summary slide writes \(W_{\text{attn}}\mathbf{s}_t\) inside the score and swaps the letters (\(U\) now multiplies \(\mathbf{h}_j\)). The letters are just names. The state must be \(\mathbf{s}_{t-1}\), as on the earlier slide and in the video, because \(\mathbf{s}_t\) is computed from \(\mathbf{c}_t\), which needs the scores. The slide's parameter list also leaves out \(W_{\text{attn}}\).</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 740 400" role="img" aria-label="One decoder step with attention. Five encoder states h1 to h5 for Main ghar ja raha hoon each go, together with the decoder state s t-1, into the scoring function f_ATT, giving scores e1t to e5t. A softmax turns them into weights, drawn as bars: 0.03, 0.04, 0.45, 0.44, 0.04. A plus node adds the encoder states weighted by these bars into the context vector ct, which is concatenated with the embedding of the previous word am as the input to the new decoder state st, which outputs going.">
+            <defs><marker id="l13-f5-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker><marker id="l13-f5-aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <rect class="d-box" x="60" y="318" width="40" height="28" rx="4"/>
+            <text class="d-s" x="80" y="337" text-anchor="middle">h₁</text>
+            <text class="d-s" x="80" y="386" text-anchor="middle">Main</text>
+            <line class="d-ln" x1="80" y1="372" x2="80" y2="348" marker-end="url(#l13-f5-ah)"/>
+            <line class="d-ln" x1="100" y1="332" x2="138" y2="332" marker-end="url(#l13-f5-ah)"/>
+            <line class="d-ln" x1="80" y1="316" x2="80" y2="294" marker-end="url(#l13-f5-ah)"/>
+            <line class="d-ln" x1="80" y1="260" x2="80" y2="224" marker-end="url(#l13-f5-ah)"/>
+            <text class="d-al" x="85" y="247">e₁ₜ</text>
+            <rect class="d-box" x="140" y="318" width="40" height="28" rx="4"/>
+            <text class="d-s" x="160" y="337" text-anchor="middle">h₂</text>
+            <text class="d-s" x="160" y="386" text-anchor="middle">ghar</text>
+            <line class="d-ln" x1="160" y1="372" x2="160" y2="348" marker-end="url(#l13-f5-ah)"/>
+            <line class="d-ln" x1="180" y1="332" x2="218" y2="332" marker-end="url(#l13-f5-ah)"/>
+            <line class="d-ln" x1="160" y1="316" x2="160" y2="294" marker-end="url(#l13-f5-ah)"/>
+            <line class="d-ln" x1="160" y1="260" x2="160" y2="224" marker-end="url(#l13-f5-ah)"/>
+            <text class="d-al" x="165" y="247">e₂ₜ</text>
+            <rect class="d-box" x="220" y="318" width="40" height="28" rx="4"/>
+            <text class="d-s" x="240" y="337" text-anchor="middle">h₃</text>
+            <text class="d-s" x="240" y="386" text-anchor="middle">ja</text>
+            <line class="d-ln" x1="240" y1="372" x2="240" y2="348" marker-end="url(#l13-f5-ah)"/>
+            <line class="d-ln" x1="260" y1="332" x2="298" y2="332" marker-end="url(#l13-f5-ah)"/>
+            <line class="d-ln" x1="240" y1="316" x2="240" y2="294" marker-end="url(#l13-f5-ah)"/>
+            <line class="d-ln" x1="240" y1="260" x2="240" y2="224" marker-end="url(#l13-f5-ah)"/>
+            <text class="d-al" x="245" y="247">e₃ₜ</text>
+            <rect class="d-box" x="300" y="318" width="40" height="28" rx="4"/>
+            <text class="d-s" x="320" y="337" text-anchor="middle">h₄</text>
+            <text class="d-s" x="320" y="386" text-anchor="middle">raha</text>
+            <line class="d-ln" x1="320" y1="372" x2="320" y2="348" marker-end="url(#l13-f5-ah)"/>
+            <line class="d-ln" x1="340" y1="332" x2="378" y2="332" marker-end="url(#l13-f5-ah)"/>
+            <line class="d-ln" x1="320" y1="316" x2="320" y2="294" marker-end="url(#l13-f5-ah)"/>
+            <line class="d-ln" x1="320" y1="260" x2="320" y2="224" marker-end="url(#l13-f5-ah)"/>
+            <text class="d-al" x="325" y="247">e₄ₜ</text>
+            <rect class="d-box" x="380" y="318" width="40" height="28" rx="4"/>
+            <text class="d-s" x="400" y="337" text-anchor="middle">h₅</text>
+            <text class="d-s" x="400" y="386" text-anchor="middle">hoon</text>
+            <line class="d-ln" x1="400" y1="372" x2="400" y2="348" marker-end="url(#l13-f5-ah)"/>
+            <line class="d-ln" x1="400" y1="316" x2="400" y2="294" marker-end="url(#l13-f5-ah)"/>
+            <line class="d-ln" x1="400" y1="260" x2="400" y2="224" marker-end="url(#l13-f5-ah)"/>
+            <text class="d-al" x="405" y="247">e₅ₜ</text>
+            <text class="d-row" x="440" y="337">encoder</text>
+            <rect class="d-box" x="50" y="262" width="380" height="30" rx="6"/>
+            <text class="d-s" x="240" y="281" text-anchor="middle">f<tspan dy="3" style="font-size: 9px">ATT</tspan><tspan dy="-3"></tspan>:  eⱼₜ = vᵀ tanh(U sₜ₋₁ + W hⱼ)</text>
+            <rect class="d-box" x="50" y="198" width="380" height="24" rx="6"/>
+            <text class="d-s" x="240" y="214" text-anchor="middle">softmax over the five scores</text>
+            <line class="d-rule" x1="50" y1="186" x2="430" y2="186"/>
+            <rect class="d-box-acc" x="68" y="183.3" width="24" height="2.7" rx="1" style="fill: var(--accent); stroke: none"/>
+            <text class="d-al" x="80" y="177.3" text-anchor="middle">0.03</text>
+            <line class="d-ln" x1="80" y1="163.3" x2="227.4" y2="68.1" marker-end="url(#l13-f5-ah)" style="stroke-width: 1; opacity: .6"/>
+            <rect class="d-box-acc" x="148" y="182.4" width="24" height="3.6" rx="1" style="fill: var(--accent); stroke: none"/>
+            <text class="d-al" x="160" y="176.4" text-anchor="middle">0.04</text>
+            <line class="d-ln" x1="160" y1="162.4" x2="230.8" y2="71.8" marker-end="url(#l13-f5-ah)" style="stroke-width: 1; opacity: .6"/>
+            <rect class="d-box-acc" x="228" y="145.5" width="24" height="40.5" rx="1" style="fill: var(--accent); stroke: none"/>
+            <text class="d-al" x="240" y="139.5" text-anchor="middle">0.45</text>
+            <line class="d-ln-acc" x1="240" y1="125.5" x2="240" y2="75" marker-end="url(#l13-f5-aa)" style="stroke-width: 2.4"/>
+            <rect class="d-box-acc" x="308" y="146.4" width="24" height="39.6" rx="1" style="fill: var(--accent); stroke: none"/>
+            <text class="d-al" x="320" y="140.4" text-anchor="middle">0.44</text>
+            <line class="d-ln-acc" x1="320" y1="126.4" x2="251.5" y2="69.6" marker-end="url(#l13-f5-aa)" style="stroke-width: 2.4"/>
+            <rect class="d-box-acc" x="388" y="182.4" width="24" height="3.6" rx="1" style="fill: var(--accent); stroke: none"/>
+            <text class="d-al" x="400" y="176.4" text-anchor="middle">0.04</text>
+            <line class="d-ln" x1="400" y1="162.4" x2="252.6" y2="68.1" marker-end="url(#l13-f5-ah)" style="stroke-width: 1; opacity: .6"/>
+            <text class="d-s" x="440" y="180">αⱼₜ</text>
+            <text class="d-s" x="440" y="247">eⱼₜ</text>
+            <circle class="node" cx="240" cy="60" r="13"/>
+            <text class="d-t" x="240" y="65" text-anchor="middle">+</text>
+            <text class="d-t" x="260" y="42">cₜ = Σⱼ αⱼₜ hⱼ</text>
+            <text class="d-row" x="520" y="160">decoder, step t = 3</text>
+            <rect class="d-box" x="520" y="170" width="50" height="30" rx="4"/>
+            <text class="d-s" x="545" y="190" text-anchor="middle">sₜ₋₁</text>
+            <line class="d-ln" x1="570" y1="185" x2="628" y2="185" marker-end="url(#l13-f5-ah)"/>
+            <rect class="d-box-acc" x="630" y="170" width="48" height="30" rx="4"/>
+            <text class="d-s" x="654" y="190" text-anchor="middle">sₜ</text>
+            <line class="d-ln" x1="654" y1="168" x2="654" y2="126" marker-end="url(#l13-f5-ah)"/>
+            <text class="d-al" x="660" y="150">V</text>
+            <rect class="d-box-acc" x="630" y="98" width="48" height="26" rx="4"/>
+            <text class="d-t" x="654" y="88" text-anchor="middle">going</text>
+            <rect class="d-box" x="600" y="240" width="54" height="26" rx="3"/>
+            <text class="d-s" x="627" y="257" text-anchor="middle">e(am)</text>
+            <rect class="d-box-acc" x="654" y="240" width="40" height="26" rx="3"/>
+            <text class="d-s" x="674" y="257" text-anchor="middle">cₜ</text>
+            <line class="d-ln" x1="654" y1="238" x2="654" y2="202" marker-end="url(#l13-f5-ah)"/>
+            <text class="d-al" x="600" y="282">previous word</text>
+            <path class="d-ln-acc" d="M253 60 H714 V253 H696" marker-end="url(#l13-f5-aa)"/>
+            <text class="d-s" x="470" y="54" style="fill: var(--accent)">context vector</text>
+            <path class="d-ln" d="M545 200 V277 H432" marker-end="url(#l13-f5-ah)"/>
+          </svg>
+        </div>
+        <figcaption><b>One decoder step with attention (\(t = 3\), producing "going").</b> \(f_{\text{ATT}}\) scores each encoder state \(\mathbf{h}_j\) against the decoder state \(\mathbf{s}_{t-1}\). A softmax turns the five scores into weights \(\alpha_{jt}\) that sum to 1 (bars, illustrative values close to the oracle's \([0, 0, 0.5, 0.5, 0]\)). The ⊕ adds the \(\mathbf{h}_j\) weighted by \(\alpha_{jt}\) to give the context vector \(\mathbf{c}_t\), which joins the previous word's embedding as the decoder's input.</figcaption>
+      </figure>
+
+      <p>The attention network is a simple feed-forward network, and only these three equations need to be fitted into a model. Like the encoder–decoder framework, this <dfn>encode–attend–decode</dfn> framework is generic. Try going back to each application of Module 16.2 and adding attention, answering the same questions (data, encoder, decoder, loss, training algorithm). The data never changes: nobody supplies the \(\alpha\)s. <a href="lecture-14.html">Lecture 14</a> takes the idea further: transformers drop the recurrence and build the encoder and decoder from attention alone.</p>
+    </section>
+
+    <section id="heatmaps">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=yInilk6x-OY&amp;t=1452s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 24:12</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yInilk6x-OY&amp;t=1487s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 24:47 heat maps</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yInilk6x-OY&amp;t=1582s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 26:22 translation</a>
+        </div>
+        <h2>Does attention learn something meaningful?</h2>
+      </div>
+      <p>Does the model really learn to focus on the most relevant input words at each step? To find out, plot the weights. With \(L\) output steps and \(T\) input words, the weights form an \(L \times T\) matrix. Drawn as a heat map, each cell shows \(\alpha_{tj}\), the importance the model gave the \(j\)-th input word when predicting the \(t\)-th output word; the darker the cell, the more attention. The picture is a <dfn>soft alignment</dfn> between input and output. Many papers include such a plot, and it is worth making one whenever you use attention, to check that the weights are meaningful.</p>
+      <ul>
+        <li><b>Summarization</b> (Rush et al. 2015). When the summary says "terrorism", the most attended input word is "terrorism"; "Russia" attends mostly to "Russian", "calls" to "called" and "front" to "front". It does not always work this cleanly, but meaningful patterns appear.</li>
+        <li><b>Translation</b> between English and French (Cho et al. 2015). Word order in the two languages largely agrees, so translation is roughly monotonic: the \(k\)-th output word attends to about the \(k\)-th input word, and most of the weight lies on the diagonal.</li>
+        <li><b>Video captioning</b> (Yao et al. 2015). The same kind of plot, with attention over the video's frames as each word is generated.</li>
+      </ul>
+
+      <figure id="att-fig">
+        <div class="controls">
+          <label for="att-step">Decoder step</label>
+          <input type="range" id="att-step" min="1" max="4" step="1" value="3">
+          <output id="att-step-out" for="att-step">t = 3 · going</output>
+          <button class="btn" id="att-oracle" type="button">Oracle weights</button>
+          <button class="btn" id="att-equal" type="button">Equal scores</button>
+          <button class="btn" id="att-reset" type="button">Reset all steps</button>
+        </div>
+        <div class="controls l13-scores">
+          <label for="att-e1">e for Main</label><input type="range" id="att-e1" min="-3" max="6" step="0.1" value="-0.5"><output id="att-e1-out" for="att-e1">−0.50</output>
+          <label for="att-e2">ghar</label><input type="range" id="att-e2" min="-3" max="6" step="0.1" value="0"><output id="att-e2-out" for="att-e2">0.00</output>
+          <label for="att-e3">ja</label><input type="range" id="att-e3" min="-3" max="6" step="0.1" value="2.5"><output id="att-e3-out" for="att-e3">2.50</output>
+          <label for="att-e4">raha</label><input type="range" id="att-e4" min="-3" max="6" step="0.1" value="2.4"><output id="att-e4-out" for="att-e4">2.40</output>
+          <label for="att-e5">hoon</label><input type="range" id="att-e5" min="-3" max="6" step="0.1" value="0.3"><output id="att-e5-out" for="att-e5">0.30</output>
+        </div>
+        <div class="readouts">
+          <div><span class="k">Largest αⱼₜ</span><span class="v" id="att-max">–</span></div>
+          <div><span class="k">Σⱼ αⱼₜ</span><span class="v" id="att-sum">–</span></div>
+          <div><span class="k">Context vector cₜ</span><span class="v" id="att-c">–</span></div>
+          <div><span class="k">‖α − α_oracle‖²</span><span class="v mine" id="att-err">–</span></div>
+        </div>
+        <div class="status" id="att-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="att-svg" viewBox="0 0 720 430" role="img" aria-label="Three linked views of attention for translating Main ghar ja raha hoon into I am going home. Top left: bars of the five attention weights at the chosen decoder step, with the scores below. Bottom left: a four by five heat map of the weights for all output steps, the chosen row outlined. Right: five toy two-dimensional encoder states and the context vector at their weighted average, with lines whose width grows with each weight."></svg></div>
+        <figcaption><b>Attention weights for a toy translation.</b> Pick a decoder step and drag the five scores \(e_{jt}\). The bars show \(\alpha_{jt}\), the softmax of the scores. On the right, \(\mathbf{c}_t\) sits at the \(\alpha\)-weighted average of five toy 2-D encoder states (real states have hundreds of dimensions), so it always lies among them. The heat map collects all four steps, like the plots in the lecture; click a row to select that step. The default scores and the 2-D states are synthetic, made up for this page to resemble a trained model. "Oracle weights" sets the slide's ideal distribution for the step. The last readout is the squared-error attention loss we could train on if true weights existed. Adding the same number to every score leaves the weights unchanged; only differences between scores matter.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ============ MODULES 16.4 AND 16.5 (slides only) ============ -->
+    <section id="image-attention">
+      <div class="sec-head">
+        <a class="ts" href="https://www.cse.iitm.ac.in/~miteshk/CS7015/Slides/Teaching/pdf/Lecture16.pdf#page=262" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 0.5 H6.5 L8.5 2.5 V9.5 H2 Z"/></svg>Slides</a>
+        <h2>Attention over images</h2>
+      </div>
+      <p>The module videos stop at the heat maps; this section and the next two follow the slides (Modules 16.4 and 16.5). How should attention work for image captioning? For text, the encoder gives a representation for every location (time step) of the input, and attention chooses among them. For images we have been using the fc7 vector, a single representation that holds no location information. So there is nothing to choose among.</p>
+      <p>The fix is to take the output of a convolutional layer instead, since convolutional layers keep spatial information. In VGGNet (<a href="lecture-08.html">Lecture 8</a>) the output of the fifth convolutional block is a \(14 \times 14 \times 512\) feature map. Treat it as 196 locations, each with a 512-dimensional representation. The model then learns an attention over these locations, and each location corresponds to an actual region of the image.</p>
+      <p>Written out in the notation of the text case (the slide shows this as a figure), with \(\mathbf{a}_j\) the vector at location \(j\):</p>
+      <div class="eq">\[ e_{jt} = f_{\text{ATT}}(\mathbf{s}_{t-1}, \mathbf{a}_j), \qquad \alpha_{jt} = \frac{\exp(e_{jt})}{\sum_{j'=1}^{196}\exp(e_{j't})}, \qquad \mathbf{c}_t = \sum_{j=1}^{196}\alpha_{jt}\,\mathbf{a}_j \in \mathbb{R}^{512} \]</div>
+      <p>The slides' examples (from Cho et al. 2015) show captions with one word underlined and the attended part of the image in white. The model attends to the correct object when it names it.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 740 280" role="img" aria-label="Attention over an image. The conv5 feature map of VGGNet is drawn as a 14 by 14 grid with 512 channels, with a shaded block of cells marking an attended region. It is unrolled into 196 location vectors a1 to a196 of 512 numbers each; weights alpha t1 to alpha t196 combine them at a plus node into a 512-dimensional context vector ct, which goes to the decoder producing the next word frisbee.">
+            <defs><marker id="l13-f6-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker><marker id="l13-f6-aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="24" y="22">VGGNet conv5 output</text>
+            <path class="d-box" d="M30 70 L156 70 L184 44 L58 44 Z"/>
+            <path class="d-box" d="M156 70 L184 44 L184 170 L156 196 Z"/>
+            <rect class="d-box" x="30" y="70" width="126" height="126" rx="0"/>
+            <rect class="l13-fm" x="84" y="97" width="54" height="54" rx="0" style="fill-opacity: .18"/>
+            <rect class="l13-fm" x="93" y="106" width="36" height="36" rx="0"/>
+            <line class="d-rule" x1="39" y1="70" x2="39" y2="196"/>
+            <line class="d-rule" x1="30" y1="79" x2="156" y2="79"/>
+            <line class="d-rule" x1="48" y1="70" x2="48" y2="196"/>
+            <line class="d-rule" x1="30" y1="88" x2="156" y2="88"/>
+            <line class="d-rule" x1="57" y1="70" x2="57" y2="196"/>
+            <line class="d-rule" x1="30" y1="97" x2="156" y2="97"/>
+            <line class="d-rule" x1="66" y1="70" x2="66" y2="196"/>
+            <line class="d-rule" x1="30" y1="106" x2="156" y2="106"/>
+            <line class="d-rule" x1="75" y1="70" x2="75" y2="196"/>
+            <line class="d-rule" x1="30" y1="115" x2="156" y2="115"/>
+            <line class="d-rule" x1="84" y1="70" x2="84" y2="196"/>
+            <line class="d-rule" x1="30" y1="124" x2="156" y2="124"/>
+            <line class="d-rule" x1="93" y1="70" x2="93" y2="196"/>
+            <line class="d-rule" x1="30" y1="133" x2="156" y2="133"/>
+            <line class="d-rule" x1="102" y1="70" x2="102" y2="196"/>
+            <line class="d-rule" x1="30" y1="142" x2="156" y2="142"/>
+            <line class="d-rule" x1="111" y1="70" x2="111" y2="196"/>
+            <line class="d-rule" x1="30" y1="151" x2="156" y2="151"/>
+            <line class="d-rule" x1="120" y1="70" x2="120" y2="196"/>
+            <line class="d-rule" x1="30" y1="160" x2="156" y2="160"/>
+            <line class="d-rule" x1="129" y1="70" x2="129" y2="196"/>
+            <line class="d-rule" x1="30" y1="169" x2="156" y2="169"/>
+            <line class="d-rule" x1="138" y1="70" x2="138" y2="196"/>
+            <line class="d-rule" x1="30" y1="178" x2="156" y2="178"/>
+            <line class="d-rule" x1="147" y1="70" x2="147" y2="196"/>
+            <line class="d-rule" x1="30" y1="187" x2="156" y2="187"/>
+            <text class="d-al" x="93" y="214" text-anchor="middle">14</text>
+            <text class="d-al" x="18" y="137" text-anchor="middle">14</text>
+            <text class="d-al" x="192" y="66">512</text>
+            <text class="d-al" x="192" y="80">channels</text>
+            <line class="d-ln" x1="214" y1="130" x2="252" y2="130" marker-end="url(#l13-f6-ah)"/>
+            <text class="d-s" x="233" y="120" text-anchor="middle">196 locations</text>
+            <rect class="d-box-acc" x="270" y="140" width="16" height="70" rx="2"/>
+            <text class="d-s" x="278" y="228" text-anchor="middle">a₁</text>
+            <line class="d-ln" x1="278" y1="138" x2="330.7" y2="71.7" marker-end="url(#l13-f6-ah)"/>
+            <rect class="d-box-acc" x="310" y="140" width="16" height="70" rx="2"/>
+            <text class="d-s" x="318" y="228" text-anchor="middle">a₂</text>
+            <line class="d-ln" x1="318" y1="138" x2="335.9" y2="74.4" marker-end="url(#l13-f6-ah)"/>
+            <rect class="d-box-acc" x="400" y="140" width="16" height="70" rx="2"/>
+            <text class="d-s" x="408" y="228" text-anchor="middle">a₁₉₆</text>
+            <line class="d-ln" x1="408" y1="138" x2="349.9" y2="71.3" marker-end="url(#l13-f6-ah)"/>
+            <text class="d-t" x="360" y="180" text-anchor="middle">…</text>
+            <text class="d-al" x="264" y="178" text-anchor="end">512</text>
+            <text class="d-al" x="293" y="112" text-anchor="end">αₜ₁</text>
+            <text class="d-al" x="332" y="112">αₜ₂</text>
+            <text class="d-al" x="392" y="112">αₜ,₁₉₆</text>
+            <circle class="node" cx="340" cy="60" r="13"/>
+            <text class="d-t" x="340" y="65" text-anchor="middle">+</text>
+            <line class="d-ln-acc" x1="353" y1="60" x2="440" y2="60" marker-end="url(#l13-f6-aa)"/>
+            <text class="d-s" x="396" y="50" text-anchor="middle">cₜ ∈ ℝ⁵¹²</text>
+            <rect class="d-box-acc" x="442" y="42" width="130" height="36" rx="4"/>
+            <text class="d-s" x="507" y="64" text-anchor="middle">decoder step t</text>
+            <line class="d-ln" x1="572" y1="60" x2="610" y2="60" marker-end="url(#l13-f6-ah)"/>
+            <text class="d-t" x="616" y="64">frisbee</text>
+            <text class="d-al" x="616" y="46">next word</text>
+            <text class="d-s" x="442" y="104">196 weights from f<tspan dy="3" style="font-size: 9px">ATT</tspan><tspan dy="-3"></tspan>(sₜ₋₁, aⱼ)</text>
+            <text class="d-s" x="442" y="122">and a softmax over the locations</text>
+            <text class="d-s" x="24" y="262">shaded cells: an attended region (illustrative)</text>
+          </svg>
+        </div>
+        <figcaption><b>Attention over image locations.</b> The fc7 vector has no notion of where things are, so the decoder attends over a convolutional feature map instead. VGGNet's conv5 output, \(14 \times 14 \times 512\), becomes 196 location vectors of 512 numbers. At every step the decoder computes 196 weights and feeds their weighted sum, a 512-dimensional context vector. The shaded cells mark an attended region (illustrative).</figcaption>
+      </figure>
+    </section>
+
+    <section id="hierarchical">
+      <div class="sec-head">
+        <a class="ts" href="https://www.cse.iitm.ac.in/~miteshk/CS7015/Slides/Teaching/pdf/Lecture16.pdf#page=274" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 0.5 H6.5 L8.5 2.5 V9.5 H2 Z"/></svg>Slides</a>
+        <h2>Sequences of sequences: hierarchical encoders</h2>
+      </div>
+      <p>Consider a dialog between a user (U) and a bot (B):</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <tbody>
+            <tr><td rowspan="3"><b>Context</b></td><td>U: Can you suggest a good movie?</td></tr>
+            <tr><td>B: Yes, sure. How about Logan?</td></tr>
+            <tr><td>U: Okay, who is the lead actor?</td></tr>
+            <tr><td><b>Response</b></td><td>B: Hugh Jackman, of course</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The dialog is a sequence of utterances, and each utterance is a sequence of words. The input is a "sequence of sequences". A natural encoder is a two-level <dfn>hierarchical RNN encoder</dfn>. The first-level RNN runs over the words of each utterance and gives one representation per utterance. A second RNN runs over this sequence of utterance representations and gives a single representation for the whole context. The decoder generates the response conditioned on it.</p>
+      <p>Documents have the same shape: a document is a sequence of sentences, and each sentence a sequence of words. Take document classification (or summarization). The slides' example document, which starts "Politics is the process of making decisions…", should be classified as <i>Politics</i>. A hierarchical RNN models it:</p>
+      <div class="eq">\[ \begin{aligned} &\text{Data:} && \{\text{document}_i, \text{class}_i\}_{i=1}^N \\ &\text{Word-level (1) encoder:} && \mathbf{h}^1_{ij} = \text{RNN}(\mathbf{h}^1_{i,j-1}, \mathbf{w}_{ij}), \qquad \mathbf{s}_i = \mathbf{h}^1_{iT_i} \\ &\text{Sentence-level (2) encoder:} && \mathbf{h}^2_i = \text{RNN}(\mathbf{h}^2_{i-1}, \mathbf{s}_i), \qquad \mathbf{s} = \mathbf{h}^2_K \\ &\text{Decoder:} && P(y \mid \text{document}) = \operatorname{softmax}(V\mathbf{s} + \mathbf{b}) \end{aligned} \]</div>
+      <p>Parameters \(W^1_{\text{enc}}, U^1_{\text{enc}}, W^2_{\text{enc}}, U^2_{\text{enc}}, V, \mathbf{b}\); loss cross-entropy; algorithm gradient descent with backpropagation. Here \(\mathbf{w}_{ij}\) is the \(j\)-th word of sentence \(i\), \(T_i\) is the length of sentence \(i\) and \(K\) the number of sentences. Each sentence is summarized by its last word-level state, and the document by the last sentence-level state.</p>
+    </section>
+
+    <section id="han">
+      <div class="sec-head">
+        <a class="ts" href="https://www.cse.iitm.ac.in/~miteshk/CS7015/Slides/Teaching/pdf/Lecture16.pdf#page=304" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 0.5 H6.5 L8.5 2.5 V9.5 H2 Z"/></svg>Slides</a>
+        <h2>Hierarchical attention</h2>
+      </div>
+      <p>To add attention to a hierarchical model we need it at two levels: first attend to the important (most informative) words in each sentence, then to the important sentences in the document. The slides use the Hierarchical Attention Network of Yang et al.</p>
+      <div class="eq">\[ \begin{aligned} &\text{Word level (1):} && \mathbf{h}_{ij} = \text{RNN}(\mathbf{h}_{i,j-1}, \mathbf{w}_{ij}), && \mathbf{u}_{ij} = \tanh(W_w\mathbf{h}_{ij} + \mathbf{b}_w), \\ &&& \alpha_{ij} = \frac{\exp(\mathbf{u}_{ij}^\top\mathbf{u}_w)}{\sum_{t}\exp(\mathbf{u}_{it}^\top\mathbf{u}_w)}, && \mathbf{s}_i = \sum_j \alpha_{ij}\,\mathbf{h}_{ij} \\ &\text{Sentence level (2):} && \mathbf{h}_i = \text{RNN}(\mathbf{h}_{i-1}, \mathbf{s}_i), && \mathbf{u}_i = \tanh(W_s\mathbf{h}_i + \mathbf{b}_s), \\ &&& \alpha_i = \frac{\exp(\mathbf{u}_i^\top\mathbf{u}_s)}{\sum_{i'}\exp(\mathbf{u}_{i'}^\top\mathbf{u}_s)}, && \mathbf{s} = \sum_i \alpha_i\,\mathbf{h}_i \\ &\text{Decoder:} && P(y \mid \text{document}) = \operatorname{softmax}(V\mathbf{s} + \mathbf{b}) \end{aligned} \]</div>
+      <p>Parameters \(W_w, W_s, V, \mathbf{b}_w, \mathbf{b}_s, \mathbf{b}, \mathbf{u}_w, \mathbf{u}_s\), plus the weights of the two RNNs. The loss is cross-entropy and the algorithm gradient descent with backpropagation.</p>
+      <p>Compare with translation. There is no decoder state to score against, because the output is a single class. Instead each state goes through a one-layer network, \(\mathbf{u}_{ij} = \tanh(W_w\mathbf{h}_{ij} + \mathbf{b}_w)\), and is scored by its dot product with a learned vector \(\mathbf{u}_w\) (\(\mathbf{u}_s\) at the sentence level). The attention-weighted sums take the place of "use the last state" (\(\mathbf{s}_i = \mathbf{h}^1_{iT_i}\), \(\mathbf{s} = \mathbf{h}^2_K\)) in the plain hierarchical encoder.</p>
+      <p class="note">Not in the lecture: Yang et al. call \(\mathbf{u}_w\) and \(\mathbf{u}_s\) the word-level and sentence-level context vectors, and their encoders are bidirectional GRUs, which is why the slide's figure shows forward and backward states.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 760 440" role="img" aria-label="Hierarchical attention network. At the bottom, two sentences, Politics is ... group and More narrowly ... and, are each read by a word-level RNN into states h11 to h1T and hK1 to hKT. Word attention against a learned vector u_w combines each sentence's states into a sentence vector s1 or sK. A sentence-level RNN reads the sentence vectors into states h1 to hK, and sentence attention against a learned vector u_s combines them into s, which a softmax classifies as Politics.">
+            <defs><marker id="l13-f7-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker><marker id="l13-f7-aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-row" x="8" y="84">sentence attention</text>
+            <text class="d-row" x="8" y="167">sentence encoder</text>
+            <text class="d-row" x="8" y="214">sentence vectors</text>
+            <text class="d-row" x="8" y="266">word attention</text>
+            <text class="d-row" x="8" y="353">word encoder</text>
+            <text class="d-row" x="8" y="407">words</text>
+            <rect class="d-box" x="122" y="392" width="56" height="22" rx="4"/>
+            <text class="d-s" x="150" y="407" text-anchor="middle">Politics</text>
+            <line class="d-ln" x1="150" y1="390" x2="150" y2="364" marker-end="url(#l13-f7-ah)"/>
+            <rect class="d-box" x="128" y="336" width="44" height="26" rx="4"/>
+            <text class="d-s" x="150" y="353" text-anchor="middle">h<tspan dy="3" style="font-size: 9px">11</tspan></text>
+            <line class="d-ln-acc" x1="150" y1="334" x2="230.6" y2="269.5" marker-end="url(#l13-f7-aa)"/>
+            <rect class="d-box" x="192" y="392" width="56" height="22" rx="4"/>
+            <text class="d-s" x="220" y="407" text-anchor="middle">is</text>
+            <line class="d-ln" x1="220" y1="390" x2="220" y2="364" marker-end="url(#l13-f7-ah)"/>
+            <rect class="d-box" x="198" y="336" width="44" height="26" rx="4"/>
+            <text class="d-s" x="220" y="353" text-anchor="middle">h<tspan dy="3" style="font-size: 9px">12</tspan></text>
+            <line class="d-ln-acc" x1="220" y1="334" x2="236.8" y2="273.6" marker-end="url(#l13-f7-aa)"/>
+            <rect class="d-box" x="302" y="392" width="56" height="22" rx="4"/>
+            <text class="d-s" x="330" y="407" text-anchor="middle">group.</text>
+            <line class="d-ln" x1="330" y1="390" x2="330" y2="364" marker-end="url(#l13-f7-ah)"/>
+            <rect class="d-box" x="308" y="336" width="44" height="26" rx="4"/>
+            <text class="d-s" x="330" y="353" text-anchor="middle">h<tspan dy="3" style="font-size: 9px">1T</tspan></text>
+            <line class="d-ln-acc" x1="330" y1="334" x2="249.4" y2="269.5" marker-end="url(#l13-f7-aa)"/>
+            <line class="d-ln" x1="172" y1="349" x2="196" y2="349" marker-end="url(#l13-f7-ah)"/>
+            <line class="d-ln" x1="242" y1="349" x2="306" y2="349" marker-end="url(#l13-f7-ah)"/>
+            <text class="d-t" x="275" y="343" text-anchor="middle">…</text>
+            <text class="d-al" x="172" y="310" text-anchor="end">α<tspan dy="3" style="font-size: 9px">11</tspan></text>
+            <text class="d-al" x="232" y="312" text-anchor="start">α<tspan dy="3" style="font-size: 9px">12</tspan></text>
+            <text class="d-al" x="306" y="310" text-anchor="start">α<tspan dy="3" style="font-size: 9px">1T</tspan></text>
+            <circle class="node" cx="240" cy="262" r="12"/>
+            <text class="d-t" x="240" y="267" text-anchor="middle">+</text>
+            <rect class="d-box-acc" x="278" y="250" width="40" height="24" rx="4"/>
+            <text class="d-s" x="298" y="265" text-anchor="middle">u<tspan dy="3" style="font-size: 9px">w</tspan></text>
+            <line class="d-ln d-dash" x1="278" y1="262" x2="254" y2="262" marker-end="url(#l13-f7-ah)"/>
+            <line class="d-ln" x1="240" y1="249" x2="240" y2="224" marker-end="url(#l13-f7-ah)"/>
+            <rect class="d-box-acc" x="222" y="198" width="36" height="24" rx="4"/>
+            <text class="d-s" x="240" y="213" text-anchor="middle">s<tspan dy="3" style="font-size: 9px">1</tspan></text>
+            <line class="d-ln" x1="240" y1="196" x2="240" y2="178" marker-end="url(#l13-f7-ah)"/>
+            <rect class="d-box" x="218" y="150" width="44" height="26" rx="4"/>
+            <text class="d-s" x="240" y="166" text-anchor="middle">h<tspan dy="3" style="font-size: 9px">1</tspan></text>
+            <line class="d-ln-acc" x1="240" y1="148" x2="397.9" y2="84.8" marker-end="url(#l13-f7-aa)"/>
+            <rect class="d-box" x="462" y="392" width="56" height="22" rx="4"/>
+            <text class="d-s" x="490" y="407" text-anchor="middle">More</text>
+            <line class="d-ln" x1="490" y1="390" x2="490" y2="364" marker-end="url(#l13-f7-ah)"/>
+            <rect class="d-box" x="468" y="336" width="44" height="26" rx="4"/>
+            <text class="d-s" x="490" y="353" text-anchor="middle">h<tspan dy="3" style="font-size: 9px">K1</tspan></text>
+            <line class="d-ln-acc" x1="490" y1="334" x2="570.6" y2="269.5" marker-end="url(#l13-f7-aa)"/>
+            <rect class="d-box" x="532" y="392" width="56" height="22" rx="4"/>
+            <text class="d-s" x="560" y="407" text-anchor="middle">narrowly</text>
+            <line class="d-ln" x1="560" y1="390" x2="560" y2="364" marker-end="url(#l13-f7-ah)"/>
+            <rect class="d-box" x="538" y="336" width="44" height="26" rx="4"/>
+            <text class="d-s" x="560" y="353" text-anchor="middle">h<tspan dy="3" style="font-size: 9px">K2</tspan></text>
+            <line class="d-ln-acc" x1="560" y1="334" x2="576.8" y2="273.6" marker-end="url(#l13-f7-aa)"/>
+            <rect class="d-box" x="642" y="392" width="56" height="22" rx="4"/>
+            <text class="d-s" x="670" y="407" text-anchor="middle">and</text>
+            <line class="d-ln" x1="670" y1="390" x2="670" y2="364" marker-end="url(#l13-f7-ah)"/>
+            <rect class="d-box" x="648" y="336" width="44" height="26" rx="4"/>
+            <text class="d-s" x="670" y="353" text-anchor="middle">h<tspan dy="3" style="font-size: 9px">KT</tspan></text>
+            <line class="d-ln-acc" x1="670" y1="334" x2="589.4" y2="269.5" marker-end="url(#l13-f7-aa)"/>
+            <line class="d-ln" x1="512" y1="349" x2="536" y2="349" marker-end="url(#l13-f7-ah)"/>
+            <line class="d-ln" x1="582" y1="349" x2="646" y2="349" marker-end="url(#l13-f7-ah)"/>
+            <text class="d-t" x="615" y="343" text-anchor="middle">…</text>
+            <text class="d-al" x="512" y="310" text-anchor="end">α<tspan dy="3" style="font-size: 9px">K1</tspan></text>
+            <text class="d-al" x="572" y="312" text-anchor="start">α<tspan dy="3" style="font-size: 9px">K2</tspan></text>
+            <text class="d-al" x="646" y="310" text-anchor="start">α<tspan dy="3" style="font-size: 9px">KT</tspan></text>
+            <circle class="node" cx="580" cy="262" r="12"/>
+            <text class="d-t" x="580" y="267" text-anchor="middle">+</text>
+            <rect class="d-box-acc" x="618" y="250" width="40" height="24" rx="4"/>
+            <text class="d-s" x="638" y="265" text-anchor="middle">u<tspan dy="3" style="font-size: 9px">w</tspan></text>
+            <line class="d-ln d-dash" x1="618" y1="262" x2="594" y2="262" marker-end="url(#l13-f7-ah)"/>
+            <line class="d-ln" x1="580" y1="249" x2="580" y2="224" marker-end="url(#l13-f7-ah)"/>
+            <rect class="d-box-acc" x="562" y="198" width="36" height="24" rx="4"/>
+            <text class="d-s" x="580" y="213" text-anchor="middle">s<tspan dy="3" style="font-size: 9px">K</tspan></text>
+            <line class="d-ln" x1="580" y1="196" x2="580" y2="178" marker-end="url(#l13-f7-ah)"/>
+            <rect class="d-box" x="558" y="150" width="44" height="26" rx="4"/>
+            <text class="d-s" x="580" y="166" text-anchor="middle">h<tspan dy="3" style="font-size: 9px">K</tspan></text>
+            <line class="d-ln-acc" x1="580" y1="148" x2="422.1" y2="84.8" marker-end="url(#l13-f7-aa)"/>
+            <text class="d-t" x="410" y="364" text-anchor="middle">…</text>
+            <line class="d-ln" x1="262" y1="163" x2="386" y2="163" marker-end="url(#l13-f7-ah)"/>
+            <text class="d-t" x="410" y="167" text-anchor="middle">…</text>
+            <line class="d-ln" x1="434" y1="163" x2="556" y2="163" marker-end="url(#l13-f7-ah)"/>
+            <text class="d-al" x="300" y="116" text-anchor="end">α<tspan dy="3" style="font-size: 9px">1</tspan></text>
+            <text class="d-al" x="520" y="116" text-anchor="start">α<tspan dy="3" style="font-size: 9px">K</tspan></text>
+            <circle class="node" cx="410" cy="80" r="13"/>
+            <text class="d-t" x="410" y="85" text-anchor="middle">+</text>
+            <rect class="d-box-acc" x="440" y="68" width="40" height="24" rx="4"/>
+            <text class="d-s" x="460" y="84" text-anchor="middle">u<tspan dy="3" style="font-size: 9px">s</tspan></text>
+            <line class="d-ln d-dash" x1="440" y1="80" x2="425" y2="80" marker-end="url(#l13-f7-ah)"/>
+            <line class="d-ln" x1="410" y1="67" x2="410" y2="54" marker-end="url(#l13-f7-ah)"/>
+            <text class="d-al" x="416" y="64">s</text>
+            <rect class="d-box-acc" x="350" y="24" width="120" height="28" rx="4"/>
+            <text class="d-s" x="410" y="43" text-anchor="middle">softmax(V s + b)</text>
+            <text class="d-t" x="482" y="43">class: Politics</text>
+          </svg>
+        </div>
+        <figcaption><b>Hierarchical attention network</b> (after the slide's figure from Yang et al., drawn with one-directional RNNs). Each sentence is read word by word, and word attention against the learned vector \(\mathbf{u}_w\) pools the word states into a sentence vector \(\mathbf{s}_i\). A second RNN reads the sentence vectors, and sentence attention against \(\mathbf{u}_s\) pools its states into the document vector \(\mathbf{s}\), which a softmax classifies.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ============ REVISION ============ -->
+    <section id="terms">
+      <div class="sec-head"><h2>Key terms</h2></div>
+      <dl class="terms">
+        <div><dt>Language model</dt><dd>A model of \(P(y_t \mid y_1^{t-1})\); an RNN computes it as \(\operatorname{softmax}(V\mathbf{s}_t + \mathbf{c})\).</dd></div>
+        <div><dt>Encoder</dt><dd>The network that reads the input and encodes it: a CNN for images, an RNN for sequences, an RNN of CNNs for videos.</dd></div>
+        <div><dt>Decoder</dt><dd>The network that produces the output from the encoding: an RNN for a sequence, a feed-forward softmax for a single label.</dd></div>
+        <div><dt>fc7(I)</dt><dd>The 4096-dimensional representation of an image from the fully connected layer fc7 of a CNN such as VGG-16.</dd></div>
+        <div><dt>Options 1 and 2</dt><dd>Feed the encoding once as \(\mathbf{s}_0\), or concatenate it with the decoder's input at every step.</dd></div>
+        <div><dt>Textual entailment</dt><dd>Generating a hypothesis that follows from a premise ("It is raining outside" → "The ground is wet").</dd></div>
+        <div><dt>Transliteration</dt><dd>Writing a word, usually a name, in another script, character by character.</dd></div>
+        <div><dt>RNN of CNNs</dt><dd>A video encoder: a CNN encodes each frame, an RNN runs over the frame encodings.</dd></div>
+        <div><dt>Attention weights \(\alpha_{jt}\)</dt><dd>Softmax-normalized importance of input position \(j\) when producing output step \(t\); they sum to 1 over \(j\).</dd></div>
+        <div><dt>Context vector \(\mathbf{c}_t\)</dt><dd>\(\sum_j \alpha_{jt}\mathbf{h}_j\): the weighted combination of encoder states fed to the decoder at step \(t\).</dd></div>
+        <div><dt>\(f_{\text{ATT}}\)</dt><dd>The scoring function; here \(\mathbf{v}_{\text{att}}^\top\tanh(U_{\text{att}}\mathbf{s}_{t-1} + W_{\text{att}}\mathbf{h}_j)\), a small feed-forward network.</dd></div>
+        <div><dt>Soft alignment</dt><dd>The \(L \times T\) heat map of attention weights between output and input words.</dd></div>
+        <div><dt>Hierarchical attention network</dt><dd>A two-level encoder for sequences of sequences, with attention over words in each sentence and over sentences in the document.</dd></div>
+      </dl>
+    </section>
+
+    <section id="test">
+      <div class="sec-head"><h2>Test yourself</h2></div>
+      <div class="quiz">
+        <details><summary><span class="q">Q1</span><span>A language model has a 20,000-word vocabulary and a 300-dimensional state. What are the shapes of \(V\), \(\mathbf{c}\) and \(V\mathbf{s}_t + \mathbf{c}\) in \(\operatorname{softmax}(V\mathbf{s}_t + \mathbf{c})\), and what is entry \(j\) of the output?</span><span class="tog"></span></summary>
+          <p>\(V \in \mathbb{R}^{20000 \times 300}\) (6 million numbers), \(\mathbf{c} \in \mathbb{R}^{20000}\), and \(V\mathbf{s}_t + \mathbf{c} \in \mathbb{R}^{20000}\), one score per word. After the softmax the 20,000 entries are positive and sum to 1; entry \(j\) is \(P(y_t = j \mid y_1^{t-1})\), the probability that the next word is word \(j\).</p></details>
+        <details><summary><span class="q">Q2</span><span>In captioning option 1 the image enters only as \(\mathbf{s}_0 = \text{fc7}(I)\). Why does the fifth word's distribution still depend on the image, and what extra parameter is needed if \(d = 512\)?</span><span class="tog"></span></summary>
+          <p>\(\mathbf{s}_5 = \text{RNN}(\mathbf{s}_4, \cdot)\), \(\mathbf{s}_4\) depends on \(\mathbf{s}_3\), and so on back to \(\mathbf{s}_0\); the recurrence carries the image to every step. fc7 has 4096 numbers, so a learnable \(512 \times 4096\) matrix projects it to the state size.</p></details>
+        <details><summary><span class="q">Q3</span><span>Write the model, parameters and loss for video classification.</span><span class="tog"></span></summary>
+          <p>Encoder: \(\mathbf{h}_t = \text{RNN}(\mathbf{h}_{t-1}, \text{CNN}(x_{it}))\) over the frames, and \(\mathbf{s} = \mathbf{h}_T\). Decoder: \(P(y \mid \text{video}) = \operatorname{softmax}(V\mathbf{s} + \mathbf{b})\). Parameters \(V, \mathbf{b}, W_{\text{conv}}, U_{\text{enc}}, W_{\text{enc}}\). Loss \(-\log P(y = \ell \mid \text{video})\), trained by gradient descent with backpropagation through time and through the CNN.</p></details>
+        <details><summary><span class="q">Q4</span><span>If an oracle tells us which input words matter at each step, why take a weighted average of their encoder vectors instead of concatenating them?</span><span class="tog"></span></summary>
+          <p>The number of relevant words changes from step to step (one, two, four…), so a concatenation would change size and the decoder's input dimension would not be fixed. A weighted average of \(d\)-dimensional vectors is always \(d\)-dimensional.</p></details>
+        <details><summary><span class="q">Q5</span><span>The scores at the step producing "going" are \(e = [0, 0, 1.25, 1.25, 0]\). Compute the attention weights, and their squared error against \(\boldsymbol{\alpha}^{\text{true}} = [0, 0, 0.5, 0.5, 0]\).</span><span class="tog"></span></summary>
+          <p>\(e^{1.25} \approx 3.49\), so the denominator is \(3 \times 1 + 2 \times 3.49 = 9.98\) and \(\boldsymbol{\alpha} \approx [0.10, 0.10, 0.35, 0.35, 0.10]\), the slide's \(\boldsymbol{\alpha}^{\text{pred}}\) (exactly, with \(\ln 3.5 \approx 1.2528\)). Squared error: \(3 \times 0.1^2 + 2 \times 0.15^2\) \(= 0.03 + 0.045 = 0.075\).</p></details>
+        <details><summary><span class="q">Q6</span><span>The decoder state has 512 dimensions, the encoder states 256, and the attention layer \(d_1 = 128\). What are the shapes of \(U_{\text{att}}\), \(W_{\text{att}}\) and \(\mathbf{v}_{\text{att}}\), and how many numbers do they hold?</span><span class="tog"></span></summary>
+          <p>\(U_{\text{att}} \in \mathbb{R}^{128 \times 512}\) (acting on \(\mathbf{s}_{t-1}\)), \(W_{\text{att}} \in \mathbb{R}^{128 \times 256}\) (acting on \(\mathbf{h}_j\)), \(\mathbf{v}_{\text{att}} \in \mathbb{R}^{128}\), so \(e_{jt}\) is a scalar. Total \(65{,}536 + 32{,}768 + 128 = 98{,}432\).</p></details>
+        <details><summary><span class="q">Q7</span><span>Nobody provides the true attention weights. How do \(U_{\text{att}}, W_{\text{att}}, \mathbf{v}_{\text{att}}\) get trained, and why should attention help at all?</span><span class="tog"></span></summary>
+          <p>Through the ordinary translation loss: the output distribution depends on \(\mathbf{c}_t\), which depends on the \(\alpha\)s, so backpropagation sends gradients into the attention parameters whenever a predicted word is wrong. Attention helps because it is a better modelling choice, like holding the handlebar while learning to ride: the model gets controls that let it focus on the relevant words, and it discovers how to use them from data.</p></details>
+        <details><summary><span class="q">Q8</span><span>For captioning with attention on VGGNet's conv5 output, how many attention weights are computed at each decoder step, how big is \(\mathbf{c}_t\), and why not attend over fc7?</span><span class="tog"></span></summary>
+          <p>The \(14 \times 14 \times 512\) map gives 196 locations, so 196 weights per step and \(\mathbf{c}_t \in \mathbb{R}^{512}\). fc7 is a single vector with no location information, so there would be nothing to choose among.</p></details>
+      </div>
+    </section>
+
+    <!-- PAGER:START --><nav class="pager" aria-label="Previous and next lecture"><a href="lecture-11.html"><span class="dir">← Lecture 11</span><span class="nm">Recurrent neural networks and BPTT</span></a><a class="next" href="index.html"><span class="dir">Lecture 14 · coming</span><span class="nm">Transformers</span></a></nav><!-- PAGER:END -->
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the official lecture slides and the module videos' NPTEL captions; attention over images and hierarchical attention (slide Modules 16.4 and 16.5) have no video and are written from the slides alone. Timestamp links open the video at that moment. Charts marked synthetic use data generated for these notes. Not an official IIT Madras resource.</div>
+</footer>
+
+<script src="notes.js"></script>
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const tween = (from, to, set) => { const t0 = performance.now(), dur = reduce ? 0 : 420; const step = now => { const k = dur ? Math.min(1, (now - t0) / dur) : 1; set(from + (to - from) * (1 - Math.pow(1 - k, 3))); if (k < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); };
+
+  /* ---------- Attention weights for a toy translation ---------- */
+  (() => {
+    const svg = document.getElementById('att-svg'); if (!svg) return;
+    const SRC = ['Main', 'ghar', 'ja', 'raha', 'hoon'];
+    const TGT = ['I', 'am', 'going', 'home'];
+    const ORACLE = [[1, 0, 0, 0, 0], [0, 0, 0, 0, 1], [0, 0, 0.5, 0.5, 0], [0, 1, 0, 0, 0]];
+    const DEFAULT = [[3, 0.2, -0.5, -0.5, 0.4], [0.3, -0.2, 0, 0.4, 3], [-0.5, 0, 2.5, 2.4, 0.3], [-0.3, 3, 0.2, -0.2, 0]];
+    const H = [[-1.0, 0.8], [0.9, 1.0], [1.1, -0.4], [0.3, -1.1], [-0.9, -0.7]];
+    const LBL = [[-9, -9, 'end', 'Main'], [10, -7, 'start', 'ghar'], [10, 4, 'start', 'ja'], [0, 20, 'middle', 'raha'], [0, 19, 'middle', 'hoon (last state)']];
+    let E = DEFAULT.map(r => r.slice());
+    let t = 2;
+    const softmax = e => { const m = Math.max(...e), x = e.map(v => Math.exp(v - m)), s = x.reduce((a, b) => a + b, 0); return x.map(v => v / s); };
+    const fmt = v => (v < -0.005 ? '−' : '') + Math.abs(v).toFixed(2);
+    const cx = j => 90 + 65 * j;
+
+    /* bars for the chosen step */
+    const barTitle = mk('text', { x: 20, y: 22, class: 'c-title' }, svg);
+    mk('line', { x1: 55, x2: 385, y1: 176, y2: 176, class: 'c-axis' }, svg);
+    const bars = [], vals = [], scs = [];
+    SRC.forEach((w, j) => {
+      bars.push(mk('rect', { x: cx(j) - 20, width: 40, class: 'c-l13-bar' }, svg));
+      vals.push(mk('text', { x: cx(j), 'text-anchor': 'middle', class: 'c-l13-val' }, svg));
+      mk('text', { x: cx(j), y: 194, 'text-anchor': 'middle', class: 'c-l13-word' }, svg).textContent = w;
+      scs.push(mk('text', { x: cx(j), y: 210, 'text-anchor': 'middle', class: 'c-l13-score' }, svg));
+    });
+
+    /* heat map of all steps */
+    mk('text', { x: 20, y: 240, class: 'c-title' }, svg).textContent = 'All four steps: rows are output words, columns source words';
+    SRC.forEach((w, j) => { mk('text', { x: cx(j), y: 260, 'text-anchor': 'middle', class: 'c-l13-score' }, svg).textContent = w; });
+    const cells = [], cellTxt = [];
+    const rowY = i => 268 + i * 37;
+    TGT.forEach((w, i) => {
+      const g = mk('g', { class: 'c-l13-row' }, svg);
+      mk('text', { x: 50, y: rowY(i) + 22, 'text-anchor': 'end', class: 'c-l13-word' }, g).textContent = w;
+      cells.push([]); cellTxt.push([]);
+      SRC.forEach((_, j) => {
+        mk('rect', { x: cx(j) - 29, y: rowY(i), width: 58, height: 34, class: 'c-l13-cellbg' }, g);
+        cells[i].push(mk('rect', { x: cx(j) - 29, y: rowY(i), width: 58, height: 34, class: 'c-l13-cell' }, g));
+        cellTxt[i].push(mk('text', { x: cx(j), y: rowY(i) + 21, 'text-anchor': 'middle', class: 'c-l13-val' }, g));
+      });
+      g.addEventListener('click', () => { t = i; draw(); });
+    });
+    const hl = mk('rect', { x: 57, width: 326, height: 36, rx: 3, class: 'c-hl' }, svg);
+
+    /* context vector among toy 2-D encoder states */
+    const X0 = 420, Y0 = 36, W = 290, lo = -1.5, hi = 1.5, S = W / (hi - lo);
+    const sx = x => X0 + (x - lo) * S, sy = y => Y0 + W - (y - lo) * S;
+    mk('text', { x: X0, y: 22, class: 'c-title' }, svg).textContent = 'Context vector cₜ = Σⱼ αⱼₜ hⱼ';
+    const grid = mk('g', { class: 'c-grid' }, svg);
+    for (let v = lo; v <= hi + 1e-9; v += 0.5) {
+      mk('line', { x1: sx(lo), x2: sx(hi), y1: sy(v), y2: sy(v) }, grid);
+      mk('line', { x1: sx(v), x2: sx(v), y1: sy(lo), y2: sy(hi) }, grid);
+    }
+    mk('line', { x1: sx(lo), x2: sx(hi), y1: sy(0), y2: sy(0), class: 'c-axis' }, svg);
+    mk('line', { x1: sx(0), x2: sx(0), y1: sy(lo), y2: sy(hi), class: 'c-axis' }, svg);
+    [-1, 1].forEach(v => {
+      mk('text', { x: sx(v), y: sy(0) + 14, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = v;
+      mk('text', { x: sx(0) - 6, y: sy(v) + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = v;
+    });
+    const pulls = H.map(() => mk('line', { class: 'c-l13-pull' }, svg));
+    H.forEach((h, j) => {
+      mk('circle', { cx: sx(h[0]), cy: sy(h[1]), r: 5, class: 'c-l13-h' }, svg);
+      mk('text', { x: sx(h[0]) + LBL[j][0], y: sy(h[1]) + LBL[j][1], 'text-anchor': LBL[j][2], class: 'c-note' }, svg).textContent = LBL[j][3];
+    });
+    const cDot = mk('circle', { r: 7, class: 'c-pt-hi' }, svg);
+    const cLbl = mk('text', { class: 'c-lbl' }, svg); cLbl.textContent = 'cₜ';
+    mk('circle', { cx: 426, cy: 352, r: 4.5, class: 'c-l13-h' }, svg);
+    mk('text', { x: 438, y: 356, class: 'c-note' }, svg).textContent = 'encoder states hⱼ (toy 2-D, synthetic)';
+    mk('circle', { cx: 426, cy: 372, r: 5.5, class: 'c-pt-hi' }, svg);
+    mk('text', { x: 438, y: 376, class: 'c-note' }, svg).textContent = 'context vector cₜ';
+    mk('line', { x1: 419, x2: 433, y1: 392, y2: 392, class: 'c-l13-pull', style: 'stroke-width: 3' }, svg);
+    mk('text', { x: 438, y: 396, class: 'c-note' }, svg).textContent = 'line width grows with αⱼₜ';
+
+    const stepIn = document.getElementById('att-step'), stepOut = document.getElementById('att-step-out');
+    const sIn = SRC.map((_, j) => document.getElementById('att-e' + (j + 1)));
+    const sOut = SRC.map((_, j) => document.getElementById('att-e' + (j + 1) + '-out'));
+    const rMax = document.getElementById('att-max'), rSum = document.getElementById('att-sum'), rC = document.getElementById('att-c'), rErr = document.getElementById('att-err'), status = document.getElementById('att-status');
+
+    const draw = () => {
+      const A = E.map(softmax);
+      A.forEach((row, i) => row.forEach((a, j) => {
+        cells[i][j].setAttribute('style', 'fill-opacity: ' + a.toFixed(3));
+        cellTxt[i][j].textContent = a.toFixed(2);
+        cellTxt[i][j].setAttribute('class', 'c-l13-val' + (a > 0.55 ? ' inv' : ''));
+      }));
+      hl.setAttribute('y', rowY(t) - 1);
+      const a = A[t];
+      a.forEach((v, j) => {
+        const h = v * 130;
+        bars[j].setAttribute('y', 176 - h); bars[j].setAttribute('height', Math.max(h, 0.5));
+        vals[j].setAttribute('y', 170 - h); vals[j].textContent = v.toFixed(2);
+        scs[j].textContent = 'e = ' + fmt(E[t][j]);
+        sIn[j].value = E[t][j]; sOut[j].textContent = fmt(E[t][j]);
+      });
+      barTitle.textContent = 'Weights αⱼₜ at step t = ' + (t + 1) + ', output word “' + TGT[t] + '”';
+      const c = [0, 0];
+      a.forEach((v, j) => { c[0] += v * H[j][0]; c[1] += v * H[j][1]; });
+      cDot.setAttribute('cx', sx(c[0])); cDot.setAttribute('cy', sy(c[1]));
+      cLbl.setAttribute('x', sx(c[0]) + 10); cLbl.setAttribute('y', sy(c[1]) - 10);
+      pulls.forEach((ln, j) => {
+        ln.setAttribute('x1', sx(c[0])); ln.setAttribute('y1', sy(c[1])); ln.setAttribute('x2', sx(H[j][0])); ln.setAttribute('y2', sy(H[j][1]));
+        ln.setAttribute('style', 'stroke-width: ' + (0.6 + 5 * a[j]).toFixed(2) + '; stroke-opacity: ' + (0.15 + 0.85 * a[j]).toFixed(2));
+      });
+      stepIn.value = t + 1; stepOut.textContent = 't = ' + (t + 1) + ' · ' + TGT[t];
+      let k = 0; a.forEach((v, j) => { if (v > a[k]) k = j; });
+      rMax.textContent = a[k].toFixed(2) + ' · ' + SRC[k];
+      rSum.textContent = a.reduce((s, v) => s + v, 0).toFixed(2);
+      rC.textContent = '(' + fmt(c[0]) + ', ' + fmt(c[1]) + ')';
+      const err = a.reduce((s, v, j) => s + (v - ORACLE[t][j]) ** 2, 0);
+      rErr.textContent = err.toFixed(3);
+      const spread = Math.max(...E[t]) - Math.min(...E[t]);
+      if (spread < 0.05) status.textContent = 'All scores equal: every weight is 0.20, and cₜ is the plain average of the five encoder states.';
+      else if (err < 0.001) status.textContent = 'These are the oracle’s weights for “' + TGT[t] + '”, to two decimals.';
+      else status.textContent = 'At step ' + (t + 1) + ' (“' + TGT[t] + '”) the largest weight, ' + a[k].toFixed(2) + ', is on “' + SRC[k] + '”.';
+    };
+
+    const animateTo = target => {
+      const from = E[t].slice(), row = t;
+      tween(0, 1, k => { E[row] = from.map((v, j) => v + (target[j] - v) * k); draw(); });
+    };
+    stepIn.addEventListener('input', () => { t = parseInt(stepIn.value, 10) - 1; draw(); });
+    sIn.forEach((inp, j) => inp.addEventListener('input', () => { E[t][j] = parseFloat(inp.value); draw(); }));
+    document.getElementById('att-oracle').addEventListener('click', () => animateTo(ORACLE[t].map(v => (v > 0 ? 6 : 0))));
+    document.getElementById('att-equal').addEventListener('click', () => animateTo([0, 0, 0, 0, 0]));
+    document.getElementById('att-reset').addEventListener('click', () => { E = DEFAULT.map(r => r.slice()); draw(); });
+    draw();
+  })();
+})();
+</script>
+</body>
+</html>
