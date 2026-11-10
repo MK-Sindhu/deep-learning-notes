@@ -1,0 +1,1058 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lecture 12 · GRUs and LSTMs · DL Notes</title>
+<meta name="description" content="CS6910 Deep Learning (IIT Madras) notes, Lecture 12: selective read, write and forget, the LSTM and GRU equations, and why gated cells avoid vanishing gradients while exploding gradients still need clipping.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<style>
+.dg .l12-slot { fill: var(--paper); stroke: var(--rule); stroke-width: 1; }
+.dg .l12-read { fill: var(--mark); stroke: var(--ink-2); stroke-width: 1.2; }
+.dg .l12-step { fill: var(--paper); stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 5 4; }
+.dg .l12-halo { paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.dg .l12-bar-bg { fill: var(--rule); }
+.dg .l12-bar { fill: var(--accent); }
+.dg .l12-val { font: 500 11px var(--font-mono); fill: var(--ink); }
+</style>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <!-- PARTNAV:START --><nav class="partnav" aria-label="Lectures"><a href="index.html">DL Notes</a><span class="sep">/</span><span>Lecture 12</span><span class="sep">·</span><a href="lecture-11.html">← Lecture 11</a><span class="sep">·</span><a href="lecture-13.html">Lecture 13 →</a></nav><!-- PARTNAV:END -->
+    <div class="eyebrow">CS6910 · Deep Learning · IIT Madras</div>
+    <h1>LSTMs and GRUs: gated memory for recurrent networks</h1>
+    <p class="lede">An RNN's state is a fixed-size memory that every new input overwrites, so old information fades on the way forward and its gradients fade on the way back. LSTMs and GRUs add sigmoid gates that write, read and forget selectively, and because the same forget gates scale the backward pass, a gradient vanishes only when the forward contribution vanished too.</p>
+    <div class="meta">
+      <span>Lecture <b>12</b></span>
+      <span>Instructor <b>Prof. Mitesh M. Khapra</b></span>
+      <span>About <b>73 min</b> of video</span>
+      <span><b>4</b> modules</span>
+    </div>
+    <div class="watch">
+      <a class="btn solid" href="https://www.cse.iitm.ac.in/~miteshk/CS7015/Slides/Teaching/pdf/Lecture15.pdf" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 0.5 H6.5 L8.5 2.5 V9.5 H2 Z"/></svg>Slides</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=pI-3TreYU18" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 9:17</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=9TFnjJkfqmA" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 31:19</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=PMv8C-Ws1b8" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 8:10</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=dKKPtG-qeaI" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 23:53</a>
+    </div>
+  </div>
+</header>
+
+<div class="page gutter">
+  <nav class="toc" aria-label="Contents">
+    <div>
+      <h4>Module 15.1 · Whiteboard</h4>
+      <ul>
+        <li><a href="#morphing">A state that gets overwritten</a></li>
+        <li><a href="#whiteboard">Write, read, forget</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 15.2 · LSTMs and GRUs</h4>
+      <ul>
+        <li><a href="#sentiment">Why an RNN needs it</a></li>
+        <li><a href="#selective-write">Output gate</a></li>
+        <li><a href="#selective-read">Input gate</a></li>
+        <li><a href="#selective-forget">Forget gate</a></li>
+        <li><a href="#lstm-equations">The full LSTM</a></li>
+        <li><a href="#gru">Gated recurrent units</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 15.3 · Gradients</h4>
+      <ul>
+        <li><a href="#gates-regulate">Gates regulate gradients</a></li>
+        <li><a href="#paths">A sum over paths</a></li>
+        <li><a href="#dependency-graph">LSTM dependency graph</a></li>
+        <li><a href="#no-vanishing">Why it need not vanish</a></li>
+        <li><a href="#exploding">Exploding and clipping</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Revision</h4>
+      <ul>
+        <li><a href="#terms">Key terms</a></li>
+        <li><a href="#test">Test yourself</a></li>
+        <li><a href="index.html">All lectures</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="glance" id="glance">
+      <h2>At a glance</h2>
+      <ul>
+        <li>An RNN's state \(\mathbf{s}_t\) has a fixed size, and every input morphs it. Information from early steps gets overwritten in the forward pass, and gradients to early steps vanish in the backward pass. With a small whiteboard people cope by <b>writing, reading and forgetting selectively</b>; gated cells give an RNN the same three operations.</li>
+        <li>A <dfn>gate</dfn> is a vector \(\sigma(W\mathbf{h}_{t-1} + U\mathbf{x}_t + \mathbf{b})\) with entries in \((0, 1)\), multiplied element-wise with what it controls. The LSTM has three: the <b>output gate</b> (selective write), the <b>input gate</b> (selective read) and the <b>forget gate</b> (selective forget).</li>
+        <li>LSTM states: \(\tilde{\mathbf{s}}_t = \sigma(W\mathbf{h}_{t-1} + U\mathbf{x}_t + \mathbf{b})\), \(\mathbf{s}_t = \mathbf{f}_t \odot \mathbf{s}_{t-1} + \mathbf{i}_t \odot \tilde{\mathbf{s}}_t\), \(\mathbf{h}_t = \mathbf{o}_t \odot \sigma(\mathbf{s}_t)\). The GRU drops the forget gate (it uses \(\mathbf{1} - \mathbf{i}_t\)) and computes its gates from \(\mathbf{s}_{t-1}\) directly.</li>
+        <li>No label says which words to keep. The gates are extra parameters, learned by backpropagation from the final loss, that <i>can</i> learn to read, write and forget if it helps.</li>
+        <li>Along the cell states the gradient from \(\mathcal{L}_t\) to \(\mathbf{s}_k\) picks up only \(\mathcal{D}(\mathbf{f}_t \odot \cdots \odot \mathbf{f}_{k+1})\). It vanishes only if the forget gates also shut \(\mathbf{s}_k\) out of the forward pass, which is fair. Paths through the output gates repeat \(W_o\) and can still <b>explode</b>; the fix is <b>gradient clipping</b>.</li>
+      </ul>
+    </div>
+
+    <!-- ============ MODULE 15.1 ============ -->
+    <section id="morphing">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=pI-3TreYU18&amp;t=12s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 0:12</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=pI-3TreYU18&amp;t=78s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 1:18 a finite state</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=pI-3TreYU18&amp;t=141s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 2:21 the backward view</a>
+        </div>
+        <h2>A fixed-size state gets overwritten</h2>
+      </div>
+      <p><a href="lecture-11.html">Lecture 11</a> ended with the difficulty of training RNNs. Backpropagating from the last time step \(t\) to an early step \(k\) multiplies many Jacobians, and the product can vanish or explode. This lecture builds two architectures that ease the problem, <dfn>long short-term memory</dfn> cells (LSTMs) and <dfn>gated recurrent units</dfn> (GRUs), from one intuition: selective read, selective write and selective forget.</p>
+      <p>The state \(\mathbf{s}_t\) of an RNN records information from all previous time steps; that is what the recurrent connection is for. The state has a fixed size, perhaps 100 or 1000 numbers, and at every step the new input morphs what is already stored. After \(t\) steps the information stored at step \(t-k\) (for some \(k &lt; t\)) may be morphed so much that it can no longer be extracted from \(\mathbf{s}_t\). By step 20 or 30 there is no way to say what step 1 or step 2 contributed.</p>
+      <p>The same difficulty appears when information flows backwards. Training has to decide how much the events at step \(t-k\) are responsible for the error at step \(t\). That responsibility is carried by gradients, and Lecture 11 showed formally that they vanish along long paths. So early steps fade twice: their content in the forward pass, and their share of the blame in the backward pass.</p>
+    </section>
+
+    <section id="whiteboard">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=pI-3TreYU18&amp;t=171s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 2:51</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=pI-3TreYU18&amp;t=277s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 4:37 selective write</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=pI-3TreYU18&amp;t=348s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 5:48 selective read</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=pI-3TreYU18&amp;t=380s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 6:20 selective forget</a>
+        </div>
+        <h2>The whiteboard analogy</h2>
+      </div>
+      <p>Think of the state as a whiteboard of fixed size. At regular intervals you write something new on it, and every time, part of the earlier content gets changed or wiped. After a long derivation it is hard to see where a quantity from the start went, or how it shaped what is on the board now.</p>
+      <p>People manage a small board with three habits: they write selectively, read selectively and erase (forget) selectively. The lecture's example: with \(a = 1\), \(b = 3\), \(c = 5\), \(d = 11\), compute \(ac(bd + a) + ad\) on a board that holds only 3 statements at a time. The derivation has six steps: \(ac\), \(bd\), \(bd + a\), \(ac(bd + a)\), \(ad\) and finally \(ac(bd + a) + ad\).</p>
+      <ul>
+        <li><b>Selective write.</b> Write only what matters. The board gets \(ac = 5\) and \(bd = 33\); the intermediate lines \(a = 1\), \(c = 5\), \(a \times c = 5\) are skipped. Later, \(ac(bd + a) = 170\) goes up as one line instead of \(5 \times 34\) followed by 170. The reason is the limited space.</li>
+        <li><b>Selective read.</b> To write step 3, \(bd + a = 34\), you read \(bd\) from the board. \(ac\) plays no part in that step.</li>
+        <li><b>Selective forget.</b> Once the board is full, erase the least useful line. \(bd\) can go, because \(bd + a\) already carries what it contributed, and \(ac(bd + a) = 170\) takes its place. Then \(bd + a\) makes way for \(ad = 11\), and \(ac\) makes way for the answer \(181\).</li>
+      </ul>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 680 362" role="img" aria-label="Six snapshots of a whiteboard that holds three lines while computing ac(bd + a) + ad with a = 1, b = 3, c = 5, d = 11. Lines written: ac = 5, bd = 33, bd + a = 34; then bd is erased for ac(bd + a) = 170, bd + a is erased for ad = 11, and ac is erased for the answer 181. Each snapshot marks the line just written and the lines read for that step.">
+<text class="d-h" x="20" y="22">Compute ac(bd + a) + ad with a = 1, b = 3, c = 5, d = 11</text>
+<text class="d-s" x="660" y="22" text-anchor="end">the board holds 3 lines</text>
+<text class="d-t" x="20" y="52">1 · write ac</text>
+<rect class="d-box" x="20" y="62" width="196" height="114" rx="8"/>
+<rect class="d-box-acc" x="32" y="74" width="172" height="26" rx="4"/>
+<text x="42" y="91.5">ac = 5</text>
+<rect class="d-off" x="32" y="106" width="172" height="26" rx="4"/>
+<text class="d-s t-off" x="42" y="123.5">empty</text>
+<rect class="d-off" x="32" y="138" width="172" height="26" rx="4"/>
+<text class="d-s t-off" x="42" y="155.5">empty</text>
+<text class="d-t" x="242" y="52">2 · write bd</text>
+<rect class="d-box" x="242" y="62" width="196" height="114" rx="8"/>
+<rect class="l12-slot" x="254" y="74" width="172" height="26" rx="4"/>
+<text x="264" y="91.5">ac = 5</text>
+<rect class="d-box-acc" x="254" y="106" width="172" height="26" rx="4"/>
+<text x="264" y="123.5">bd = 33</text>
+<rect class="d-off" x="254" y="138" width="172" height="26" rx="4"/>
+<text class="d-s t-off" x="264" y="155.5">empty</text>
+<text class="d-t" x="464" y="52">3 · read bd, write bd + a</text>
+<rect class="d-box" x="464" y="62" width="196" height="114" rx="8"/>
+<rect class="l12-slot" x="476" y="74" width="172" height="26" rx="4"/>
+<text x="486" y="91.5">ac = 5</text>
+<rect class="l12-read" x="476" y="106" width="172" height="26" rx="4"/>
+<text x="486" y="123.5">bd = 33</text>
+<rect class="d-box-acc" x="476" y="138" width="172" height="26" rx="4"/>
+<text x="486" y="155.5">bd + a = 34</text>
+<text class="d-t" x="20" y="208">4 · board full: erase bd</text>
+<rect class="d-box" x="20" y="218" width="196" height="114" rx="8"/>
+<rect class="l12-read" x="32" y="230" width="172" height="26" rx="4"/>
+<text x="42" y="247.5">ac = 5</text>
+<rect class="d-box-acc" x="32" y="262" width="172" height="26" rx="4"/>
+<text x="42" y="279.5">ac(bd + a) = 170</text>
+<rect class="l12-read" x="32" y="294" width="172" height="26" rx="4"/>
+<text x="42" y="311.5">bd + a = 34</text>
+<text class="d-t" x="242" y="208">5 · erase bd + a</text>
+<rect class="d-box" x="242" y="218" width="196" height="114" rx="8"/>
+<rect class="l12-slot" x="254" y="230" width="172" height="26" rx="4"/>
+<text x="264" y="247.5">ac = 5</text>
+<rect class="l12-slot" x="254" y="262" width="172" height="26" rx="4"/>
+<text x="264" y="279.5">ac(bd + a) = 170</text>
+<rect class="d-box-acc" x="254" y="294" width="172" height="26" rx="4"/>
+<text x="264" y="311.5">ad = 11</text>
+<text class="d-t" x="464" y="208">6 · erase ac</text>
+<rect class="d-box" x="464" y="218" width="196" height="114" rx="8"/>
+<rect class="d-box-acc" x="476" y="230" width="172" height="26" rx="4"/>
+<text x="486" y="247.5">ad + ac(bd + a) = 181</text>
+<rect class="l12-read" x="476" y="262" width="172" height="26" rx="4"/>
+<text x="486" y="279.5">ac(bd + a) = 170</text>
+<rect class="l12-read" x="476" y="294" width="172" height="26" rx="4"/>
+<text x="486" y="311.5">ad = 11</text>
+<rect class="d-box-acc" x="20" y="338" width="16" height="12" rx="2"/><text class="d-s" x="42" y="348">just written</text>
+<rect class="l12-read" x="140" y="338" width="16" height="12" rx="2"/><text class="d-s" x="162" y="348">read to write this step</text>
+<rect class="d-off" x="310" y="338" width="16" height="12" rx="2"/><text class="d-s" x="332" y="348">empty slot</text>
+<text class="d-s" x="660" y="348" text-anchor="end">a, b, c, d are given, so they are never stored</text>
+</svg>
+        </div>
+        <figcaption><b>Selective write, read and forget on a three-line board.</b> Each snapshot is the board after one step of the lecture's example. The accent line was just written; highlighted lines were read to write it. Every erasure removes a line whose information is already held elsewhere or is no longer needed, so the answer \(170 + 11 = 181\) is reached in three lines of space.</figcaption>
+      </figure>
+
+      <p>The same three operations show up elsewhere <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=pI-3TreYU18&amp;t=448s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>7:28</a>. The brain holds a finite number of facts, and over time it reads, writes and forgets some of them, mostly without our deciding to. An RNN also has a state of finite size, so the plan is to let it read, write and forget selectively too <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=pI-3TreYU18&amp;t=483s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>8:03</a>. Information will still be morphed, as it was on the whiteboard, but in a principled way that keeps the useful parts and deletes what is not needed. The lecturer adds a warning: the solution that follows moves in this direction without living up to the analogy completely.</p>
+    </section>
+
+    <!-- ============ MODULE 15.2 ============ -->
+    <section id="sentiment">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=46s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 0:46</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=144s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 2:24 the state as a whiteboard</a>
+        </div>
+        <h2>An RNN needs the same three operations</h2>
+      </div>
+      <p>Two questions drive this module. Is there a concrete case where an RNN needs to read, write and forget selectively? And how can the intuition be written as equations?</p>
+      <p>The concrete case is sentiment classification. The RNN reads a review one word per time step and predicts positive or negative at the last step. The slide's review says that the first half of a movie was dry, that the second half picked up pace, and that the lead actor's performance was amazing. By the time the RNN reaches the end of a long document, the information from the first few words is lost. Ideally it would:</p>
+      <ul>
+        <li><b>forget</b> the information added by stop words such as <i>a</i>, <i>an</i> and <i>the</i>, which carry no sentiment;</li>
+        <li><b>selectively read</b> the information added by earlier sentiment-bearing words, such as <i>amazing</i> or <i>awesome</i>;</li>
+        <li><b>selectively write</b> new information from the current word into the state.</li>
+      </ul>
+      <p>Long inputs make this pressing. A document of 1000 words is common (many Wikipedia pages are longer), and encoding all of it in one RNN state is hard. LSTMs and GRUs make it easier only to an extent.</p>
+      <p>Now the equations. The state \(\mathbf{s}_t \in \mathbb{R}^n\) has a finite size and is meant to store all information up to step \(t\). It plays the role of the whiteboard, and sooner or later it gets overloaded. The problem, stated precisely <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=182s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:02</a>: from the state \(\mathbf{s}_{t-1}\) and the new input \(\mathbf{x}_t\), compute the new state \(\mathbf{s}_t\), using selective write, read and forget along the way so that only important information is kept in \(\mathbf{s}_t\).</p>
+    </section>
+
+    <section id="selective-write">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=258s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 4:18</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=429s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 7:09 the output gate</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=497s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 8:17 learning the gate</a>
+        </div>
+        <h2>Selective write: the output gate</h2>
+      </div>
+      <p>In an RNN the new state uses all of the old one: \(\mathbf{s}_t = \sigma(W\mathbf{s}_{t-1} + U\mathbf{x}_t)\), bias ignored. Instead of passing \(\mathbf{s}_{t-1}\) on as it is, we want to pass on (write) only some portions of it.</p>
+      <p>The strictest version is a binary decision for each entry <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=321s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:21</a>. With \(\mathbf{s}_{t-1} = [-1.4,\ -0.4,\ 1,\ \dots,\ -2]^\top\), keeping the 1st and 3rd entries and deleting the rest gives \([-1.4,\ 0,\ 1,\ \dots,\ 0]^\top\). A more sensible, soft version gives each entry a number between 0 and 1: the fraction of that entry to pass on.</p>
+      <p>So introduce a vector \(\mathbf{o}_{t-1}\) with entries between 0 and 1, and multiply it element-wise with the state. Each entry of \(\mathbf{o}_{t-1}\) decides what fraction of the matching entry of \(\mathbf{s}_{t-1}\) is passed on. How does the network know which fractions to use? It has to learn them, and the course's recurring recipe applies: to learn a quantity, give it a parametric form and learn the parameters.</p>
+      <div class="eq">\[ \mathbf{o}_{t-1} = \sigma\big(W_o\mathbf{h}_{t-2} + U_o\mathbf{x}_{t-1} + \mathbf{b}_o\big), \qquad \mathbf{h}_{t-1} = \mathbf{o}_{t-1} \odot \sigma(\mathbf{s}_{t-1}) \]</div>
+      <p>The gate at step \(t-1\) depends on that step's input \(\mathbf{x}_{t-1}\) and on \(\mathbf{h}_{t-2}\), the output of the same selective write one step earlier. The sigmoid keeps every entry in \((0, 1)\). This is the place where sigmoids are still used: <a href="lecture-07.html">Lecture 7</a> argued for tanh or ReLU in their place, but noted that RNNs and LSTMs still use sigmoids <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=625s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>10:25</a>. The new parameters \(W_o, U_o, \mathbf{b}_o\) are learned along with the RNN's \(W, U, V\). \(\mathbf{o}_t\) is called the <dfn>output gate</dfn> because it decides how much to pass (write) to the next time step.</p>
+      <p class="note">In the video the lecturer pauses to check whether the σ on \(\mathbf{s}_{t-1}\) belongs in \(\mathbf{h}_{t-1}\). The slides keep it, and so do these notes.</p>
+
+      <h3>Nobody tells the gate what to keep <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=726s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 12:06</a></h3>
+      <p>The whiteboard analogy hides one difference. On the board we knew exactly which steps mattered. Take a review saying the movie was long but really amazing. The overall sentiment is positive and the word <i>long</i> is misleading, so ideally the gate would drop it. With a label for every word (retain, retain, forget, …) a loss could check whether the gates follow those decisions. No such labels exist. The only signal is the final loss on the positive/negative prediction, backpropagated through the network.</p>
+      <p>What the gates add is a better modelling choice, in the same sense that a deep network is a different choice from \(y = \mathbf{w}^\top\mathbf{x}\). Their parameters give backpropagation the means to learn selective writing if that lowers the loss <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=694s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>11:34</a>. Suppose \(\mathbf{o}_{t-1}\) were all ones, passing everything to the next state; if that hurts the loss, the gradients will push the fractions toward more useful values.</p>
+    </section>
+
+    <section id="selective-read">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=965s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 16:05</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=1069s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 17:49 the input gate</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=1131s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 18:51 so far</a>
+        </div>
+        <h2>Selective read: the input gate</h2>
+      </div>
+      <p>Next, combine the selectively written \(\mathbf{h}_{t-1}\) with the new input \(\mathbf{x}_t\) into a temporary state:</p>
+      <div class="eq">\[ \tilde{\mathbf{s}}_t = \sigma\big(W\mathbf{h}_{t-1} + U\mathbf{x}_t + \mathbf{b}\big) \]</div>
+      <p>This is the RNN update with \(\mathbf{h}_{t-1}\) in place of \(\mathbf{s}_{t-1}\), which makes sense because \(\mathbf{h}_{t-1}\) holds only the selectively written values. \(W\), \(U\) and \(\mathbf{b}\) play the same role as the RNN's parameters (the slide's figure leaves \(\mathbf{b}\) out).</p>
+      <p>\(\tilde{\mathbf{s}}_t\) captures all the information from the previous state and the current input, and we may not want all of it: the current word might be a stop word. So read from it selectively, through another gate called the <dfn>input gate</dfn> (the lecture also calls it the read gate):</p>
+      <div class="eq">\[ \mathbf{i}_t = \sigma\big(W_i\mathbf{h}_{t-1} + U_i\mathbf{x}_t + \mathbf{b}_i\big), \qquad \text{selectively read: } \mathbf{i}_t \odot \tilde{\mathbf{s}}_t \]</div>
+      <p>It has the same form as the output gate with its own parameters. Where things stand:</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Quantity</th><th>Computed as</th></tr></thead>
+          <tbody>
+            <tr><td>Previous state</td><td>\(\mathbf{s}_{t-1}\)</td></tr>
+            <tr><td>Output gate</td><td>\(\mathbf{o}_{t-1} = \sigma(W_o\mathbf{h}_{t-2} + U_o\mathbf{x}_{t-1} + \mathbf{b}_o)\)</td></tr>
+            <tr><td>Selectively write</td><td>\(\mathbf{h}_{t-1} = \mathbf{o}_{t-1} \odot \sigma(\mathbf{s}_{t-1})\)</td></tr>
+            <tr><td>Current (temporary) state</td><td>\(\tilde{\mathbf{s}}_t = \sigma(W\mathbf{h}_{t-1} + U\mathbf{x}_t + \mathbf{b})\)</td></tr>
+            <tr><td>Input gate</td><td>\(\mathbf{i}_t = \sigma(W_i\mathbf{h}_{t-1} + U_i\mathbf{x}_t + \mathbf{b}_i)\)</td></tr>
+            <tr><td>Selectively read</td><td>\(\mathbf{i}_t \odot \tilde{\mathbf{s}}_t\)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Selective write and selective read are in place, and \(\mathbf{s}_t\) itself is still not computed.</p>
+    </section>
+
+    <section id="selective-forget">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=1198s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 19:58</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=1262s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 21:02 why another gate</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=1329s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 22:09 variants</a>
+        </div>
+        <h2>Selective forget: the forget gate</h2>
+      </div>
+      <p>How should \(\mathbf{s}_{t-1}\) and \(\tilde{\mathbf{s}}_t\) be combined into the new state? One simple and effective way adds the selectively read information to the old state, \(\mathbf{s}_t = \mathbf{s}_{t-1} + \mathbf{i}_t \odot \tilde{\mathbf{s}}_t\). That keeps all of \(\mathbf{s}_{t-1}\), and we may want to forget some of it. So add a third gate, the <dfn>forget gate</dfn>:</p>
+      <div class="eq">\[ \mathbf{f}_t = \sigma\big(W_f\mathbf{h}_{t-1} + U_f\mathbf{x}_t + \mathbf{b}_f\big), \qquad \mathbf{s}_t = \mathbf{f}_t \odot \mathbf{s}_{t-1} + \mathbf{i}_t \odot \tilde{\mathbf{s}}_t \]</div>
+      <p>This should be confusing, and the lecturer says so: the output gate already wrote \(\mathbf{s}_{t-1}\) selectively, so why also forget selectively? The two gates act at different places. \(\mathbf{o}_{t-1}\) shapes \(\mathbf{h}_{t-1}\), which is only an input to the temporary state and the gates; it is never added into \(\mathbf{s}_t\) directly. \(\mathbf{f}_t\) decides how much of the old state survives when the newly read information is merged back into it. Keeping input, output and forget as separate functions lets each learn on its own.</p>
+      <p>This exact doubt led to the gated recurrent unit, which merges two of the gates. More generally there are some 15 to 20 variants of the LSTM that tie gates or weights together. For example, the forget gate could be one minus the input gate, or the output gate one minus the input gate. The most parameterized form, used here, gives every gate its own parameters.</p>
+    </section>
+
+    <section id="lstm-equations">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=1406s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 23:26</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=1468s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 24:28 one time step</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=1563s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 26:03 outputs and notation</a>
+        </div>
+        <h2>The full LSTM</h2>
+      </div>
+      <p>Moving the output gate's equation from step \(t-1\) to step \(t\) gives the complete set: three gates of the same form with different parameters, and three states, where \(\tilde{\mathbf{s}}_t\) leads to \(\mathbf{s}_t\) and \(\mathbf{s}_t\) leads to \(\mathbf{h}_t\).</p>
+      <div class="result">
+        <span class="lbl">LSTM, one time step (gates left, states right)</span>
+        \[ \begin{aligned} \mathbf{o}_t &amp;= \sigma(W_o\mathbf{h}_{t-1} + U_o\mathbf{x}_t + \mathbf{b}_o) &amp; \qquad \tilde{\mathbf{s}}_t &amp;= \sigma(W\mathbf{h}_{t-1} + U\mathbf{x}_t + \mathbf{b}) \\ \mathbf{i}_t &amp;= \sigma(W_i\mathbf{h}_{t-1} + U_i\mathbf{x}_t + \mathbf{b}_i) &amp; \qquad \mathbf{s}_t &amp;= \mathbf{f}_t \odot \mathbf{s}_{t-1} + \mathbf{i}_t \odot \tilde{\mathbf{s}}_t \\ \mathbf{f}_t &amp;= \sigma(W_f\mathbf{h}_{t-1} + U_f\mathbf{x}_t + \mathbf{b}_f) &amp; \qquad \mathbf{h}_t &amp;= \mathbf{o}_t \odot \sigma(\mathbf{s}_t) \end{aligned} \]
+        <p>The RNN's output at step \(t\) is \(\mathbf{h}_t\). \(\mathbf{s}_{t-1}\) is carried over from the step before.</p>
+      </div>
+      <p>Which part of the slide's diagram is one time step? The lecture asks this as a quiz. The answer is everything indexed by \(t\): the selective read and forget that produce \(\mathbf{s}_t\), plus the selective write after them that produces \(\mathbf{h}_t\). The selective write at the start of the diagram, which produced \(\mathbf{h}_{t-1}\), belongs to step \(t-1\).</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 30 660 270" role="img" aria-label="The LSTM step drawn as a pipeline. The old state times the output gate gives h t minus 1 (selective write at the previous step). W times h t minus 1 plus U times x t goes through a sigmoid to give the temporary state. Temporary state times input gate (selective read) plus old state times forget gate (selective forget) equals the new state s t. Then sigmoid of s t times the output gate o t gives h t (selective write). The part computed at time step t is shaded.">
+<defs><marker id="l12-lp-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<path class="l12-step" d="M232 42 H648 V274 H418 V186 H232 Z"/>
+<text class="d-row" x="640" y="56" text-anchor="end">computed at time step t</text>
+<rect class="d-box" x="16" y="60" width="46" height="40" rx="6"/><text class="d-t" x="39" y="84.5" text-anchor="middle">sₜ₋₁</text>
+<circle class="d-ln" cx="75" cy="80" r="7"/><circle class="pt-plain" cx="75" cy="80" r="1.8"/>
+<rect class="d-box-acc" x="88" y="60" width="46" height="40" rx="6"/><text class="d-t" x="111" y="84.5" text-anchor="middle">oₜ₋₁</text>
+<text class="d-h" x="147" y="85.0" text-anchor="middle">=</text>
+<rect class="d-box" x="160" y="60" width="46" height="40" rx="6"/><text class="d-t" x="183" y="84.5" text-anchor="middle">hₜ₋₁</text>
+<line class="d-ln" x1="206" y1="80.0" x2="238" y2="80.0" marker-end="url(#l12-lp-ah)"/>
+<text class="d-t" x="217" y="73.0" text-anchor="middle">W</text>
+<circle class="node" cx="256" cy="80.0" r="16"/><text class="d-t" x="256" y="84.5" text-anchor="middle">σ</text>
+<line class="d-ln" x1="272" y1="80.0" x2="298" y2="80.0" marker-end="url(#l12-lp-ah)"/>
+<rect class="d-box" x="233" y="136" width="46" height="40" rx="6"/><text class="d-t" x="256" y="160.5" text-anchor="middle">xₜ</text>
+<line class="d-ln" x1="256" y1="136" x2="256" y2="98.0" marker-end="url(#l12-lp-ah)"/>
+<text class="d-t" x="264" y="124">U</text>
+<rect class="d-box" x="300" y="60" width="46" height="40" rx="6"/><text class="d-t" x="323" y="84.5" text-anchor="middle">s̃ₜ</text>
+<circle class="d-ln" cx="359" cy="80" r="7"/><circle class="pt-plain" cx="359" cy="80" r="1.8"/>
+<rect class="d-box-acc" x="372" y="60" width="46" height="40" rx="6"/><text class="d-t" x="395" y="84.5" text-anchor="middle">iₜ</text>
+<text class="d-h" x="431" y="85.0" text-anchor="middle">+</text>
+<rect class="d-box" x="444" y="60" width="46" height="40" rx="6"/><text class="d-t" x="467" y="84.5" text-anchor="middle">sₜ₋₁</text>
+<circle class="d-ln" cx="503" cy="80" r="7"/><circle class="pt-plain" cx="503" cy="80" r="1.8"/>
+<rect class="d-box-acc" x="516" y="60" width="46" height="40" rx="6"/><text class="d-t" x="539" y="84.5" text-anchor="middle">fₜ</text>
+<text class="d-h" x="575" y="85.0" text-anchor="middle">=</text>
+<rect class="d-box" x="588" y="60" width="46" height="40" rx="6"/><text class="d-t" x="611" y="84.5" text-anchor="middle">sₜ</text>
+<path class="d-ln" d="M16 105 V110 H206 V105"/><text class="d-s" x="111" y="126" text-anchor="middle" style="fill: var(--accent)">selective write at t − 1</text>
+<path class="d-ln" d="M300 105 V110 H418 V105"/><text class="d-s" x="359" y="126" text-anchor="middle" style="fill: var(--accent)">selective read</text>
+<path class="d-ln" d="M444 105 V110 H562 V105"/><text class="d-s" x="503" y="126" text-anchor="middle" style="fill: var(--accent)">selective forget</text>
+<path class="d-ln" d="M611 100 V160 H460 V194" marker-end="url(#l12-lp-ah)"/>
+<rect class="d-box" x="430" y="196" width="60" height="40" rx="6"/><text class="d-t" x="460" y="220.5" text-anchor="middle">σ(sₜ)</text>
+<circle class="d-ln" cx="503" cy="216" r="7"/><circle class="pt-plain" cx="503" cy="216" r="1.8"/>
+<rect class="d-box-acc" x="516" y="196" width="46" height="40" rx="6"/><text class="d-t" x="539" y="220.5" text-anchor="middle">oₜ</text>
+<text class="d-h" x="575" y="221" text-anchor="middle">=</text>
+<rect class="d-box" x="588" y="196" width="46" height="40" rx="6"/><text class="d-t" x="611" y="220.5" text-anchor="middle">hₜ</text>
+<path class="d-ln" d="M430 241 V246 H634 V241"/><text class="d-s" x="532" y="262" text-anchor="middle" style="fill: var(--accent)">selective write</text>
+<text class="d-s" x="20" y="226">hₜ goes on to step t + 1</text>
+<text class="d-s" x="20" y="242">and is the RNN output at step t</text>
+<rect class="d-box-acc" x="20" y="282" width="16" height="12" rx="2"/><text class="d-s" x="42" y="292">gates, entries in (0, 1)</text>
+<rect class="d-box" x="190" y="282" width="16" height="12" rx="2"/><text class="d-s" x="212" y="292">states and input</text>
+<circle class="d-ln" cx="337" cy="288" r="6"/><circle class="pt-plain" cx="337" cy="288" r="1.6"/><text class="d-s" x="350" y="292">element-wise product</text>
+</svg>
+        </div>
+        <figcaption><b>One LSTM step, in the order of the slides.</b> The shaded part is computed at step \(t\): six computations, three gates and three states. \(\mathbf{h}_{t-1}\) comes from the previous step's selective write. The slides fill each vector with sample entries; this redrawing keeps only the symbols, and the interactive cell below computes actual numbers.</figcaption>
+      </figure>
+
+      <p>An LSTM in TensorFlow or PyTorch returns two vectors at each step, \(\mathbf{h}_t\) and \(\mathbf{s}_t\), since both are states computed at that step. The course writes \(\mathbf{s}\) to match its RNN notation. The literature, and most blogs, call the same vector the <dfn>cell state</dfn> and write it \(\mathbf{c}_t\), so read every \(\mathbf{c}\) there as \(\mathbf{s}\).</p>
+      <p class="note">Not in the lecture: standard implementations squash \(\tilde{\mathbf{s}}_t\) and the cell state inside \(\mathbf{h}_t\) with tanh instead of σ, so \(\tilde{\mathbf{s}}_t \in (-1, 1)\) and an update can also lower an entry of the state. The structure of the equations is the same.</p>
+      <p>There are many LSTM variants with different numbers and arrangements of gates <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=1601s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>26:41</a>. You could tie the input gate to one minus the forget gate, or compute a gate from \(\mathbf{s}_{t-1}\) instead of \(\mathbf{h}_{t-1}\), and so on; all of these are valid LSTMs. The paper <i>LSTM: A Search Space Odyssey</i> compares many of them. The version above is the standard one and the default on most platforms.</p>
+
+      <figure id="cell-fig">
+        <div class="controls">
+          <label for="cell-s">Old cell state s<sub>t−1</sub></label>
+          <input type="range" id="cell-s" min="-2" max="2" step="0.05" value="1.2">
+          <output id="cell-s-out" for="cell-s">1.20</output>
+        </div>
+        <div class="controls">
+          <label for="cell-af">Forget gate input a<sub>f</sub></label>
+          <input type="range" id="cell-af" min="-6" max="6" step="0.1" value="3">
+          <output id="cell-af-out" for="cell-af">3.0</output>
+        </div>
+        <div class="controls">
+          <label for="cell-ai">Input gate input a<sub>i</sub></label>
+          <input type="range" id="cell-ai" min="-6" max="6" step="0.1" value="-1">
+          <output id="cell-ai-out" for="cell-ai">-1.0</output>
+        </div>
+        <div class="controls">
+          <label for="cell-ac">Candidate input a<sub>s̃</sub></label>
+          <input type="range" id="cell-ac" min="-6" max="6" step="0.1" value="1">
+          <output id="cell-ac-out" for="cell-ac">1.0</output>
+        </div>
+        <div class="controls">
+          <label for="cell-ao">Output gate input a<sub>o</sub></label>
+          <input type="range" id="cell-ao" min="-6" max="6" step="0.1" value="0.5">
+          <output id="cell-ao-out" for="cell-ao">0.5</output>
+        </div>
+        <div class="controls">
+          <button class="btn" id="cell-keep" type="button">Keep the old state</button>
+          <button class="btn" id="cell-over" type="button">Overwrite it</button>
+          <button class="btn" id="cell-reset" type="button">Reset</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">fₜ = σ(a<sub>f</sub>)</span><span class="v" id="cell-f">–</span></div>
+          <div><span class="k">iₜ = σ(a<sub>i</sub>)</span><span class="v" id="cell-i">–</span></div>
+          <div><span class="k">oₜ = σ(a<sub>o</sub>)</span><span class="v" id="cell-o">–</span></div>
+          <div><span class="k">s̃ₜ = σ(a<sub>s̃</sub>)</span><span class="v" id="cell-c">–</span></div>
+          <div><span class="k">sₜ = fₜsₜ₋₁ + iₜs̃ₜ</span><span class="v mine" id="cell-st">–</span></div>
+          <div><span class="k">hₜ = oₜσ(sₜ)</span><span class="v mine" id="cell-h">–</span></div>
+        </div>
+        <div class="status" id="cell-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="cell-svg" class="dg" viewBox="0 0 640 290" role="img" aria-label="One LSTM unit. The old cell state runs along the top, is multiplied by the forget gate, and has the input gate times the candidate added to it, giving the new cell state. A sigmoid of the new state times the output gate gives h t. Each gate box shows its value as a bar, and the wires show the numbers flowing through them."></svg></div>
+        <figcaption><b>One LSTM unit with live numbers.</b> Every vector has a single entry here, so ⊙ is ordinary multiplication. Each slider sets a gate's input \(a = W\mathbf{h}_{t-1} + U\mathbf{x}_t + b\), with that gate's own parameters, and the gate is \(\sigma(a)\). The candidate and the squash in \(h_t\) use σ, as in the lecture. The kept part of the old state is drawn thicker as \(f_t\) grows, and the read-in part as \(i_t\) grows. Going backwards along the top line, the explicit part of \(\partial s_t/\partial s_{t-1}\) is just \(f_t\); Module 15.3 builds on that.</figcaption>
+      </figure>
+    </section>
+
+    <section id="gru">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=1634s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 27:14</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=1667s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 27:47 tied gates</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=1766s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 29:26 no supervision</a>
+        </div>
+        <h2>Gated recurrent units</h2>
+      </div>
+      <p>Another equally popular variant is the <dfn>gated recurrent unit</dfn> (GRU). It has two gates, an output gate and an input gate, and no forget gate:</p>
+      <div class="result">
+        <span class="lbl">GRU, one time step (gates left, states right)</span>
+        \[ \begin{aligned} \mathbf{o}_t &amp;= \sigma(W_o\mathbf{s}_{t-1} + U_o\mathbf{x}_t + \mathbf{b}_o) &amp; \qquad \tilde{\mathbf{s}}_t &amp;= \sigma\big(W(\mathbf{o}_t \odot \mathbf{s}_{t-1}) + U\mathbf{x}_t + \mathbf{b}\big) \\ \mathbf{i}_t &amp;= \sigma(W_i\mathbf{s}_{t-1} + U_i\mathbf{x}_t + \mathbf{b}_i) &amp; \qquad \mathbf{s}_t &amp;= (\mathbf{1} - \mathbf{i}_t) \odot \mathbf{s}_{t-1} + \mathbf{i}_t \odot \tilde{\mathbf{s}}_t \end{aligned} \]
+      </div>
+      <p>Two things change compared with the LSTM.</p>
+      <ul>
+        <li><b>No explicit forget gate.</b> The forget and input gates are tied. \(\mathbf{i}_t\) says how much to take from the new temporary state, and the rest, \(\mathbf{1} - \mathbf{i}_t\), comes from the previous state.</li>
+        <li><b>The gates read \(\mathbf{s}_{t-1}\) directly</b>, with no intermediate \(\mathbf{h}_{t-1}\). The selective write happens inside the temporary state, as \(\mathbf{o}_t \odot \mathbf{s}_{t-1}\).</li>
+      </ul>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 46 620 168" role="img" aria-label="The GRU step as a pipeline. The old state times the gate o t is multiplied by W, added to U times x t and passed through a sigmoid to give the temporary state. Temporary state times i t plus old state times one minus i t equals the new state s t.">
+<defs><marker id="l12-gp-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="d-box" x="16" y="60" width="46" height="40" rx="6"/><text class="d-t" x="39" y="84.5" text-anchor="middle">sₜ₋₁</text>
+<circle class="d-ln" cx="75" cy="80" r="7"/><circle class="pt-plain" cx="75" cy="80" r="1.8"/>
+<rect class="d-box-acc" x="88" y="60" width="46" height="40" rx="6"/><text class="d-t" x="111" y="84.5" text-anchor="middle">oₜ</text>
+<line class="d-ln" x1="134" y1="80.0" x2="182" y2="80.0" marker-end="url(#l12-gp-ah)"/>
+<text class="d-t" x="158" y="73.0" text-anchor="middle">W</text>
+<circle class="node" cx="200" cy="80.0" r="16"/><text class="d-t" x="200" y="84.5" text-anchor="middle">σ</text>
+<line class="d-ln" x1="216" y1="80.0" x2="242" y2="80.0" marker-end="url(#l12-gp-ah)"/>
+<rect class="d-box" x="177" y="136" width="46" height="40" rx="6"/><text class="d-t" x="200" y="160.5" text-anchor="middle">xₜ</text>
+<line class="d-ln" x1="200" y1="136" x2="200" y2="98.0" marker-end="url(#l12-gp-ah)"/>
+<text class="d-t" x="208" y="124">U</text>
+<rect class="d-box" x="244" y="60" width="46" height="40" rx="6"/><text class="d-t" x="267" y="84.5" text-anchor="middle">s̃ₜ</text>
+<circle class="d-ln" cx="303" cy="80" r="7"/><circle class="pt-plain" cx="303" cy="80" r="1.8"/>
+<rect class="d-box-acc" x="316" y="60" width="46" height="40" rx="6"/><text class="d-t" x="339" y="84.5" text-anchor="middle">iₜ</text>
+<text class="d-h" x="375" y="85.0" text-anchor="middle">+</text>
+<rect class="d-box" x="388" y="60" width="46" height="40" rx="6"/><text class="d-t" x="411" y="84.5" text-anchor="middle">sₜ₋₁</text>
+<circle class="d-ln" cx="447" cy="80" r="7"/><circle class="pt-plain" cx="447" cy="80" r="1.8"/>
+<rect class="d-box-acc" x="460" y="60" width="56" height="40" rx="6"/><text class="d-t" x="488" y="84.5" text-anchor="middle">1 − iₜ</text>
+<text class="d-h" x="529" y="85.0" text-anchor="middle">=</text>
+<rect class="d-box" x="542" y="60" width="46" height="40" rx="6"/><text class="d-t" x="565" y="84.5" text-anchor="middle">sₜ</text>
+<path class="d-ln" d="M16 105 V110 H134 V105"/><text class="d-s" x="75" y="126" text-anchor="middle" style="fill: var(--accent)">selective write</text>
+<path class="d-ln" d="M244 105 V110 H362 V105"/><text class="d-s" x="303" y="126" text-anchor="middle" style="fill: var(--accent)">selective read</text>
+<path class="d-ln" d="M388 105 V110 H516 V105"/><text class="d-s" x="452" y="126" text-anchor="middle" style="fill: var(--accent)">forget tied to the input</text>
+<text class="d-s" x="250" y="160">both gates, oₜ and iₜ, are computed</text>
+<text class="d-s" x="250" y="176">from sₜ₋₁ and xₜ; there is no hₜ₋₁</text>
+<rect class="d-box-acc" x="20" y="194" width="16" height="12" rx="2"/><text class="d-s" x="42" y="204">gates</text>
+<rect class="d-box" x="100" y="194" width="16" height="12" rx="2"/><text class="d-s" x="122" y="204">states and input</text>
+</svg>
+        </div>
+        <figcaption><b>One GRU step.</b> The output gate now acts on the old state inside the candidate computation, and the single gate \(\mathbf{i}_t\) splits every entry of the new state between the candidate (weight \(\mathbf{i}_t\)) and the old state (weight \(\mathbf{1} - \mathbf{i}_t\)). Compared with the LSTM pipeline above, one gate and the vector \(\mathbf{h}\) are gone.</figcaption>
+      </figure>
+
+      <p class="note">Standard names, not used in the lecture: in the GRU paper and in libraries, \(\mathbf{o}_t\) is the <i>reset gate</i> \(\mathbf{r}_t\), \(\mathbf{i}_t\) is the <i>update gate</i> \(\mathbf{z}_t\), and the candidate uses tanh.</p>
+      <p>At the abstract level <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=1703s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>28:23</a>, the original problem was to store information from time step 1 to \(T\) in a state of finite size, which cannot be done. The intuition was that selective read, write and forget would help. LSTMs and GRUs are two ways to realize those operations in equations, and many other choices are possible. When someone says they used an LSTM or a GRU, they most likely mean the equations on this page.</p>
+      <p>Again, nothing supervises the gates <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=9TFnjJkfqmA&amp;t=1766s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>29:26</a>. They are extra parameters that can learn to read, write and forget selectively if that helps the loss. So when you use RNNs or LSTMs for a task, it is worth visualizing the gates. In a review where the word <i>but</i> overturns everything before it (say, the movie was long, but I really loved it), check whether the gates learn to forget what came before <i>but</i>.</p>
+    </section>
+
+    <!-- ============ MODULE 15.3 ============ -->
+    <section id="gates-regulate">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=PMv8C-Ws1b8&amp;t=42s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 0:42</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=PMv8C-Ws1b8&amp;t=140s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 2:20 exploding is easier</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=PMv8C-Ws1b8&amp;t=176s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 2:56 the intuition</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=PMv8C-Ws1b8&amp;t=307s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 5:07 gates of 0.5</a>
+        </div>
+        <h2>Gates regulate gradients the way they regulate information</h2>
+      </div>
+      <p>So far the case for gates is an intuition; it does not show that gradients flow back any better. In an RNN the trouble came from the recurrent weight \(W\) between \(\mathbf{s}_{t-1}\) and \(\mathbf{s}_t\). It appears again and again in the gradient, and the bound in <a href="lecture-11.html">Lecture 11</a> is \((\lambda\gamma)^{t-k}\), where \(\lambda\) bounds \(\lVert W\rVert\) and \(\gamma\) bounds the activation's derivative: above 1 the gradient can explode, below 1 it vanishes. LSTMs and GRUs still have recurrent connections <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=PMv8C-Ws1b8&amp;t=77s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:17</a>. Why should things be any easier?</p>
+      <p>The module concentrates on vanishing gradients, because exploding gradients are easier to deal with <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=PMv8C-Ws1b8&amp;t=140s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:20</a>. What we need from a gradient is its direction, so when its magnitude is too large we can normalize it to an acceptable size. This is <dfn>gradient clipping</dfn>, and it acts like an extra reduction of the learning rate, which already scales the gradient down. A vanished gradient cannot be rescued that way.</p>
+      <p>The intuition <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=PMv8C-Ws1b8&amp;t=176s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:56</a>. During forward propagation the gates control the flow of information: they decide how much of \(\mathbf{s}_{t-1}\) passes into \(\mathbf{s}_t\) and keep irrelevant information out of the state. During backward propagation the gradients get multiplied by the same gates. Take \(\mathbf{s}_t = \mathbf{f}_t \odot \mathbf{s}_{t-1} + \mathbf{i}_t \odot \tilde{\mathbf{s}}_t\). Treating the states as single numbers and \(\tilde{s}_t\) as a constant, \(\partial s_t/\partial s_{t-1} = f_t\).</p>
+      <p>That is not the whole derivative <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=PMv8C-Ws1b8&amp;t=239s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:59</a>. This is an ordered network, and \(\tilde{\mathbf{s}}_t\) also depends on \(\mathbf{s}_{t-1}\), through \(\mathbf{h}_{t-1}\). The lecture assumes that this second contribution vanishes. That is the worst case for the argument, an assumption made against what we want to show, and the first term still leaves a gradient proportional to the gate.</p>
+      <p>Now suppose every forget gate from step 1 to step \(t\) equals 0.5 <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=PMv8C-Ws1b8&amp;t=307s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:07</a>. In the forward pass the contribution of \(\mathbf{s}_1\) to \(\mathbf{s}_t\) is scaled by \(0.5^{t}\), which vanishes for large \(t\). It works like a game of Chinese whispers, where each player adds noise until the first message is gone. In the backward pass the gradient reaching \(\mathbf{s}_1\) is scaled by the same \(0.5^{t}\) and also vanishes. That is fine: \(\mathbf{s}_1\) did not contribute to \(\mathbf{s}_t\), so there is no reason to blame it for the error at step \(t\).</p>
+      <div class="result">
+        <span class="lbl">When a vanishing gradient is fine</span>
+        <p>If the state at \(t-1\) contributed little to the state at \(t\) (\(\lVert\mathbf{f}_t\rVert \to 0\) and \(\lVert\mathbf{o}_{t-1}\rVert \to 0\); the second condition closes the route through \(\mathbf{h}_{t-1}\)), the gradients flowing into \(\mathbf{s}_{t-1}\) vanish during backpropagation. The slides call this acceptable, since we should not "hold it responsible for the crimes of \(\mathbf{s}_t\)". The difference from a vanilla RNN is that the gates apply the same regulation forward and backward, so gradients vanish only when they should <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=PMv8C-Ws1b8&amp;t=409s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>6:49</a>.</p>
+      </div>
+    </section>
+
+    <section id="paths">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=182s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 3:02</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=248s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 4:08 why the long path matters</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=311s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 5:11 the path rule</a>
+        </div>
+        <h2>A gradient is a sum over paths</h2>
+      </div>
+      <p>The second video of Module 15.3 turns this intuition into an illustrative proof. Start from the RNN. Because it is an ordered network, Lecture 11 wrote the gradient with respect to \(W\) using explicit and implicit derivatives:</p>
+      <div class="eq">\[ \frac{\partial\mathcal{L}_t(\theta)}{\partial W} = \frac{\partial\mathcal{L}_t(\theta)}{\partial\mathbf{s}_t}\sum_{k=1}^{t}\left(\prod_{j=k}^{t-1}\frac{\partial\mathbf{s}_{j+1}}{\partial\mathbf{s}_j}\right)\frac{\partial^+\mathbf{s}_k}{\partial W} \]</div>
+      <p>Each \(\partial\mathbf{s}_{j+1}/\partial\mathbf{s}_j\) is a matrix (a vector differentiated by a vector), the same kind of matrix multiplied again and again, and its norm was bounded by \(\lambda\gamma\) <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=214s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:34</a>. Here is why that hurts. Suppose the loss \(\mathcal{L}_4(\theta)\) is high because \(W\) was not good enough to compute \(\mathbf{s}_1\). That news has to reach \(W\) through \(\mathbf{s}_1\). The direct link from \(W\) to \(\mathbf{s}_4\) carries how badly \(W\) did at computing \(\mathbf{s}_4\), which is different information. The path through \(\mathbf{s}_1\) multiplies three Jacobians, and the gradient along it vanishes.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 640 236" role="img" aria-label="Dependency graph of an RNN: s0 to s1 to s2 to s3 to s4 to the loss L4, and the shared weight W feeding s1, s2, s3 and s4. The path from the loss back through s4, s3, s2 and s1 to W is highlighted; it multiplies three Jacobians.">
+<defs><marker id="l12-rnn-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker><marker id="l12-rnn-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<line class="d-ln" x1="70" y1="60" x2="128" y2="60" marker-end="url(#l12-rnn-ah)"/>
+<line class="d-ln-acc" x1="170" y1="60" x2="228" y2="60" marker-end="url(#l12-rnn-aha)" style="stroke-width:2.4"/>
+<line class="d-ln-acc" x1="270" y1="60" x2="328" y2="60" marker-end="url(#l12-rnn-aha)" style="stroke-width:2.4"/>
+<line class="d-ln-acc" x1="370" y1="60" x2="428" y2="60" marker-end="url(#l12-rnn-aha)" style="stroke-width:2.4"/>
+<line class="d-ln-acc" x1="470" y1="60" x2="528" y2="60" marker-end="url(#l12-rnn-aha)" style="stroke-width:2.4"/>
+<line class="d-ln-acc" x1="284.8" y1="175" x2="166.7" y2="74.3" marker-end="url(#l12-rnn-aha)" style="stroke-width:2.4"/>
+<line class="d-ln" x1="292.7" y1="169.4" x2="258" y2="80.5" marker-end="url(#l12-rnn-ah)"/>
+<line class="d-ln" x1="307.3" y1="169.4" x2="342" y2="80.5" marker-end="url(#l12-rnn-ah)"/>
+<line class="d-ln" x1="315.2" y1="175" x2="433.3" y2="74.3" marker-end="url(#l12-rnn-ah)"/>
+<circle class="node" cx="50" cy="60" r="20"/>
+<text x="50" y="64.5" text-anchor="middle" style="font-size:12.5px">s₀</text>
+<circle class="node-acc" cx="150" cy="60" r="20"/>
+<text x="150" y="64.5" text-anchor="middle" style="font-size:12.5px">s₁</text>
+<circle class="node-acc" cx="250" cy="60" r="20"/>
+<text x="250" y="64.5" text-anchor="middle" style="font-size:12.5px">s₂</text>
+<circle class="node-acc" cx="350" cy="60" r="20"/>
+<text x="350" y="64.5" text-anchor="middle" style="font-size:12.5px">s₃</text>
+<circle class="node-acc" cx="450" cy="60" r="20"/>
+<text x="450" y="64.5" text-anchor="middle" style="font-size:12.5px">s₄</text>
+<circle class="node-acc" cx="558" cy="60" r="28"/>
+<text x="558" y="64.5" text-anchor="middle" style="font-size:12.5px">L₄(θ)</text>
+<circle class="node-acc" cx="300" cy="188" r="20"/>
+<text x="300" y="192.5" text-anchor="middle" style="font-size:12.5px">W</text>
+<text class="d-al" x="200" y="38" text-anchor="middle">∂s₂/∂s₁</text>
+<text class="d-al" x="300" y="38" text-anchor="middle">∂s₃/∂s₂</text>
+<text class="d-al" x="400" y="38" text-anchor="middle">∂s₄/∂s₃</text>
+<text class="d-al" x="504" y="38" text-anchor="middle">∂L₄/∂s₄</text>
+<text class="d-s" x="214" y="134" text-anchor="end" style="fill: var(--accent)">∂⁺s₁/∂W</text>
+<text class="d-s" x="392" y="138">∂⁺s₄/∂W: how W did at s₄</text>
+<text class="d-s" x="20" y="226">accent: the only path that tells W how well it computed s₁; it multiplies three Jacobians ∂sⱼ₊₁/∂sⱼ</text>
+</svg>
+        </div>
+        <figcaption><b>Four paths from the loss to \(W\).</b> \(W\) feeds every state, so \(\partial\mathcal{L}_4/\partial W\) adds one term per path, one for each \(k\) in the sum. Only the highlighted path can tell \(W\) how well it computed \(\mathbf{s}_1\), and it carries the product \(\frac{\partial\mathbf{s}_4}{\partial\mathbf{s}_3}\frac{\partial\mathbf{s}_3}{\partial\mathbf{s}_2}\frac{\partial\mathbf{s}_2}{\partial\mathbf{s}_1}\), which is what vanishes.</figcaption>
+      </figure>
+
+      <p>The general principle <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=311s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:11</a>: the gradient of \(\mathcal{L}_t(\theta)\) with respect to a parameter \(\theta_i\) adds up contributions from every path between them.</p>
+      <div class="result">
+        <span class="lbl">The path rule</span>
+        <ul>
+          <li>The gradient of \(\mathcal{L}_t(\theta)\) with respect to \(\theta_i\) <b>vanishes</b> only when the gradients flowing through each and every path from \(\mathcal{L}_t(\theta)\) to \(\theta_i\) vanish.</li>
+          <li>It <b>explodes</b> when the gradient flowing through at least one path explodes.</li>
+        </ul>
+      </div>
+      <p>In the RNN only one path reaches \(W\) through \(\mathbf{s}_1\), so when it vanishes that information is lost. If there were another, more direct path, the gradient would survive. For the LSTM this sets the plan of the proof <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=378s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>6:18</a>: to rule out vanishing, show one path along which the gradient flows well; to show that exploding is still possible, show one path along which it can explode.</p>
+    </section>
+
+    <section id="dependency-graph">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=410s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 6:50</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=575s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 9:35 parameters on edges</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=606s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 10:06 reaching W_f through s_k</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=705s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 11:45 many paths</a>
+        </div>
+        <h2>The LSTM dependency graph</h2>
+      </div>
+      <p>An LSTM has two kinds of variable, gates and states. Start from the two states at step \(k-1\), \(\mathbf{s}_{k-1}\) and \(\mathbf{h}_{k-1}\), and follow the six computations of step \(k\):</p>
+      <ul>
+        <li>\(\mathbf{o}_k\), \(\mathbf{i}_k\), \(\mathbf{f}_k\) and \(\tilde{\mathbf{s}}_k\) are each computed from \(\mathbf{h}_{k-1}\) (and \(\mathbf{x}_k\)), for example \(\mathbf{o}_k = \sigma(W_o\mathbf{h}_{k-1} + U_o\mathbf{x}_k + \mathbf{b}_o)\);</li>
+        <li>\(\mathbf{s}_k = \mathbf{f}_k \odot \mathbf{s}_{k-1} + \mathbf{i}_k \odot \tilde{\mathbf{s}}_k\) depends on \(\mathbf{s}_{k-1}\), \(\mathbf{f}_k\), \(\mathbf{i}_k\) and \(\tilde{\mathbf{s}}_k\);</li>
+        <li>\(\mathbf{h}_k = \mathbf{o}_k \odot \sigma(\mathbf{s}_k)\) depends on \(\mathbf{o}_k\) and \(\mathbf{s}_k\).</li>
+      </ul>
+      <p>From \(\mathbf{s}_k\) and \(\mathbf{h}_k\) the same graph recurs up to the last step, where the loss \(\mathcal{L}_t(\theta)\) depends on \(\mathbf{h}_t\). It has many more paths than the RNN's graph, since each step now has three states and three gates. To keep it readable, the parameters are written on the edges they act on instead of drawn as nodes, and only a few are shown (\(W, W_f, W_i, W_o\)); the \(U\)'s and biases are left out. The argument is the same for every parameter.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 750 384" role="img" aria-label="Dependency graph of an LSTM at time steps k and t. At each step the gates s-tilde, f, i and o depend on the previous h; s depends on the previous s and on s-tilde, f and i; h depends on o and s. Parameters W, W f, W i and W o sit on the edges. Highlighted: the path from the loss back through h t, s t, s t minus 1 and the earlier cell states to s k, with factors D(f) along the cell states.">
+<defs><marker id="l12-t0-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker><marker id="l12-t0-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<line class="d-ln" x1="53" y1="56" x2="257" y2="56" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln" x1="36" y1="73" x2="36" y2="307" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln" x1="44.4" y1="311.2" x2="146.6" y2="132.5" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln" x1="46.2" y1="312.4" x2="144.6" y2="181.2" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln" x1="48.5" y1="314.5" x2="142" y2="228.8" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln" x1="51.2" y1="318.4" x2="139" y2="274.5" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln" x1="171.2" y1="108.4" x2="259" y2="64.5" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln" x1="168.5" y1="154.5" x2="262" y2="68.8" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln" x1="166.2" y1="202.4" x2="264.6" y2="71.2" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln" x1="171.2" y1="273.6" x2="259" y2="317.5" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln" x1="276" y1="73" x2="276" y2="307" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln-acc" x1="393" y1="56" x2="597" y2="56" marker-end="url(#l12-t0-aha)" style="stroke-width:2.4"/>
+<line class="d-ln" x1="376" y1="73" x2="376" y2="307" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln" x1="384.4" y1="311.2" x2="486.6" y2="132.5" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln" x1="386.2" y1="312.4" x2="484.6" y2="181.2" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln" x1="388.5" y1="314.5" x2="482" y2="228.8" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln" x1="391.2" y1="318.4" x2="479" y2="274.5" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln" x1="511.2" y1="108.4" x2="599" y2="64.5" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln" x1="508.5" y1="154.5" x2="602" y2="68.8" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln" x1="506.2" y1="202.4" x2="604.6" y2="71.2" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln" x1="511.2" y1="273.6" x2="599" y2="317.5" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln-acc" x1="616" y1="73" x2="616" y2="307" marker-end="url(#l12-t0-aha)" style="stroke-width:2.4"/>
+<line class="d-ln-acc" x1="633" y1="326" x2="674" y2="326" marker-end="url(#l12-t0-aha)" style="stroke-width:2.4"/>
+<line class="d-ln-acc d-dash" x1="293" y1="56" x2="357" y2="56" marker-end="url(#l12-t0-aha)" style="stroke-width:2.4"/>
+<line class="d-ln d-dash" x1="293" y1="326" x2="357" y2="326" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln d-dash" x1="4" y1="56" x2="17" y2="56" marker-end="url(#l12-t0-ah)"/>
+<line class="d-ln d-dash" x1="4" y1="326" x2="17" y2="326" marker-end="url(#l12-t0-ah)"/>
+<circle class="node" cx="36" cy="56" r="17"/>
+<text x="36" y="60.5" text-anchor="middle" style="font-size:12.5px">sₖ₋₁</text>
+<circle class="node" cx="36" cy="326" r="17"/>
+<text x="36" y="330.5" text-anchor="middle" style="font-size:12.5px">hₖ₋₁</text>
+<circle class="node" cx="156" cy="116" r="17"/>
+<text x="156" y="120.5" text-anchor="middle" style="font-size:12.5px">s̃ₖ</text>
+<circle class="node" cx="156" cy="166" r="17"/>
+<text x="156" y="170.5" text-anchor="middle" style="font-size:12.5px">fₖ</text>
+<circle class="node" cx="156" cy="216" r="17"/>
+<text x="156" y="220.5" text-anchor="middle" style="font-size:12.5px">iₖ</text>
+<circle class="node" cx="156" cy="266" r="17"/>
+<text x="156" y="270.5" text-anchor="middle" style="font-size:12.5px">oₖ</text>
+<circle class="node-acc" cx="276" cy="56" r="17"/>
+<text x="276" y="60.5" text-anchor="middle" style="font-size:12.5px">sₖ</text>
+<circle class="node" cx="276" cy="326" r="17"/>
+<text x="276" y="330.5" text-anchor="middle" style="font-size:12.5px">hₖ</text>
+<circle class="node-acc" cx="376" cy="56" r="17"/>
+<text x="376" y="60.5" text-anchor="middle" style="font-size:12.5px">sₜ₋₁</text>
+<circle class="node" cx="376" cy="326" r="17"/>
+<text x="376" y="330.5" text-anchor="middle" style="font-size:12.5px">hₜ₋₁</text>
+<circle class="node" cx="496" cy="116" r="17"/>
+<text x="496" y="120.5" text-anchor="middle" style="font-size:12.5px">s̃ₜ</text>
+<circle class="node" cx="496" cy="166" r="17"/>
+<text x="496" y="170.5" text-anchor="middle" style="font-size:12.5px">fₜ</text>
+<circle class="node" cx="496" cy="216" r="17"/>
+<text x="496" y="220.5" text-anchor="middle" style="font-size:12.5px">iₜ</text>
+<circle class="node" cx="496" cy="266" r="17"/>
+<text x="496" y="270.5" text-anchor="middle" style="font-size:12.5px">oₜ</text>
+<circle class="node-acc" cx="616" cy="56" r="17"/>
+<text x="616" y="60.5" text-anchor="middle" style="font-size:12.5px">sₜ</text>
+<circle class="node-acc" cx="616" cy="326" r="17"/>
+<text x="616" y="330.5" text-anchor="middle" style="font-size:12.5px">hₜ</text>
+<circle class="node-acc" cx="704" cy="326" r="28"/>
+<text x="704" y="330.5" text-anchor="middle" style="font-size:12.5px">Lₜ(θ)</text>
+<text class="l12-halo" x="110.4" y="199.8" text-anchor="middle" style="fill: var(--accent); font-size:11.5px">W</text>
+<text class="l12-halo" x="110.4" y="230.8" text-anchor="middle" style="fill: var(--accent); font-size:11.5px">W<tspan dy="3" style="font-size:9px">f</tspan></text>
+<text class="l12-halo" x="110.4" y="261.8" text-anchor="middle" style="fill: var(--accent); font-size:11.5px">W<tspan dy="3" style="font-size:9px">i</tspan></text>
+<text class="l12-halo" x="110.4" y="292.8" text-anchor="middle" style="fill: var(--accent); font-size:11.5px">W<tspan dy="3" style="font-size:9px">o</tspan></text>
+<text class="d-row" x="156" y="14" text-anchor="middle">time step k</text>
+<text class="d-row" x="496" y="14" text-anchor="middle">time step t</text>
+<text class="d-al" x="326" y="72" text-anchor="middle">⋯</text>
+<text class="d-al" x="326" y="342" text-anchor="middle">⋯</text>
+<text class="d-s" x="326" y="34" text-anchor="middle" style="fill: var(--accent)">D(fₜ₋₁) ⋯ D(fₖ₊₁)</text>
+<text class="d-s" x="496" y="34" text-anchor="middle" style="fill: var(--accent)">D(fₜ)</text>
+<text class="d-s" x="626" y="184" style="fill: var(--accent)">D(oₜ ⊙ σ′(sₜ))</text>
+<text class="d-s" x="652" y="356" text-anchor="middle" style="fill: var(--accent)">L′ₜ(hₜ)</text>
+<text class="d-s" x="20" y="374">accent: the path t₀ from Lₜ(θ) back to sₖ along the cell states · dashed: steps not drawn</text>
+</svg>
+        </div>
+        <figcaption><b>The LSTM as a dependency graph, steps \(k\) and \(t\).</b> At each step the four gate nodes read the previous \(\mathbf{h}\); \(\mathbf{s}\) collects \(\tilde{\mathbf{s}}\), \(\mathbf{f}\), \(\mathbf{i}\) and the previous \(\mathbf{s}\); \(\mathbf{h}\) collects \(\mathbf{o}\) and \(\mathbf{s}\). The vertical edge from each \(\mathbf{s}\) down to its \(\mathbf{h}\) is how \(\mathbf{s}_{t-1}\) also reaches \(\mathbf{s}_t\) indirectly, through \(\mathbf{h}_{t-1}\) and the gates: that is the implicit term. Highlighted is the path \(t_0\) of the next section, with the factor each part contributes.</figcaption>
+      </figure>
+
+      <p>The question <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=606s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>10:06</a>: suppose \(\mathcal{L}_t(\theta)\) is high because \(W_f\) failed to compute an appropriate value for \(\mathbf{s}_k\) (through \(\mathbf{f}_k\)). Does that information flow back to \(W_f\) through \(\mathbf{s}_k\)? The same question can be asked about \(W_i\), \(W_o\), \(W\) and the rest. How does the LSTM make sure this gradient does not vanish, even for a step \(k\) far back from \(t\)?</p>
+      <p>It is enough to show that \(\partial\mathcal{L}_t(\theta)/\partial\mathbf{s}_k\) does not vanish <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=668s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>11:08</a>. Between \(\mathbf{s}_k\) and \(W_f\) there is one short link through \(\mathbf{f}_k\), with nothing recurrent in it, so a gradient that reaches \(\mathbf{s}_k\) also reaches \(W_f\). And there are many paths from \(\mathcal{L}_t(\theta)\) to \(\mathbf{s}_k\); reverse the arrows to see them <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=705s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>11:45</a>. One goes through \(\mathbf{s}_{k+1}\), another through \(\mathbf{h}_k\), and \(\mathbf{h}_k\) is itself reached by many paths, because it has four outgoing edges and each step after it branches again. Their number is combinatorial. What matters is that there are many.</p>
+    </section>
+
+    <section id="no-vanishing">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=769s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 12:49</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=841s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 14:01 ∂h/∂s is diagonal</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=974s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 16:14 ∂sₜ/∂sₜ₋₁</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=1143s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 19:03 fair vanishing</a>
+        </div>
+        <h2>Along the cell states, only forget gates multiply</h2>
+      </div>
+      <p>To show that the gradient does not vanish, one good path is enough, even if the gradient vanishes along all the others. Take the highlighted path and call the gradient along it \(t_0\); the full gradient is a sum of many such terms.</p>
+      <div class="eq">\[ t_0 = \frac{\partial\mathcal{L}_t(\theta)}{\partial\mathbf{h}_t}\,\frac{\partial\mathbf{h}_t}{\partial\mathbf{s}_t}\,\frac{\partial\mathbf{s}_t}{\partial\mathbf{s}_{t-1}}\cdots\frac{\partial\mathbf{s}_{k+1}}{\partial\mathbf{s}_k} \]</div>
+      <p>The first factor is fine: \(\mathbf{h}_t\) is connected directly to \(\mathcal{L}_t(\theta)\), with no intermediate node that could make the gradient vanish. The remaining factors are worked out one at a time.</p>
+
+      <h3>\(\partial\mathbf{h}_t/\partial\mathbf{s}_t\) is diagonal <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=841s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 14:01</a></h3>
+      <p>Recall \(\mathbf{h}_t = \mathbf{o}_t \odot \sigma(\mathbf{s}_t)\). Entry \(h_{ti}\) depends only on \(o_{ti}\) and \(s_{ti}\), and on no other entry of \(\mathbf{o}_t\) or \(\mathbf{s}_t\). So \(\partial h_{ti}/\partial s_{tj} = 0\) whenever \(i \ne j\), and \(\partial\mathbf{h}_t/\partial\mathbf{s}_t\) is a square \(d \times d\) diagonal matrix whose diagonal is \(\mathbf{o}_t \odot \sigma'(\mathbf{s}_t) \in \mathbb{R}^d\), by the same argument as in <a href="lecture-11.html">Lecture 11</a>. Write \(\mathcal{D}(\mathbf{v})\) for the diagonal matrix with the vector \(\mathbf{v}\) on its diagonal; this factor is \(\mathcal{D}(\mathbf{o}_t \odot \sigma'(\mathbf{s}_t))\).</p>
+
+      <h3>\(\partial\mathbf{s}_t/\partial\mathbf{s}_{t-1}\): keep only the explicit term <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=974s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 16:14</a></h3>
+      <p>In \(\mathbf{s}_t = \mathbf{f}_t \odot \mathbf{s}_{t-1} + \mathbf{i}_t \odot \tilde{\mathbf{s}}_t\), the temporary state \(\tilde{\mathbf{s}}_t\) also depends on \(\mathbf{s}_{t-1}\), so it cannot be treated as a constant. In an ordered network the derivative is then a sum of an explicit term and an implicit term (Lecture 11). Assume the worst case, that the gradient from the implicit term vanishes <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=1007s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>16:47</a>. This works against the claim being proved, because it throws part of the gradient away. The explicit term, with \(\tilde{\mathbf{s}}_t\) treated as a constant, is again diagonal: \(\mathcal{D}(\mathbf{f}_t)\).</p>
+
+      <h3>Put the path together <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=1077s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 17:57</a></h3>
+      <div class="eq">\[ \begin{aligned} t_0 &amp;= \mathcal{L}_t'(\mathbf{h}_t)\;\mathcal{D}\big(\mathbf{o}_t \odot \sigma'(\mathbf{s}_t)\big)\;\mathcal{D}(\mathbf{f}_t)\cdots\mathcal{D}(\mathbf{f}_{k+1}) \\ &amp;= \mathcal{L}_t'(\mathbf{h}_t)\;\mathcal{D}\big(\mathbf{o}_t \odot \sigma'(\mathbf{s}_t)\big)\;\mathcal{D}(\mathbf{f}_t \odot \cdots \odot \mathbf{f}_{k+1}) \\ &amp;= \mathcal{L}_t'(\mathbf{h}_t)\;\mathcal{D}\big(\mathbf{o}_t \odot \sigma'(\mathbf{s}_t)\big)\;\mathcal{D}\Big(\textstyle\bigodot_{i=k+1}^{t}\mathbf{f}_i\Big) \end{aligned} \]</div>
+      <p>Here \(\mathcal{L}_t'(\mathbf{h}_t)\) is short for \(\partial\mathcal{L}_t(\theta)/\partial\mathbf{h}_t\). The second line uses the fact that a product of diagonal matrices is diagonal, with the element-wise product of their diagonals on its diagonal.</p>
+      <div class="result">
+        <span class="lbl">Gradient along the cell-state path t₀</span>
+        \[ t_0 = \mathcal{L}_t'(\mathbf{h}_t)\;\mathcal{D}\big(\mathbf{o}_t \odot \sigma'(\mathbf{s}_t)\big)\;\mathcal{D}\Big(\textstyle\bigodot_{i=k+1}^{t}\mathbf{f}_i\Big) \]
+        <p>The first two factors (red on the slide) do not get repeated as \(k\) moves further back, so they do not vanish. The only repeated part (blue on the slide) is the product of the forget gates between \(k\) and \(t\).</p>
+      </div>
+      <p>Every forget gate lies between 0 and 1, so the product can still vanish <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=1109s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>18:29</a>. It does so only when the forget gates are small, and the same gates decide how much of \(\mathbf{s}_k\) is carried into \(\mathbf{s}_t\) in the forward pass. If some \(\mathbf{f}_i \to 0\), then \(\mathbf{s}_k\) contributed little to the later states during the forward pass, and the gradient does not reach it during backpropagation either, and there is no reason to hold it responsible. If the gates stayed open, the information from \(\mathbf{s}_k\) reached step \(t\), and the gradient travels all the way back. The forget gates apply the same regulation in both directions, which the lecturer calls fair.</p>
+      <p>Compare the RNN: there every factor \(\partial\mathbf{s}_{j+1}/\partial\mathbf{s}_j\) contained the weight matrix \(W\), so the size of the product was set by \(W\) through \((\lambda\gamma)^{t-k}\), whatever the states were doing. Along \(t_0\) no weight matrix is repeated, only the forget gates.</p>
+
+      <figure id="flow-fig">
+        <div class="controls">
+          <label for="flow-f">Forget gate at every step, f</label>
+          <input type="range" id="flow-f" min="0.5" max="1" step="0.01" value="0.95">
+          <output id="flow-f-out" for="flow-f">0.95</output>
+        </div>
+        <div class="controls">
+          <label for="flow-n">Steps back, n = t − k</label>
+          <input type="range" id="flow-n" min="1" max="100" step="1" value="40">
+          <output id="flow-n-out" for="flow-n">40</output>
+        </div>
+        <div class="controls">
+          <label for="flow-lam">RNN: bound λ on ‖W‖</label>
+          <input type="range" id="flow-lam" min="0.5" max="8" step="0.1" value="3.6">
+          <output id="flow-lam-out" for="flow-lam">3.6</output>
+          <button class="btn" id="flow-half" type="button">The lecture's f = 0.5</button>
+          <button class="btn" id="flow-reset" type="button">Reset</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">Forward: share of sₖ carried into sₜ</span><span class="v" id="flow-fwd">–</span></div>
+          <div><span class="k">Backward: product of f along t₀</span><span class="v mine" id="flow-bwd">–</span></div>
+          <div><span class="k">RNN bound (γλ)ⁿ, γ = 1/4</span><span class="v" id="flow-rnn">–</span></div>
+        </div>
+        <div class="status" id="flow-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="flow-svg" viewBox="0 0 640 340" role="img" aria-label="Log-scale plot of a factor against the number of steps back, from 0 to 100. The LSTM curve is f to the power n; it stays at 1 when f is 1 and decays slowly when f is near 1. The RNN curve is gamma lambda to the power n, which falls or rises steeply depending on lambda. A marker shows the chosen number of steps."></svg></div>
+        <figcaption><b>How much survives \(n\) steps.</b> Computed from the formulas, no data. The accent curve is the only part of \(t_0\) that depends on the distance, \(\prod f_i = f^n\), with the same forget gate \(f\) at every step and the implicit term dropped as in the proof. It is also the share of \(\mathbf{s}_k\) that the cell-state path carries into \(\mathbf{s}_t\) during the forward pass, which is why the first two readouts always agree. The dashed curve is the vanilla RNN bound \((\gamma\lambda)^n\) with \(\gamma = 1/4\), the largest slope of the sigmoid. A forget gate near 1 keeps the path alive over many steps; the RNN bound shrinks or grows geometrically.</figcaption>
+      </figure>
+
+      <p>So there is one path along which the gradient does not vanish when it should not <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=1212s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>20:12</a>. As long as the gradient reaches \(W_f\) through \(\mathbf{s}_k\) along \(t_0\), training gets the signal it needs, and it flows back only when the forget gates allow it. In this sense LSTMs solve the vanishing gradient problem: gradients vanish only when required, while in RNNs they vanish arbitrarily.</p>
+    </section>
+
+    <section id="exploding">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=1250s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 20:50</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=1313s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 21:53 same shape as an RNN</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=1348s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 22:28 gradient clipping</a>
+        </div>
+        <h2>Exploding gradients remain, so clip them</h2>
+      </div>
+      <p>To show that the gradient can explode, one path is enough. Take the path from \(\mathcal{L}_t(\theta)\) back to \(\mathbf{h}_{k-1}\) through every output gate: \(\mathcal{L}_t \leftarrow \mathbf{h}_t \leftarrow \mathbf{o}_t \leftarrow \mathbf{h}_{t-1} \leftarrow \cdots \leftarrow \mathbf{h}_k \leftarrow \mathbf{o}_k \leftarrow \mathbf{h}_{k-1}\). A path like this exists whichever gate or state you look at. Call its contribution to \(\partial\mathcal{L}_t(\theta)/\partial\mathbf{h}_{k-1}\) \(t_1\):</p>
+      <div class="eq">\[ t_1 = \frac{\partial\mathcal{L}_t(\theta)}{\partial\mathbf{h}_t}\left(\frac{\partial\mathbf{h}_t}{\partial\mathbf{o}_t}\frac{\partial\mathbf{o}_t}{\partial\mathbf{h}_{t-1}}\right)\cdots\left(\frac{\partial\mathbf{h}_k}{\partial\mathbf{o}_k}\frac{\partial\mathbf{o}_k}{\partial\mathbf{h}_{k-1}}\right) \]</div>
+      <p>The lecture states each bracket without working; it follows from the equations. \(\mathbf{h}_t = \mathbf{o}_t \odot \sigma(\mathbf{s}_t)\) gives \(\partial\mathbf{h}_t/\partial\mathbf{o}_t = \mathcal{D}(\sigma(\mathbf{s}_t))\), and \(\mathbf{o}_t = \sigma(W_o\mathbf{h}_{t-1} + U_o\mathbf{x}_t + \mathbf{b}_o)\) gives \(\partial\mathbf{o}_t/\partial\mathbf{h}_{t-1} = \mathcal{D}(\mathbf{o}'_t)\,W_o\), where \(\mathbf{o}'_t\) is the sigmoid's derivative at the gate's input. Multiplying the two diagonal matrices:</p>
+      <div class="eq">\[ t_1 = \mathcal{L}_t'(\mathbf{h}_t)\,\big(\mathcal{D}(\sigma(\mathbf{s}_t) \odot \mathbf{o}'_t)\,W_o\big)\cdots\big(\mathcal{D}(\sigma(\mathbf{s}_k) \odot \mathbf{o}'_k)\,W_o\big), \qquad \lVert t_1\rVert \le \lVert\mathcal{L}_t'(\mathbf{h}_t)\rVert\,\big(\lVert K\rVert\,\lVert W_o\rVert\big)^{t-k+1} \]</div>
+      <p>where \(K\) bounds the diagonal matrices.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 750 396" role="img" aria-label="The same LSTM dependency graph with a different path highlighted: from the loss to h t, then to the output gate o t, to h t minus 1, and so on through every output gate back to o k and h k minus 1. Every step on this path multiplies by W o.">
+<defs><marker id="l12-t1-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker><marker id="l12-t1-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<line class="d-ln" x1="53" y1="56" x2="257" y2="56" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln" x1="36" y1="73" x2="36" y2="307" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln" x1="44.4" y1="311.2" x2="146.6" y2="132.5" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln" x1="46.2" y1="312.4" x2="144.6" y2="181.2" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln" x1="48.5" y1="314.5" x2="142" y2="228.8" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln-acc" x1="51.2" y1="318.4" x2="139" y2="274.5" marker-end="url(#l12-t1-aha)" style="stroke-width:2.4"/>
+<line class="d-ln" x1="171.2" y1="108.4" x2="259" y2="64.5" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln" x1="168.5" y1="154.5" x2="262" y2="68.8" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln" x1="166.2" y1="202.4" x2="264.6" y2="71.2" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln-acc" x1="171.2" y1="273.6" x2="259" y2="317.5" marker-end="url(#l12-t1-aha)" style="stroke-width:2.4"/>
+<line class="d-ln" x1="276" y1="73" x2="276" y2="307" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln" x1="393" y1="56" x2="597" y2="56" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln" x1="376" y1="73" x2="376" y2="307" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln" x1="384.4" y1="311.2" x2="486.6" y2="132.5" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln" x1="386.2" y1="312.4" x2="484.6" y2="181.2" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln" x1="388.5" y1="314.5" x2="482" y2="228.8" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln-acc" x1="391.2" y1="318.4" x2="479" y2="274.5" marker-end="url(#l12-t1-aha)" style="stroke-width:2.4"/>
+<line class="d-ln" x1="511.2" y1="108.4" x2="599" y2="64.5" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln" x1="508.5" y1="154.5" x2="602" y2="68.8" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln" x1="506.2" y1="202.4" x2="604.6" y2="71.2" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln-acc" x1="511.2" y1="273.6" x2="599" y2="317.5" marker-end="url(#l12-t1-aha)" style="stroke-width:2.4"/>
+<line class="d-ln" x1="616" y1="73" x2="616" y2="307" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln-acc" x1="633" y1="326" x2="674" y2="326" marker-end="url(#l12-t1-aha)" style="stroke-width:2.4"/>
+<line class="d-ln d-dash" x1="293" y1="56" x2="357" y2="56" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln-acc d-dash" x1="293" y1="326" x2="357" y2="326" marker-end="url(#l12-t1-aha)" style="stroke-width:2.4"/>
+<line class="d-ln d-dash" x1="4" y1="56" x2="17" y2="56" marker-end="url(#l12-t1-ah)"/>
+<line class="d-ln d-dash" x1="4" y1="326" x2="17" y2="326" marker-end="url(#l12-t1-ah)"/>
+<circle class="node" cx="36" cy="56" r="17"/>
+<text x="36" y="60.5" text-anchor="middle" style="font-size:12.5px">sₖ₋₁</text>
+<circle class="node-acc" cx="36" cy="326" r="17"/>
+<text x="36" y="330.5" text-anchor="middle" style="font-size:12.5px">hₖ₋₁</text>
+<circle class="node" cx="156" cy="116" r="17"/>
+<text x="156" y="120.5" text-anchor="middle" style="font-size:12.5px">s̃ₖ</text>
+<circle class="node" cx="156" cy="166" r="17"/>
+<text x="156" y="170.5" text-anchor="middle" style="font-size:12.5px">fₖ</text>
+<circle class="node" cx="156" cy="216" r="17"/>
+<text x="156" y="220.5" text-anchor="middle" style="font-size:12.5px">iₖ</text>
+<circle class="node-acc" cx="156" cy="266" r="17"/>
+<text x="156" y="270.5" text-anchor="middle" style="font-size:12.5px">oₖ</text>
+<circle class="node" cx="276" cy="56" r="17"/>
+<text x="276" y="60.5" text-anchor="middle" style="font-size:12.5px">sₖ</text>
+<circle class="node-acc" cx="276" cy="326" r="17"/>
+<text x="276" y="330.5" text-anchor="middle" style="font-size:12.5px">hₖ</text>
+<circle class="node" cx="376" cy="56" r="17"/>
+<text x="376" y="60.5" text-anchor="middle" style="font-size:12.5px">sₜ₋₁</text>
+<circle class="node-acc" cx="376" cy="326" r="17"/>
+<text x="376" y="330.5" text-anchor="middle" style="font-size:12.5px">hₜ₋₁</text>
+<circle class="node" cx="496" cy="116" r="17"/>
+<text x="496" y="120.5" text-anchor="middle" style="font-size:12.5px">s̃ₜ</text>
+<circle class="node" cx="496" cy="166" r="17"/>
+<text x="496" y="170.5" text-anchor="middle" style="font-size:12.5px">fₜ</text>
+<circle class="node" cx="496" cy="216" r="17"/>
+<text x="496" y="220.5" text-anchor="middle" style="font-size:12.5px">iₜ</text>
+<circle class="node-acc" cx="496" cy="266" r="17"/>
+<text x="496" y="270.5" text-anchor="middle" style="font-size:12.5px">oₜ</text>
+<circle class="node" cx="616" cy="56" r="17"/>
+<text x="616" y="60.5" text-anchor="middle" style="font-size:12.5px">sₜ</text>
+<circle class="node-acc" cx="616" cy="326" r="17"/>
+<text x="616" y="330.5" text-anchor="middle" style="font-size:12.5px">hₜ</text>
+<circle class="node-acc" cx="704" cy="326" r="28"/>
+<text x="704" y="330.5" text-anchor="middle" style="font-size:12.5px">Lₜ(θ)</text>
+<text class="l12-halo" x="110.4" y="199.8" text-anchor="middle" style="fill: var(--accent); font-size:11.5px">W</text>
+<text class="l12-halo" x="110.4" y="230.8" text-anchor="middle" style="fill: var(--accent); font-size:11.5px">W<tspan dy="3" style="font-size:9px">f</tspan></text>
+<text class="l12-halo" x="110.4" y="261.8" text-anchor="middle" style="fill: var(--accent); font-size:11.5px">W<tspan dy="3" style="font-size:9px">i</tspan></text>
+<text class="l12-halo" x="110.4" y="292.8" text-anchor="middle" style="fill: var(--accent); font-size:11.5px">W<tspan dy="3" style="font-size:9px">o</tspan></text>
+<text class="d-row" x="156" y="14" text-anchor="middle">time step k</text>
+<text class="d-row" x="496" y="14" text-anchor="middle">time step t</text>
+<text class="d-al" x="326" y="72" text-anchor="middle">⋯</text>
+<text class="d-al" x="326" y="342" text-anchor="middle">⋯</text>
+<text class="l12-halo" x="450.4" y="292.8" text-anchor="middle" style="fill: var(--accent); font-size:11.5px">W<tspan dy="3" style="font-size:9px">o</tspan></text>
+<text class="d-s" x="216" y="364" text-anchor="middle" style="fill: var(--accent)">D(σ(sₖ) ⊙ o′ₖ) Wₒ</text>
+<text class="d-s" x="556" y="364" text-anchor="middle" style="fill: var(--accent)">D(σ(sₜ) ⊙ o′ₜ) Wₒ</text>
+<text class="d-s" x="20" y="386">accent: the path t₁ from Lₜ(θ) back to hₖ₋₁ through every output gate; each step repeats Wₒ</text>
+</svg>
+        </div>
+        <figcaption><b>A path that can explode.</b> The same graph with the path \(t_1\) highlighted. It runs from the loss back through \(\mathbf{h}_t\) and every output gate to \(\mathbf{h}_{k-1}\), and each step back multiplies by a diagonal matrix and by \(W_o\), just as the RNN multiplied by \(W\) at every step.</figcaption>
+      </figure>
+
+      <p>This is the RNN situation again <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=1313s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>21:53</a>: a diagonal matrix times a weight matrix, multiplied \(t-k+1\) times. Both are bounded, but depending on the norm of \(W_o\) the product \(\partial\mathcal{L}_t(\theta)/\partial\mathbf{h}_{k-1}\) may explode, and \(W_i\), \(W_f\) and \(W\) can do the same along their own paths. So LSTMs handle vanishing gradients and leave exploding gradients unsolved, and those still spoil training.</p>
+      <p>The popular fix is <dfn>gradient clipping</dfn>, from Pascanu, Mikolov and Bengio (2013) <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=1348s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>22:28</a>. While backpropagating, if the norm of the gradient exceeds a threshold, scale the gradient down so its norm is within the threshold. The direction stays the same; only the norm shrinks.</p>
+      <div class="eq">\[ \text{if } \lVert\mathbf{g}\rVert &gt; \tau: \qquad \mathbf{g} \leftarrow \tau\,\frac{\mathbf{g}}{\lVert\mathbf{g}\rVert} \]</div>
+      <p class="note">The formula is the standard way to write the rule; the slides state it in words, with \(\mathbf{g}\) the gradient and \(\tau\) the threshold.</p>
+      <p>This is acceptable because we care about the gradient's direction, and the learning rate already scales its magnitude (<a href="lecture-05.html">Lecture 5</a>). Clipping keeps an unmanageable magnitude in check while staying faithful to the direction. Vanishing gradients are the more serious problem <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=dKKPtG-qeaI&amp;t=1383s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>23:03</a>: when the whole gradient becomes 0 there is no direction left to keep. That is why it is enough for LSTMs to solve the vanishing problem.</p>
+      <p class="rule-of-thumb">Vanishing: the forget gates let a gradient fade only when the forward contribution faded too. Exploding: still possible through repeated weight matrices, and handled by clipping.</p>
+      <p>The encoder–decoder models of <a href="lecture-13.html">Lecture 13</a> are built from these recurrent cells.</p>
+    </section>
+
+    <!-- ============ REVISION ============ -->
+    <section id="terms">
+      <div class="sec-head"><h2>Key terms</h2></div>
+      <dl class="terms">
+        <div><dt>Selective write</dt><dd>Passing on only part of the state: \(\mathbf{h}_{t-1} = \mathbf{o}_{t-1} \odot \sigma(\mathbf{s}_{t-1})\).</dd></div>
+        <div><dt>Selective read</dt><dd>Taking in only part of the new information: \(\mathbf{i}_t \odot \tilde{\mathbf{s}}_t\).</dd></div>
+        <div><dt>Selective forget</dt><dd>Keeping only part of the old state: \(\mathbf{f}_t \odot \mathbf{s}_{t-1}\).</dd></div>
+        <div><dt>Gate</dt><dd>A vector \(\sigma(W\mathbf{h}_{t-1} + U\mathbf{x}_t + \mathbf{b})\) with entries in \((0, 1)\), multiplied element-wise; a soft keep/delete decision whose parameters are learned.</dd></div>
+        <div><dt>Output gate \(\mathbf{o}_t\)</dt><dd>Decides how much of the cell state is written to \(\mathbf{h}_t\) and passed to the next step.</dd></div>
+        <div><dt>Input gate \(\mathbf{i}_t\)</dt><dd>Decides how much of the temporary state is read into the new state. Also called the read gate.</dd></div>
+        <div><dt>Forget gate \(\mathbf{f}_t\)</dt><dd>Decides how much of the old state survives into the new one.</dd></div>
+        <div><dt>Temporary state \(\tilde{\mathbf{s}}_t\)</dt><dd>The RNN-style candidate \(\sigma(W\mathbf{h}_{t-1} + U\mathbf{x}_t + \mathbf{b})\), built from the selectively written \(\mathbf{h}_{t-1}\).</dd></div>
+        <div><dt>Cell state \(\mathbf{s}_t\)</dt><dd>\(\mathbf{f}_t \odot \mathbf{s}_{t-1} + \mathbf{i}_t \odot \tilde{\mathbf{s}}_t\); written \(\mathbf{c}_t\) in most of the literature.</dd></div>
+        <div><dt>GRU</dt><dd>Gated recurrent unit: two gates, forget tied to \(\mathbf{1} - \mathbf{i}_t\), gates computed from \(\mathbf{s}_{t-1}\) with no separate \(\mathbf{h}\).</dd></div>
+        <div><dt>\(\mathcal{D}(\mathbf{v})\)</dt><dd>The diagonal matrix with \(\mathbf{v}\) on its diagonal; the Jacobian of an element-wise operation.</dd></div>
+        <div><dt>Path rule</dt><dd>A gradient vanishes only if it vanishes along every path, and explodes if it explodes along any one path.</dd></div>
+        <div><dt>Gradient clipping</dt><dd>If the gradient's norm exceeds a threshold, scale it back to the threshold, keeping its direction.</dd></div>
+      </dl>
+    </section>
+
+    <section id="test">
+      <div class="sec-head"><h2>Test yourself</h2></div>
+      <div class="quiz">
+        <details><summary><span class="q">Q1</span><span>On the three-line whiteboard, why is \(bd\) the line to erase at step 4?</span><span class="tog"></span></summary>
+          <p>Step 4 computes \(ac(bd + a)\), which needs \(ac\) and \(bd + a\). Everything \(bd\) contributed is already inside \(bd + a = 34\), and no later step needs \(bd\) alone, so it is the least useful line on the full board.</p></details>
+        <details><summary><span class="q">Q2</span><span>What does a gate entry of 0.9 mean, and why are gates computed with a sigmoid?</span><span class="tog"></span></summary>
+          <p>The matching entry of the vector the gate multiplies is passed on at 90%. The sigmoid keeps every entry in \((0, 1)\), a soft version of a binary keep/delete decision, and its parameters (such as \(W_o, U_o, \mathbf{b}_o\)) are learned by backpropagation with the rest of the network.</p></details>
+        <details><summary><span class="q">Q3</span><span>One LSTM unit has \(s_{t-1} = 2\), \(f_t = 0.9\), \(i_t = 0.2\), \(\tilde{s}_t = 0.5\) and \(o_t = 0.5\). Find \(s_t\), \(h_t\) and the explicit part of \(\partial s_t/\partial s_{t-1}\).</span><span class="tog"></span></summary>
+          <p>\(s_t = 0.9 \times 2 + 0.2 \times 0.5 = 1.8 + 0.1 = 1.9\). Then \(\sigma(1.9) = 1/(1 + e^{-1.9}) \approx 0.870\), so \(h_t = 0.5 \times 0.870 \approx 0.435\). With \(\tilde{s}_t\) held constant, \(\partial s_t/\partial s_{t-1} = f_t = 0.9\).</p></details>
+        <details><summary><span class="q">Q4</span><span>Name the two ways the GRU differs from the LSTM of this lecture.</span><span class="tog"></span></summary>
+          <p>It has no forget gate: the old state is weighted by \(\mathbf{1} - \mathbf{i}_t\), tying forgetting to reading. And its gates are computed from \(\mathbf{s}_{t-1}\) directly, with no \(\mathbf{h}_{t-1}\); the output gate acts on \(\mathbf{s}_{t-1}\) inside the temporary state, \(\tilde{\mathbf{s}}_t = \sigma(W(\mathbf{o}_t \odot \mathbf{s}_{t-1}) + U\mathbf{x}_t + \mathbf{b})\).</p></details>
+        <details><summary><span class="q">Q5</span><span>Why is \(\partial\mathbf{h}_t/\partial\mathbf{s}_t\) a diagonal matrix, and what is on its diagonal?</span><span class="tog"></span></summary>
+          <p>\(\mathbf{h}_t = \mathbf{o}_t \odot \sigma(\mathbf{s}_t)\) works entry by entry: \(h_{ti}\) depends on \(s_{ti}\) and on no other entry of \(\mathbf{s}_t\), so every off-diagonal derivative is 0. The diagonal is \(\mathbf{o}_t \odot \sigma'(\mathbf{s}_t)\).</p></details>
+        <details><summary><span class="q">Q6</span><span>The gradient along \(t_0\) contains \(\bigodot_{i=k+1}^{t}\mathbf{f}_i\), which can vanish. Why does the lecture still say LSTMs solve the vanishing gradient problem?</span><span class="tog"></span></summary>
+          <p>The same product of forget gates sets how much of \(\mathbf{s}_k\) the cell-state path carries into \(\mathbf{s}_t\) in the forward pass. It vanishes only when \(\mathbf{s}_k\)'s contribution vanished too, and then no blame should flow back to it. When the gates stay open the gradient survives, and one path that survives is enough. Along this path no weight matrix is repeated, unlike the RNN's \(W\).</p></details>
+        <details><summary><span class="q">Q7</span><span>The proof assumes the implicit term of \(\partial\mathbf{s}_t/\partial\mathbf{s}_{t-1}\) vanishes. Why is that called a worst-case assumption?</span><span class="tog"></span></summary>
+          <p>The claim is that some gradient reaches \(\mathbf{s}_k\). Dropping the implicit term throws part of the gradient away, which can only make that claim harder to establish, and a usable gradient still remains: the explicit term \(\mathcal{D}(\mathbf{f}_t)\) alone keeps the path open.</p></details>
+        <details><summary><span class="q">Q8</span><span>Which path shows that LSTMs can still have exploding gradients, how is that handled, and why can't the same trick rescue a vanishing gradient?</span><span class="tog"></span></summary>
+          <p>The path through every output gate, \(\mathbf{h}_t \to \mathbf{o}_t \to \mathbf{h}_{t-1} \to \cdots \to \mathbf{o}_k \to \mathbf{h}_{k-1}\) in reverse. Each step multiplies by \(\mathcal{D}(\sigma(\mathbf{s}) \odot \mathbf{o}')\,W_o\), so the bound \((\lVert K\rVert\lVert W_o\rVert)^{t-k+1}\) can grow without limit. Gradient clipping rescales any gradient whose norm exceeds a threshold, keeping its direction. A vanished gradient is (nearly) zero and has no direction to keep, so rescaling cannot help.</p></details>
+      </div>
+    </section>
+
+    <!-- PAGER:START --><nav class="pager" aria-label="Previous and next lecture"><a href="lecture-11.html"><span class="dir">← Lecture 11</span><span class="nm">Recurrent neural networks and BPTT</span></a><a class="next" href="lecture-13.html"><span class="dir">Lecture 13 →</span><span class="nm">Encoder–decoder models and attention</span></a></nav><!-- PAGER:END -->
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the official lecture slides and the module videos' NPTEL captions. Timestamp links open the video at that moment. Charts marked synthetic use data generated for these notes. Not an official IIT Madras resource.</div>
+</footer>
+
+<script src="notes.js"></script>
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const tweenAll = (from, to, set) => { const t0 = performance.now(), dur = reduce ? 0 : 420; const step = now => { const k = dur ? Math.min(1, (now - t0) / dur) : 1; const e = 1 - Math.pow(1 - k, 3); set(from.map((a, j) => a + (to[j] - a) * e)); if (k < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); };
+  const sig = z => 1 / (1 + Math.exp(-z));
+  const SUP = { '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
+  const sup = s => String(s).split('').map(c => SUP[c] || c).join('');
+  const fmt = x => {
+    if (x === 0) return '0';
+    const a = Math.abs(x);
+    if (a >= 1e-3 && a < 1e4) return String(Number(x.toPrecision(3)));
+    const e = Math.floor(Math.log10(a)); let m = x / Math.pow(10, e);
+    return m.toFixed(1) + ' × 10' + sup(e);
+  };
+  const arrowDefs = (svg, id) => {
+    const defs = mk('defs', {}, svg);
+    [['', 'd-ah'], ['-acc', 'd-ah-acc']].forEach(([s, cls]) => {
+      const m = mk('marker', { id: id + s, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse' }, defs);
+      mk('path', { d: 'M0,0 L10,5 L0,10 z', class: cls }, m);
+    });
+    return defs;
+  };
+  const txt = (parent, x, y, s, attrs) => { const t = mk('text', Object.assign({ x, y }, attrs || {}), parent); t.textContent = s; return t; };
+
+  /* ---------- One LSTM unit with live numbers ---------- */
+  (() => {
+    const svg = document.getElementById('cell-svg'); if (!svg) return;
+    arrowDefs(svg, 'l12-cell-ah');
+    const AH = 'url(#l12-cell-ah)', AHA = 'url(#l12-cell-ah-acc)';
+    const ids = ['cell-s', 'cell-af', 'cell-ai', 'cell-ac', 'cell-ao'];
+    const inp = ids.map(id => document.getElementById(id));
+    const out = ids.map(id => document.getElementById(id + '-out'));
+    const DEF = inp.map(el => parseFloat(el.value));
+    const rd = k => document.getElementById('cell-' + k);
+    const status = document.getElementById('cell-status');
+
+    // backward note along the cell state
+    mk('line', { x1: 604, y1: 40, x2: 44, y2: 40, class: 'd-ln-acc d-dash', 'marker-end': AHA }, svg);
+    const back = txt(svg, 324, 28, '', { class: 'd-s', 'text-anchor': 'middle', style: 'fill: var(--accent)' });
+    // cell-state line
+    mk('line', { x1: 30, y1: 70, x2: 168, y2: 70, class: 'd-ln', style: 'stroke-width:2' }, svg);
+    const kept = mk('line', { x1: 191, y1: 70, x2: 319, y2: 70, class: 'd-ln-acc' }, svg);
+    mk('line', { x1: 341, y1: 70, x2: 612, y2: 70, class: 'd-ln', style: 'stroke-width:2', 'marker-end': AH }, svg);
+    // gate wires
+    mk('line', { x1: 180, y1: 185, x2: 180, y2: 84, class: 'd-ln', 'marker-end': AH }, svg);
+    mk('path', { d: 'M280 185 V135 H316', class: 'd-ln', 'marker-end': AH }, svg);
+    mk('path', { d: 'M380 185 V135 H344', class: 'd-ln', 'marker-end': AH }, svg);
+    const readUp = mk('line', { x1: 330, y1: 124, x2: 330, y2: 81, class: 'd-ln-acc' }, svg);
+    mk('line', { x1: 560, y1: 70, x2: 560, y2: 114, class: 'd-ln', 'marker-end': AH }, svg);
+    mk('line', { x1: 560, y1: 143, x2: 560, y2: 191, class: 'd-ln', 'marker-end': AH }, svg);
+    mk('line', { x1: 512, y1: 205, x2: 546, y2: 205, class: 'd-ln', 'marker-end': AH }, svg);
+    mk('line', { x1: 571, y1: 205, x2: 628, y2: 205, class: 'd-ln', style: 'stroke-width:2', 'marker-end': AH }, svg);
+    // operator nodes
+    const odot = (x, y) => { mk('circle', { cx: x, cy: y, r: 11, class: 'node' }, svg); mk('circle', { cx: x, cy: y, r: 2.2, class: 'pt-plain' }, svg); };
+    odot(180, 70); odot(330, 135); odot(560, 205);
+    mk('circle', { cx: 330, cy: 70, r: 11, class: 'node' }, svg);
+    mk('path', { d: 'M324 70 H336 M330 64 V76', class: 'd-ln', style: 'stroke-width:1.8' }, svg);
+    mk('circle', { cx: 560, cy: 130, r: 13, class: 'node' }, svg);
+    txt(svg, 560, 134.5, 'σ', { class: 'd-t', 'text-anchor': 'middle' });
+    // gate boxes
+    const boxes = [['f', 'fₜ', 180, 'd-box-acc'], ['i', 'iₜ', 280, 'd-box-acc'], ['c', 's̃ₜ', 380, 'd-box'], ['o', 'oₜ', 480, 'd-box-acc']];
+    const sub = { f: 'f', i: 'i', c: 's̃', o: 'o' };
+    const B = {};
+    boxes.forEach(([k, name, cx, cls]) => {
+      const x = cx - 32;
+      mk('rect', { x, y: 185, width: 64, height: 40, rx: 6, class: cls }, svg);
+      txt(svg, x + 9, 201, name, { class: 'd-t' });
+      const val = txt(svg, x + 56, 201, '', { class: 'l12-val', 'text-anchor': 'end' });
+      mk('rect', { x: x + 9, y: 209, width: 46, height: 7, rx: 2, class: 'l12-bar-bg' }, svg);
+      const bar = mk('rect', { x: x + 9, y: 209, width: 0, height: 7, rx: 2, class: 'l12-bar' }, svg);
+      mk('line', { x1: cx, y1: 262, x2: cx, y2: 228, class: 'd-ln', 'marker-end': AH }, svg);
+      const a = mk('text', { x: cx + 6, y: 252, class: 'd-al' }, svg);
+      a.appendChild(document.createTextNode('a'));
+      const ts = mk('tspan', { dy: 3, style: 'font-size:9px' }, a); ts.textContent = sub[k];
+      const tv = mk('tspan', { dy: -3 }, a);
+      B[k] = { val, bar, tv };
+    });
+    txt(svg, 320, 284, 'each input a = W·hₜ₋₁ + U·xₜ + b, with that gate’s own W, U and b', { class: 'd-s', 'text-anchor': 'middle' });
+    // wire labels
+    const lS = txt(svg, 30, 62, '', { class: 'd-t' });
+    const lK = txt(svg, 255, 62, '', { class: 'd-s', 'text-anchor': 'middle' });
+    const lR = txt(svg, 342, 108, '', { class: 'd-s' });
+    const lN = txt(svg, 612, 62, '', { class: 'd-t', 'text-anchor': 'end' });
+    const lQ = txt(svg, 548, 166, '', { class: 'd-s', 'text-anchor': 'end' });
+    const lH = txt(svg, 600, 226, '', { class: 'd-t', 'text-anchor': 'middle' });
+
+    let v = DEF.slice();
+    const draw = () => {
+      const [s0, af, ai, ac, ao] = v;
+      const f = sig(af), i = sig(ai), c = sig(ac), o = sig(ao);
+      const s1 = f * s0 + i * c, q = sig(s1), h = o * q;
+      out[0].textContent = s0.toFixed(2);
+      [af, ai, ac, ao].forEach((a, j) => { out[j + 1].textContent = a.toFixed(1); });
+      const g = { f, i, c, o }, a = { f: af, i: ai, c: ac, o: ao };
+      for (const k in B) { B[k].val.textContent = g[k].toFixed(2); B[k].bar.setAttribute('width', (46 * g[k]).toFixed(1)); B[k].tv.textContent = ' = ' + a[k].toFixed(1); }
+      kept.setAttribute('style', 'stroke-width:' + (0.8 + 3.4 * f).toFixed(2));
+      readUp.setAttribute('style', 'stroke-width:' + (0.8 + 3.4 * i).toFixed(2));
+      lS.textContent = 'sₜ₋₁ = ' + s0.toFixed(2);
+      lK.textContent = 'fₜ·sₜ₋₁ = ' + (f * s0).toFixed(2);
+      lR.textContent = 'iₜ·s̃ₜ = ' + (i * c).toFixed(2);
+      lN.textContent = 'sₜ = ' + s1.toFixed(2);
+      lQ.textContent = 'σ(sₜ) = ' + q.toFixed(2);
+      lH.textContent = 'hₜ = ' + h.toFixed(2);
+      back.textContent = 'backward along the cell state: × fₜ = ' + f.toFixed(2) + ' per step';
+      rd('f').textContent = f.toFixed(3); rd('i').textContent = i.toFixed(3); rd('o').textContent = o.toFixed(3); rd('c').textContent = c.toFixed(3);
+      rd('st').textContent = s1.toFixed(3); rd('h').textContent = h.toFixed(3);
+      const f50 = Math.pow(f, 50);
+      if (f > 0.95 && i < 0.05) status.textContent = `Keeping: the new state is almost the old one and almost nothing new is read in. Backward, the cell-state gradient keeps fₜ of its size per step, ${f.toFixed(3)}⁵⁰ ≈ ${fmt(f50)} after 50 such steps.`;
+      else if (f < 0.05 && i > 0.95) status.textContent = 'Overwriting: the old state is forgotten and the candidate is read in. Backward, almost nothing flows to the old state along the cell state, which is fair because it hardly contributed to the new one.';
+      else status.textContent = `sₜ = ${f.toFixed(2)} × ${s0.toFixed(2)} + ${i.toFixed(2)} × ${c.toFixed(2)} = ${s1.toFixed(2)}. With this forget gate at every step, the cell-state gradient from 50 steps away would keep ${f.toFixed(3)}⁵⁰ ≈ ${fmt(f50)} of its size.`;
+    };
+    const setV = nv => { v = nv; nv.forEach((x, j) => { inp[j].value = x; }); draw(); };
+    draw();
+    inp.forEach((el, j) => el.addEventListener('input', () => { v[j] = parseFloat(el.value); draw(); }));
+    const go = target => tweenAll(v.slice(), target, setV);
+    document.getElementById('cell-keep').addEventListener('click', () => go([v[0], 5, -5, v[3], v[4]]));
+    document.getElementById('cell-over').addEventListener('click', () => go([v[0], -5, 5, v[3], v[4]]));
+    document.getElementById('cell-reset').addEventListener('click', () => go(DEF.slice()));
+  })();
+
+  /* ---------- Gradient along the cell state vs the RNN bound ---------- */
+  (() => {
+    const svg = document.getElementById('flow-svg'); if (!svg) return;
+    const fIn = document.getElementById('flow-f'), nIn = document.getElementById('flow-n'), lIn = document.getElementById('flow-lam');
+    const fOut = document.getElementById('flow-f-out'), nOut = document.getElementById('flow-n-out'), lOut = document.getElementById('flow-lam-out');
+    const rF = document.getElementById('flow-fwd'), rB = document.getElementById('flow-bwd'), rR = document.getElementById('flow-rnn'), status = document.getElementById('flow-status');
+    const DEF = [parseFloat(fIn.value), parseFloat(nIn.value), parseFloat(lIn.value)];
+    const X0 = 70, X1 = 610, YT = 26, YB = 290, LO = -12, HI = 6;
+    const sx = n => X0 + n / 100 * (X1 - X0), sy = lg => YB - (lg - LO) / (HI - LO) * (YB - YT);
+    const grid = mk('g', { class: 'c-grid' }, svg);
+    for (let lg = LO; lg <= HI; lg += 2) {
+      mk('line', { x1: X0, x2: X1, y1: sy(lg), y2: sy(lg) }, grid);
+      txt(svg, X0 - 8, sy(lg) + 4, lg === 0 ? '1' : '10' + sup(lg), { class: 'c-tick', 'text-anchor': 'end' });
+    }
+    for (let n = 0; n <= 100; n += 20) {
+      mk('line', { x1: sx(n), x2: sx(n), y1: YT, y2: YB }, grid);
+      txt(svg, sx(n), YB + 16, String(n), { class: 'c-tick', 'text-anchor': 'middle' });
+    }
+    mk('line', { x1: X0, x2: X1, y1: sy(0), y2: sy(0), class: 'c-axis' }, svg);
+    mk('line', { x1: X0, x2: X0, y1: YT, y2: YB, class: 'c-axis' }, svg);
+    txt(svg, (X0 + X1) / 2, YB + 38, 'steps back, n = t − k', { class: 'c-title', 'text-anchor': 'middle' });
+    txt(svg, X0, 16, 'size of the factor (log scale)', { class: 'c-title' });
+    const defs = mk('defs', {}, svg);
+    const cp = mk('clipPath', { id: 'l12-flow-clip' }, defs); mk('rect', { x: X0, y: YT, width: X1 - X0, height: YB - YT }, cp);
+    const gC = mk('g', { 'clip-path': 'url(#l12-flow-clip)' }, svg);
+    const rnn = mk('polyline', { class: 'c-line', style: 'fill: none; stroke-dasharray: 6 5' }, gC);
+    const lstm = mk('polyline', { class: 'c-user', style: 'fill: none' }, gC);
+    const mark = mk('line', { y1: YT, y2: YB, style: 'stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4' }, svg);
+    const dR = mk('circle', { r: 4.5, style: 'fill: var(--ink-2); stroke: var(--surface); stroke-width: 1.5' }, svg);
+    const dL = mk('circle', { r: 5.5, class: 'c-proxy' }, svg);
+    mk('line', { x1: 330, x2: 352, y1: 12, y2: 12, class: 'c-user' }, svg);
+    txt(svg, 358, 16, 'LSTM path: fⁿ', { class: 'c-lbl' });
+    mk('line', { x1: 462, x2: 486, y1: 12, y2: 12, class: 'c-line', style: 'stroke-dasharray: 6 5' }, svg);
+    txt(svg, 492, 16, 'RNN bound: (γλ)ⁿ', { class: 'c-note' });
+    const clampLg = lg => Math.max(LO - 1, Math.min(HI + 1, lg));
+    const pts = m => { const p = []; for (let n = 0; n <= 100; n += 1) p.push(sx(n).toFixed(1) + ',' + sy(clampLg(n * m)).toFixed(1)); return p.join(' '); };
+    let v = DEF.slice();
+    const draw = () => {
+      const [f, n, lam] = v;
+      const gl = lam / 4, mF = Math.log10(f), mR = Math.log10(gl);
+      fOut.textContent = f.toFixed(2); nOut.textContent = String(Math.round(n)); lOut.textContent = lam.toFixed(1) + '  (γλ = ' + gl.toFixed(2) + ')';
+      lstm.setAttribute('points', pts(mF)); rnn.setAttribute('points', pts(mR));
+      const N = Math.round(n);
+      mark.setAttribute('x1', sx(N)); mark.setAttribute('x2', sx(N));
+      const yL = clampLg(N * mF), yR = clampLg(N * mR);
+      const inR = lg => lg >= LO && lg <= HI;
+      dL.setAttribute('cx', sx(N)); dL.setAttribute('cy', sy(yL)); dL.setAttribute('visibility', inR(yL) ? 'visible' : 'hidden');
+      dR.setAttribute('cx', sx(N)); dR.setAttribute('cy', sy(yR)); dR.setAttribute('visibility', inR(yR) ? 'visible' : 'hidden');
+      const fn = Math.pow(f, N), rn = Math.pow(gl, N);
+      rF.textContent = fmt(fn); rB.textContent = fmt(fn); rR.textContent = fmt(rn);
+      let msg = f >= 1 ? `With f = 1 the cell state is copied unchanged, and the gradient along t₀ does not shrink at all over ${N} steps. ` : `With f = ${f.toFixed(2)} at every step, the gradient along t₀ from ${N} steps away keeps ${fmt(fn)} of its size: the same share of sₖ that reached sₜ in the forward pass. `;
+      if (gl < 0.995) msg += `The RNN bound with γλ = ${gl.toFixed(2)} has fallen to ${fmt(rn)}.`;
+      else if (gl > 1.005) msg += `The RNN bound with γλ = ${gl.toFixed(2)} has grown to ${fmt(rn)}: nothing stops that gradient from exploding.`;
+      else msg += 'With γλ = 1 the RNN bound stays at 1.';
+      status.textContent = msg;
+    };
+    const setV = nv => { v = nv; fIn.value = nv[0]; nIn.value = Math.round(nv[1]); lIn.value = nv[2]; draw(); };
+    draw();
+    fIn.addEventListener('input', () => { v[0] = parseFloat(fIn.value); draw(); });
+    nIn.addEventListener('input', () => { v[1] = parseFloat(nIn.value); draw(); });
+    lIn.addEventListener('input', () => { v[2] = parseFloat(lIn.value); draw(); });
+    document.getElementById('flow-half').addEventListener('click', () => tweenAll(v.slice(), [0.5, v[1], v[2]], setV));
+    document.getElementById('flow-reset').addEventListener('click', () => tweenAll(v.slice(), DEF.slice(), setV));
+  })();
+})();
+</script>
+</body>
+</html>

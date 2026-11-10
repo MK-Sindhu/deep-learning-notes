@@ -1,0 +1,1365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lecture 5 · Optimization algorithms · DL Notes</title>
+<meta name="description" content="CS6910 Deep Learning (IIT Madras) notes, Lecture 5: gradient descent, momentum, Nesterov, stochastic and mini-batch GD, learning-rate tuning and schedules, AdaGrad, RMSProp, AdaDelta, Adam, AdaMax and NAdam.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<style>
+.opt-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn.opt { padding: 8px 12px; }
+.btn.opt[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.opt-table { min-width: 760px; }
+.opt-table td { font-size: 14px; }
+.opt-table td:first-child { font-family: var(--font-head); font-weight: 600; white-space: nowrap; }
+.r-heat { fill: var(--accent); }
+.r-iso { fill: none; stroke: var(--ink-2); stroke-width: 0.8; opacity: .55; }
+.r-ghost { fill: none; stroke: var(--muted); stroke-width: 1.2; opacity: .6; stroke-linejoin: round; }
+.r-path { fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; }
+.r-dot { fill: var(--accent); }
+.r-end { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+.r-start { fill: var(--mark); stroke: var(--ink); stroke-width: 1.6; }
+.r-min { fill: none; stroke: var(--ink); stroke-width: 2; }
+.r-frame { fill: none; stroke: var(--rule); stroke-width: 1; }
+.e-obs { fill: var(--muted); opacity: .7; }
+.e-true { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.e-raw { fill: none; stroke: var(--ink-2); stroke-width: 2; }
+.e-bc { fill: none; stroke: var(--accent); stroke-width: 2.6; }
+.e-max { fill: none; stroke: var(--ok); stroke-width: 2; }
+</style>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <!-- PARTNAV:START --><nav class="partnav" aria-label="Lectures"><a href="index.html">DL Notes</a><span class="sep">/</span><span>Lecture 5</span><span class="sep">·</span><a href="lecture-08.html">Lecture 8 →</a></nav><!-- PARTNAV:END -->
+    <div class="eyebrow">CS6910 · Deep Learning · IIT Madras</div>
+    <h1>Optimization: from gradient descent to Adam</h1>
+    <p class="lede">Lecture 5 takes the gradient descent rule from Lecture 3 and repairs its weaknesses one at a time: momentum and Nesterov for flat regions, stochastic and mini-batch versions for cheap steps, and tips and schedules for the learning rate. It then gives every parameter its own adaptive learning rate, from AdaGrad through RMSProp and AdaDelta to Adam, AdaMax and NAdam.</p>
+    <div class="meta">
+      <span><b>Lecture 5</b></span>
+      <span>Instructor <b>Prof. Mitesh M. Khapra</b></span>
+      <span>About <b>295 min</b> of video</span>
+      <span><b>15</b> modules in 14 videos</span>
+    </div>
+    <div class="watch">
+      <a class="btn solid" href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-5/fullscreen" target="_blank" rel="noopener">Slides 1</a>
+      <a class="btn solid" href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-52/fullscreen" target="_blank" rel="noopener">Slides 2</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=gupSH0MU7vs" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1–M2 · 31:31</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=fGzJOBIxXdg" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 15:18</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=R3jlvdclAHI" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 19:42</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=dIYDPtHWBNA" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 14:05</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=hXK16fgWjsc" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 22:52</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=-7ET3TUWi8M" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 19:25</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=oqkfhBf71gc" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 12:56</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=WSvxne3oGr0" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 25:26</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=ubOy0NPI2cY" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 31:59</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=EcX0rqjHR9k" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 19:50</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=m9g9Hij1h1A" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 30:22</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=d2mSof7c4Jo" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M13 · 19:36</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=fsTRJeWpZ_o" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M14 · 18:28</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=Lqauh9dJzNc" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M15 · 13:58</a>
+    </div>
+  </div>
+</header>
+
+<div class="page gutter">
+  <nav class="toc" aria-label="Contents">
+    <div>
+      <h4>Modules 5.1–5.2 · Gradient descent</h4>
+      <ul>
+        <li><a href="#guesswork">The toy problem</a></li>
+        <li><a href="#gd-rule">Taylor series to the GD rule</a></li>
+        <li><a href="#gd-toy">Gradients for the toy network</a></li>
+        <li><a href="#gd-slow">Slow on gentle slopes</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 5.3 · Contours</h4>
+      <ul>
+        <li><a href="#contours">Reading contour maps</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Modules 5.4–5.5 · Momentum, NAG</h4>
+      <ul>
+        <li><a href="#momentum">Momentum</a></li>
+        <li><a href="#nag">Nesterov accelerated GD</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 5.6 · Stochastic GD</h4>
+      <ul>
+        <li><a href="#sgd">Stochastic GD</a></li>
+        <li><a href="#minibatch">Mini-batch GD</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Modules 5.7–5.8 · Learning rate</h4>
+      <ul>
+        <li><a href="#lr-tips">Tuning and annealing</a></li>
+        <li><a href="#line-search">Line search</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 5.9 · Adaptive rates</h4>
+      <ul>
+        <li><a href="#sparse">Why per-parameter rates</a></li>
+        <li><a href="#adagrad">AdaGrad</a></li>
+        <li><a href="#rmsprop">RMSProp</a></li>
+        <li><a href="#adadelta">AdaDelta</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 5.9 · Adam and variants</h4>
+      <ul>
+        <li><a href="#adam">Adam</a></li>
+        <li><a href="#bias-correction">Bias correction</a></li>
+        <li><a href="#adamax">MaxProp and AdaMax</a></li>
+        <li><a href="#nadam">NAdam</a></li>
+        <li><a href="#race">Six optimizers, one surface</a></li>
+        <li><a href="#which-optimizer">Which optimizer?</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 5.10 · Schedulers</h4>
+      <ul>
+        <li><a href="#lr-schemes">Cyclical learning rates</a></li>
+        <li><a href="#cosine">Cosine annealing, warmup</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Revision</h4>
+      <ul>
+        <li><a href="#terms">Key terms</a></li>
+        <li><a href="#test">Test yourself</a></li>
+        <li><a href="index.html">All lectures</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="glance" id="glance">
+      <h2>At a glance</h2>
+      <ul>
+        <li><b>Gradient descent</b> moves against the gradient, \(w_{t+1} = w_t - \eta\nabla w_t\). The step is proportional to the slope, so it crawls across flat regions and slows again near the minimum. On a <dfn>contour map</dfn>, rings that are far apart mean a gentle slope.</li>
+        <li><b>Momentum</b> adds an exponentially weighted history of past gradients and races across plateaus, but overshoots and makes U-turns. <b>Nesterov (NAG)</b> takes the gradient at the look-ahead point after the history move, so its U-turns are shorter.</li>
+        <li><b>Stochastic</b> and <b>mini-batch</b> GD update after 1 or \(B\) points (\(N\) or \(N/B\) steps per epoch instead of 1). Each step is cheap but noisy, and in practice everything is run in mini-batches.</li>
+        <li>Pick the initial learning rate on a log scale, <b>anneal</b> it (step, exponential, \(1/t\) or validation-based halving), or try several values per step with <b>line search</b>. Momentum can also follow a schedule.</li>
+        <li><b>Adaptive methods</b> give each parameter its own rate. <b>AdaGrad</b> divides by the root of the summed squared gradients, which only grows. <b>RMSProp</b> decays that sum but is sensitive to \(\eta_0\). <b>AdaDelta</b> replaces \(\eta_0\) with a second history. <b>Adam</b> combines momentum and RMSProp with <dfn>bias correction</dfn>, <b>AdaMax</b> uses the max norm and <b>NAdam</b> adds the Nesterov look-ahead.</li>
+        <li><b>Schedulers</b>: cyclical (triangular) rates help escape saddle points, <b>cosine annealing</b> restarts warm, and <b>warm start</b> (warmup) is the default for Transformers.</li>
+      </ul>
+    </div>
+
+    <!-- ============ MODULES 5.1–5.2 ============ -->
+    <section id="guesswork">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=gupSH0MU7vs&amp;t=236s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1–M2 · 3:56</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=gupSH0MU7vs&amp;t=394s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1–M2 · 6:34 error surface</a>
+        </div>
+        <h2>The toy problem and the guess-work algorithm</h2>
+      </div>
+      <p>The lecture opens with a brisk recap of the gradient descent material from <a href="lecture-03.html">Lecture 3</a>. <a href="lecture-04.html">Lecture 4</a> carried the same rule over to deep networks with backpropagation. Lecture 5 goes back to the smallest network, a single sigmoid neuron with one weight \(w\) and one bias \(b\), and studies the update rule itself. Each time the rule shows a peculiarity, the lecture proposes a fix, and each fix is a new variant of gradient descent.</p>
+      <div class="eq">\[ \hat y = f(x) = \frac{1}{1+e^{-(wx+b)}}, \qquad \text{given } \{(x_i, y_i)\}_{i=1}^{N}, \qquad \min_{w,\,b}\ \mathcal{L}(w,b) = \frac1N\sum_{i=1}^{N}\big(y_i - f(x_i)\big)^2 \]</div>
+      <p>Training on the two points \((0.5, 0.2)\) and \((2.5, 0.9)\) means finding \(w^*, b^*\) with \(f(0.5) \to 0.2\) and \(f(2.5) \to 0.9\): a sigmoid curve that passes through both points.</p>
+      <p>Start with a random guess, \(w = 3,\ b = -1\). The curve is clearly wrong, and the loss says how wrong:</p>
+      <div class="eq">\[ \mathcal{L}(w,b) = \tfrac12\Big[\big(0.9 - f(2.5)\big)^2 + \big(0.2 - f(0.5)\big)^2\Big] = \tfrac12\Big[(0.90 - 0.99)^2 + (0.20 - 0.62)^2\Big] = 0.099 \]</div>
+      <p>We want the loss as close to zero as possible. Moving \(w\) and \(b\) by hand and keeping any change that lowers the loss gives a sequence like this one from the slides:</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th class="num">w</th><th class="num">b</th><th class="num">Loss</th></tr></thead>
+          <tbody>
+            <tr><td class="num">0.50</td><td class="num">0.00</td><td class="num">0.0730</td></tr>
+            <tr><td class="num">−0.10</td><td class="num">0.00</td><td class="num">0.14</td></tr>
+            <tr><td class="num">0.94</td><td class="num">−0.94</td><td class="num">0.0214</td></tr>
+            <tr><td class="num">1.42</td><td class="num">−1.73</td><td class="num">0.0028</td></tr>
+            <tr><td class="num">1.65</td><td class="num">−2.08</td><td class="num">0.0003</td></tr>
+            <tr><td class="num">1.78</td><td class="num">−2.27</td><td class="num">0.0000</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>With two points and two parameters you could also compute \(\mathcal{L}(w,b)\) over a grid, plot the <dfn>error surface</dfn> and pick its lowest point. That does not scale to many data points and parameters, and even here the plot covers only \(w, b \in (-6, 6)\), not \((-\infty, \infty)\). The hand-tuning above is a walk on this surface by someone who cannot see it, and some guesses make the loss worse. We want a principled way to move on the surface.</p>
+    </section>
+
+    <section id="gd-rule">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=gupSH0MU7vs&amp;t=550s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1–M2 · 9:10</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=gupSH0MU7vs&amp;t=618s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1–M2 · 10:18 opposite to the gradient</a>
+        </div>
+        <h2>From Taylor series to the gradient descent rule</h2>
+      </div>
+      <p>Collect the parameters in \(\boldsymbol\theta = [w, b]\), initialized randomly. A change is \(\Delta\boldsymbol\theta = [\Delta w, \Delta b]\). To be conservative, move only a small amount \(\eta\) in that direction: \(\boldsymbol\theta_{new} = \boldsymbol\theta + \eta\,\Delta\boldsymbol\theta\). The question is which \(\Delta\boldsymbol\theta\) to use, and Taylor series answers it.</p>
+      <p>A Taylor series approximates a continuously differentiable function near a point \(w_0\) by a polynomial. Degree 1 gives the linear approximation, degree 2 the quadratic one, and higher degrees do better:</p>
+      <div class="eq">\[ \mathcal{L}(w) = \mathcal{L}(w_0) + \frac{\mathcal{L}'(w_0)}{1!}(w - w_0) + \frac{\mathcal{L}''(w_0)}{2!}(w - w_0)^2 + \frac{\mathcal{L}'''(w_0)}{3!}(w - w_0)^3 + \cdots \]</div>
+      <p>Write \(\mathbf{u} = \Delta\boldsymbol\theta\). For a vector of parameters the expansion is</p>
+      <div class="eq">\[ \mathcal{L}(\boldsymbol\theta + \eta\mathbf{u}) = \mathcal{L}(\boldsymbol\theta) + \eta\,\mathbf{u}^\top\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta) + \frac{\eta^2}{2!}\,\mathbf{u}^\top\nabla^2_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta)\,\mathbf{u} + \frac{\eta^3}{3!}\cdots \;\approx\; \mathcal{L}(\boldsymbol\theta) + \eta\,\mathbf{u}^\top\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta) \]</div>
+      <p>The approximation drops the higher terms because \(\eta\) is small, so \(\eta^2, \eta^3, \dots \to 0\). The move is worth making only if the new loss is lower, \(\mathcal{L}(\boldsymbol\theta + \eta\mathbf{u}) - \mathcal{L}(\boldsymbol\theta) < 0\), which here means \(\mathbf{u}^\top\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta) < 0\).</p>
+      <p>How negative can that dot product be? Let \(\beta\) be the angle between \(\mathbf{u}\) and the gradient (only in this derivation; from Module 5.4 on, \(\beta\) is the momentum constant):</p>
+      <div class="eq">\[ \begin{gathered} -1 \le \cos\beta = \frac{\mathbf{u}^\top\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta)}{\lVert\mathbf{u}\rVert\,\lVert\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta)\rVert} \le 1 \\ \text{multiply through by } k = \lVert\mathbf{u}\rVert\,\lVert\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta)\rVert: \qquad -k \le k\cos\beta = \mathbf{u}^\top\nabla_{\boldsymbol\theta}\mathcal{L}(\boldsymbol\theta) \le k \end{gathered} \]</div>
+      <p>The change in loss, \(k\cos\beta\), is most negative when \(\cos\beta = -1\), that is \(\beta = 180^\circ\). So move in the direction opposite to the gradient.</p>
+      <div class="result">
+        <span class="lbl">Update rule · gradient descent</span>
+        \[ \begin{gathered} w_{t+1} = w_t - \eta\,\nabla w_t, \qquad b_{t+1} = b_t - \eta\,\nabla b_t, \\ \text{where } \nabla w_t = \frac{\partial\mathcal{L}(w,b)}{\partial w}\bigg|_{w = w_t,\ b = b_t}, \qquad \nabla b_t = \frac{\partial\mathcal{L}(w,b)}{\partial b}\bigg|_{w = w_t,\ b = b_t} \end{gathered} \]
+      </div>
+      <p class="note">The evaluation point matters for the whole lecture. If \(\mathcal{L} = w^2\), then \(\partial\mathcal{L}/\partial w = 2w\), and at \(w_t = 1\) the gradient \(\nabla w_t\) is 2.</p>
+    </section>
+
+    <section id="gd-toy">
+      <div class="sec-head">
+        <a class="ts" href="https://www.youtube.com/watch?v=gupSH0MU7vs&amp;t=746s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1–M2 · 12:26</a>
+        <h2>Gradients for the toy network</h2>
+      </div>
+      <p>For a single point \((x, y)\) take \(\mathcal{L}(w,b) = \tfrac12(f(x) - y)^2\). The chain rule gives</p>
+      <div class="eq">\[ \begin{aligned} \nabla w &= \frac{\partial}{\partial w}\Big[\tfrac12\big(f(x) - y\big)^2\Big] = \big(f(x) - y\big)\,\frac{\partial f(x)}{\partial w}, \\ \frac{\partial}{\partial w}\Big(\frac{1}{1+e^{-(wx+b)}}\Big) &= \frac{-1}{\big(1+e^{-(wx+b)}\big)^2}\cdot e^{-(wx+b)}\cdot(-x) \\ &= \frac{1}{1+e^{-(wx+b)}}\cdot\frac{e^{-(wx+b)}}{1+e^{-(wx+b)}}\cdot x = f(x)\big(1 - f(x)\big)\,x, \\ \nabla w &= \big(f(x) - y\big)\, f(x)\big(1 - f(x)\big)\, x. \end{aligned} \]</div>
+      <p>The bias works the same way without the final \(x\). For the two training points, the gradients are sums over the points:</p>
+      <div class="eq">\[ \nabla w = \sum_{i=1}^{2}\big(f(x_i) - y_i\big)\, f(x_i)\big(1 - f(x_i)\big)\, x_i, \qquad \nabla b = \sum_{i=1}^{2}\big(f(x_i) - y_i\big)\, f(x_i)\big(1 - f(x_i)\big) \]</div>
+      <ol class="algo">
+        <li class="algo-title">Algorithm · gradient_descent()</li>
+        <li>\(t \leftarrow 0\); max_iterations \(\leftarrow 1000\); initialize \(w, b\) randomly.</li>
+        <li>While \(t <\) max_iterations: \(w_{t+1} \leftarrow w_t - \eta\nabla w_t\) and \(b_{t+1} \leftarrow b_t - \eta\nabla b_t\).</li>
+        <li>\(t \leftarrow t + 1\), and repeat.</li>
+      </ol>
+      <p>The slides' Python version uses <code>X = [0.5, 2.5]</code>, <code>Y = [0.2, 0.9]</code>, starts at \(w = b = -2\) (a second run starts at \(-4, -4\)), sets \(\eta = 1.0\) and runs 1000 epochs. Its inner loop adds up the gradients of both points before making one update, and its <code>error()</code> returns \(\tfrac12\sum(f(x) - y)^2\).</p>
+    </section>
+
+    <section id="gd-slow">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=gupSH0MU7vs&amp;t=810s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1–M2 · 13:30</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=gupSH0MU7vs&amp;t=1307s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1–M2 · 21:47 why: the derivative</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=gupSH0MU7vs&amp;t=1728s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1–M2 · 28:48 another start</a>
+        </div>
+        <h2>Why gradient descent crawls on gentle slopes</h2>
+      </div>
+      <p>Run from a start on a flat part of the surface (in the video \(w\) and \(b\) are both near \(-5\) and the loss is about 0.4 to 0.5), the point barely moves. Consecutive \((w, b)\) values are so close that the trail in the \(wb\)-plane looks like one continuous snake. Where the surface drops steeply into the valley, the points suddenly jump far apart. Inside the valley the steps become small again.</p>
+      <p>The reason is in the update \(w \leftarrow w - \eta\nabla w\). If the derivative is 0, \(w\) does not move; if it is small, \(w\) moves a little; if it is large, \(w\) moves a lot. A derivative measures how sensitive the function is to a change in the input. For \(y = x^2\), moving \(x\) from 1 to 1.5 changes \(y\) by 1.25 (from 1 to 2.25), but moving \(x\) from 2 to 2.5 changes \(y\) by 2.25 (from 4 to 6.25). The input moved by 0.5 both times, but the curve is steeper near 2, so the derivative there is larger. Steep regions have large derivatives and give large updates. Gentle regions give small ones.</p>
+      <figure>
+        <div class="fig-scroll">
+<svg class="dg" viewBox="0 0 640 292" role="img" aria-label="An illustrative loss curve with a flat plateau on the left, a steep drop in the middle and a gentle approach to the minimum on the right. At three points the tangent is drawn, and below the axis an arrow shows the gradient descent step eta times the slope: tiny on the plateau, long on the steep part, tiny again near the minimum.">
+<defs><marker id="l05-f1-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<line class="d-rule" x1="60" y1="178" x2="600" y2="178"/>
+<line class="d-rule" x1="60" y1="18" x2="60" y2="178"/>
+<text class="d-al" x="600" y="194" text-anchor="end">w</text>
+<text class="d-al" x="66" y="26">L(w)</text>
+<path class="d-ln" d="M60 28.6 L63.4 29 L66.8 29.4 L70.1 29.8 L73.5 30.2 L76.9 30.5 L80.2 30.9 L83.6 31.3 L87 31.7 L90.4 32 L93.8 32.4 L97.1 32.8 L100.5 33.1 L103.9 33.5 L107.3 33.9 L110.6 34.2 L114 34.6 L117.4 34.9 L120.8 35.3 L124.1 35.6 L127.5 36 L130.9 36.4 L134.2 36.7 L137.6 37.1 L141 37.4 L144.4 37.8 L147.8 38.2 L151.1 38.5 L154.5 38.9 L157.9 39.3 L161.2 39.6 L164.6 40 L168 40.4 L171.4 40.8 L174.8 41.2 L178.1 41.6 L181.5 42 L184.9 42.5 L188.3 42.9 L191.6 43.4 L195 43.9 L198.4 44.4 L201.8 44.9 L205.1 45.4 L208.5 46 L211.9 46.6 L215.3 47.2 L218.6 47.8 L222 48.5 L225.4 49.3 L228.8 50 L232.1 50.9 L235.5 51.7 L238.9 52.7 L242.2 53.7 L245.6 54.7 L249 55.9 L252.4 57.1 L255.8 58.3 L259.1 59.7 L262.5 61.2 L265.9 62.7 L269.2 64.4 L272.6 66.2 L276 68.1 L279.4 70.1 L282.8 72.2 L286.1 74.4 L289.5 76.7 L292.9 79.2 L296.2 81.7 L299.6 84.4 L303 87.2 L306.4 90.1 L309.8 93 L313.1 96.1 L316.5 99.2 L319.9 102.4 L323.2 105.6 L326.6 108.8 L330 112.1 L333.4 115.4 L336.8 118.6 L340.1 121.8 L343.5 124.9 L346.9 128 L350.2 131.1 L353.6 134 L357 136.8 L360.4 139.6 L363.8 142.2 L367.1 144.7 L370.5 147.1 L373.9 149.3 L377.2 151.5 L380.6 153.5 L384 155.4 L387.4 157.2 L390.8 158.8 L394.1 160.4 L397.5 161.8 L400.9 163.2 L404.3 164.4 L407.6 165.6 L411 166.7 L414.4 167.6 L417.8 168.5 L421.1 169.4 L424.5 170.2 L427.9 170.9 L431.2 171.5 L434.6 172.1 L438 172.6 L441.4 173.1 L444.8 173.6 L448.1 174 L451.5 174.4 L454.9 174.7 L458.2 175.1 L461.6 175.4 L465 175.6 L468.4 175.9 L471.8 176.1 L475.1 176.3 L478.5 176.4 L481.9 176.6 L485.3 176.7 L488.6 176.9 L492 177 L495.4 177.1 L498.8 177.2 L502.1 177.2 L505.5 177.3 L508.9 177.4 L512.2 177.4 L515.6 177.5 L519 177.5 L522.4 177.5 L525.8 177.5 L529.1 177.5 L532.5 177.5 L535.9 177.5 L539.2 177.5 L542.6 177.5 L546 177.5 L549.4 177.5 L552.8 177.5 L556.1 177.4 L559.5 177.4 L562.9 177.3 L566.2 177.3 L569.6 177.2 L573 177.2 L576.4 177.1 L579.8 177.1 L583.1 177 L586.5 176.9 L589.9 176.9 L593.2 176.8 L596.6 176.7 L600 176.6" style="stroke-width:2"/>
+<line class="d-ln-acc d-dash" x1="76.9" y1="30.7" x2="178.1" y2="41.4"/>
+<circle class="pt-new" cx="127.5" cy="36" r="5"/>
+<line class="d-rule" x1="127.5" y1="42" x2="127.5" y2="208" style="stroke-dasharray: 2 3"/>
+<line class="d-ln-acc" x1="127.5" y1="218" x2="140.5" y2="218" marker-end="url(#l05-f1-ah)" style="stroke-width:2.4"/>
+<circle class="pt-plain" cx="127.5" cy="218" r="3"/>
+<text class="d-t" x="127.5" y="244" text-anchor="start">plateau</text>
+<text class="d-s" x="127.5" y="260" text-anchor="start">slope -0.024 · step 0.19</text>
+<text class="d-s" x="139.5" y="24">gentle slope</text>
+<line class="d-ln-acc d-dash" x1="262.5" y1="49.8" x2="363.8" y2="142.4"/>
+<circle class="pt-new" cx="313.1" cy="96.1" r="5"/>
+<line class="d-rule" x1="313.1" y1="102.1" x2="313.1" y2="208" style="stroke-dasharray: 2 3"/>
+<line class="d-ln-acc" x1="313.1" y1="218" x2="425.7" y2="218" marker-end="url(#l05-f1-ah)" style="stroke-width:2.4"/>
+<circle class="pt-plain" cx="313.1" cy="218" r="3"/>
+<text class="d-t" x="313.1" y="244" text-anchor="start">steep</text>
+<text class="d-s" x="313.1" y="260" text-anchor="start">slope -0.208 · step 1.67</text>
+<text class="d-s" x="325.1" y="82.1">steep slope</text>
+<line class="d-ln-acc d-dash" x1="414.4" y1="171.9" x2="515.6" y2="179.4"/>
+<circle class="pt-new" cx="465" cy="175.6" r="5"/>
+<line class="d-rule" x1="465" y1="181.6" x2="465" y2="208" style="stroke-dasharray: 2 3"/>
+<line class="d-ln-acc" x1="465" y1="218" x2="474.1" y2="218" marker-end="url(#l05-f1-ah)" style="stroke-width:2.4"/>
+<circle class="pt-plain" cx="465" cy="218" r="3"/>
+<text class="d-t" x="465" y="244" text-anchor="start">near the minimum</text>
+<text class="d-s" x="465" y="260" text-anchor="start">slope -0.017 · step 0.13</text>
+<text class="d-s" x="477" y="163.6">gentle slope</text>
+<text class="d-al" x="60" y="282">arrows: the step −η·L′(w) with η = 8, drawn on the w axis</text>
+</svg>
+        </div>
+        <figcaption><b>The step follows the slope.</b> An illustrative loss curve with a plateau, a steep drop and a gentle approach to the minimum. With the same \(\eta\), the gradient descent step on the plateau is about a tenth of the step on the steep part, and the step near the minimum is smaller still.</figcaption>
+      </figure>
+      <p>So a start on a large flat region can cost thousands of iterations in which the loss barely changes, say from 0.9 to 0.8999. With max_iterations at 1000 you might conclude that nothing is happening, when the algorithm is only stuck on the plateau.</p>
+      <p>A better start does not remove the problem. The slides suggest \(w_{init} = -2,\ b_{init} = 2\) (and \(-3, 2\), with \(t_{max} = 150\)). This start sits on a slope, so the point drops into the valley quickly with widely spaced iterates. Then it reaches the gentle region near the minimum and crawls again, and 100 iterations run out before it arrives. This always happens near convergence, because the surface flattens around a minimum.</p>
+      <p class="rule-of-thumb">Wherever it starts, once gradient descent reaches a gentle slope its progress slows down. The rest of the lecture looks for ways to move faster on gentle slopes.</p>
+    </section>
+
+    <!-- ============ MODULE 5.3 ============ -->
+    <section id="contours">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=fGzJOBIxXdg&amp;t=91s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 1:31</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=fGzJOBIxXdg&amp;t=306s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 5:06 spacing and slope</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=fGzJOBIxXdg&amp;t=621s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 10:21 gradient descent on a contour map</a>
+        </div>
+        <h2>Contour maps: reading slope from above</h2>
+      </div>
+      <p>3-D plots are awkward: a static picture shows one viewing angle. A <dfn>contour map</dfn> shows the same surface in 2-D. Cut the surface with horizontal slices at regular intervals along the vertical axis (in the demo at \(-1, -0.8, -0.6, \dots\)) and look at the slices from the top. Each ring is one slice, so every point on a ring has the same height. For an error surface the horizontal plane is the \(wb\)-plane and the height is the loss, so each ring is a set of \((w, b)\) with equal loss.</p>
+      <p>The spacing between rings carries the slope. A small distance between two rings means the loss changes quickly along that direction: a steep slope. A large distance means a gentle slope. The same pair of rings can be far apart on one side of the surface and close together on the other.</p>
+      <figure>
+        <div class="fig-scroll">
+<svg class="dg" viewBox="0 0 640 392" role="img" aria-label="Top: a cross-section of a loss surface that is steep on the left and gentle on the right, cut by five horizontal slices at equal loss intervals. Bottom: the same slices seen from above as five rings. Dashed lines drop each crossing point to its ring: on the steep side the rings are packed close together, on the gentle side they are far apart.">
+<text class="d-h" x="20" y="20">Side view: slices at equal steps of the loss</text>
+<line class="d-rule" x1="70" y1="168" x2="600" y2="168"/>
+<text class="d-al" x="600" y="182" text-anchor="end">w</text>
+<line class="d-ln-mut" x1="70" y1="148.3" x2="600" y2="148.3" style="stroke-dasharray: 4 4"/>
+<text class="d-al" x="62" y="152.3" text-anchor="end">0.15</text>
+<line class="d-ln-mut" x1="70" y1="122" x2="600" y2="122" style="stroke-dasharray: 4 4"/>
+<text class="d-al" x="62" y="126" text-anchor="end">0.35</text>
+<line class="d-ln-mut" x1="70" y1="95.7" x2="600" y2="95.7" style="stroke-dasharray: 4 4"/>
+<text class="d-al" x="62" y="99.7" text-anchor="end">0.55</text>
+<line class="d-ln-mut" x1="70" y1="69.4" x2="600" y2="69.4" style="stroke-dasharray: 4 4"/>
+<text class="d-al" x="62" y="73.4" text-anchor="end">0.75</text>
+<line class="d-ln-mut" x1="70" y1="43.1" x2="600" y2="43.1" style="stroke-dasharray: 4 4"/>
+<text class="d-al" x="62" y="47.1" text-anchor="end">0.95</text>
+<text class="d-al" x="62" y="22" text-anchor="end">loss</text>
+<path class="d-ln" d="M105.3 31.3 L107.1 35 L108.9 38.7 L110.6 42.3 L112.4 45.9 L114.2 49.4 L115.9 52.9 L117.7 56.3 L119.5 59.6 L121.2 63 L123 66.2 L124.8 69.4 L126.5 72.6 L128.3 75.7 L130.1 78.8 L131.8 81.8 L133.6 84.7 L135.4 87.6 L137.1 90.5 L138.9 93.3 L140.7 96 L142.4 98.7 L144.2 101.4 L146 104 L147.7 106.5 L149.5 109 L151.3 111.4 L153 113.8 L154.8 116.2 L156.6 118.5 L158.3 120.7 L160.1 122.9 L161.9 125 L163.6 127.1 L165.4 129.1 L167.2 131.1 L168.9 133 L170.7 134.9 L172.5 136.7 L174.2 138.5 L176 140.2 L177.8 141.9 L179.5 143.5 L181.3 145 L183.1 146.5 L184.8 148 L186.6 149.4 L188.4 150.8 L190.1 152.1 L191.9 153.3 L193.7 154.5 L195.4 155.7 L197.2 156.8 L199 157.8 L200.7 158.8 L202.5 159.8 L204.3 160.7 L206 161.5 L207.8 162.3 L209.6 163.1 L211.3 163.7 L213.1 164.4 L214.9 165 L216.6 165.5 L218.4 166 L220.2 166.4 L221.9 166.8 L223.7 167.1 L225.5 167.4 L227.2 167.6 L229 167.8 L230.8 167.9 L232.5 168 L234.3 168 L236.1 168 L237.8 168 L239.6 168 L241.4 167.9 L243.1 167.9 L244.9 167.8 L246.7 167.8 L248.4 167.7 L250.2 167.7 L252 167.6 L253.7 167.5 L255.5 167.4 L257.3 167.3 L259 167.2 L260.8 167.1 L262.6 166.9 L264.3 166.8 L266.1 166.6 L267.9 166.5 L269.6 166.3 L271.4 166.2 L273.2 166 L274.9 165.8 L276.7 165.6 L278.5 165.4 L280.2 165.2 L282 165 L283.8 164.7 L285.5 164.5 L287.3 164.3 L289.1 164 L290.8 163.7 L292.6 163.5 L294.4 163.2 L296.1 162.9 L297.9 162.6 L299.7 162.3 L301.4 162 L303.2 161.7 L305 161.4 L306.7 161 L308.5 160.7 L310.3 160.3 L312 160 L313.8 159.6 L315.6 159.2 L317.3 158.8 L319.1 158.4 L320.9 158 L322.6 157.6 L324.4 157.2 L326.2 156.8 L327.9 156.4 L329.7 155.9 L331.5 155.5 L333.2 155 L335 154.5 L336.8 154.1 L338.5 153.6 L340.3 153.1 L342.1 152.6 L343.8 152.1 L345.6 151.6 L347.4 151 L349.1 150.5 L350.9 150 L352.7 149.4 L354.4 148.9 L356.2 148.3 L358 147.7 L359.7 147.1 L361.5 146.5 L363.3 145.9 L365 145.3 L366.8 144.7 L368.6 144.1 L370.3 143.5 L372.1 142.8 L373.9 142.2 L375.6 141.5 L377.4 140.9 L379.2 140.2 L380.9 139.5 L382.7 138.8 L384.5 138.1 L386.2 137.4 L388 136.7 L389.8 136 L391.5 135.2 L393.3 134.5 L395.1 133.8 L396.8 133 L398.6 132.2 L400.4 131.5 L402.1 130.7 L403.9 129.9 L405.7 129.1 L407.4 128.3 L409.2 127.5 L411 126.7 L412.7 125.8 L414.5 125 L416.3 124.2 L418 123.3 L419.8 122.4 L421.6 121.6 L423.3 120.7 L425.1 119.8 L426.9 118.9 L428.6 118 L430.4 117.1 L432.2 116.2 L433.9 115.2 L435.7 114.3 L437.5 113.4 L439.2 112.4 L441 111.4 L442.8 110.5 L444.5 109.5 L446.3 108.5 L448.1 107.5 L449.8 106.5 L451.6 105.5 L453.4 104.5 L455.1 103.5 L456.9 102.4 L458.7 101.4 L460.4 100.3 L462.2 99.3 L464 98.2 L465.7 97.1 L467.5 96 L469.3 94.9 L471 93.8 L472.8 92.7 L474.6 91.6 L476.3 90.5 L478.1 89.3 L479.9 88.2 L481.6 87.1 L483.4 85.9 L485.2 84.7 L486.9 83.5 L488.7 82.4 L490.5 81.2 L492.2 80 L494 78.8 L495.8 77.5 L497.5 76.3 L499.3 75.1 L501.1 73.8 L502.8 72.6 L504.6 71.3 L506.4 70.1 L508.1 68.8 L509.9 67.5 L511.7 66.2 L513.4 64.9 L515.2 63.6 L517 62.3 L518.7 61 L520.5 59.6 L522.3 58.3 L524 57 L525.8 55.6 L527.6 54.2 L529.3 52.9 L531.1 51.5 L532.9 50.1 L534.6 48.7 L536.4 47.3 L538.2 45.9 L539.9 44.4 L541.7 43 L543.5 41.6 L545.2 40.1 L547 38.7 L548.8 37.2 L550.5 35.7 L552.3 34.2 L554.1 32.8 L555.8 31.3" style="stroke-width:2"/>
+<line class="d-rule" x1="185.2" y1="148.3" x2="185.2" y2="300" style="stroke-dasharray: 2 3"/>
+<circle class="pt-tree" cx="185.2" cy="148.3" r="3.6"/>
+<line class="d-rule" x1="356.2" y1="148.3" x2="356.2" y2="300" style="stroke-dasharray: 2 3"/>
+<circle class="pt-tree" cx="356.2" cy="148.3" r="3.6"/>
+<line class="d-rule" x1="159.4" y1="122" x2="159.4" y2="300" style="stroke-dasharray: 2 3"/>
+<circle class="pt-tree" cx="159.4" cy="122" r="3.6"/>
+<line class="d-rule" x1="420.7" y1="122" x2="420.7" y2="300" style="stroke-dasharray: 2 3"/>
+<circle class="pt-tree" cx="420.7" cy="122" r="3.6"/>
+<line class="d-rule" x1="140.5" y1="95.7" x2="140.5" y2="300" style="stroke-dasharray: 2 3"/>
+<circle class="pt-tree" cx="140.5" cy="95.7" r="3.6"/>
+<line class="d-rule" x1="468" y1="95.7" x2="468" y2="300" style="stroke-dasharray: 2 3"/>
+<circle class="pt-tree" cx="468" cy="95.7" r="3.6"/>
+<line class="d-rule" x1="124.8" y1="69.4" x2="124.8" y2="300" style="stroke-dasharray: 2 3"/>
+<circle class="pt-tree" cx="124.8" cy="69.4" r="3.6"/>
+<line class="d-rule" x1="507.3" y1="69.4" x2="507.3" y2="300" style="stroke-dasharray: 2 3"/>
+<circle class="pt-tree" cx="507.3" cy="69.4" r="3.6"/>
+<line class="d-rule" x1="111.1" y1="43.1" x2="111.1" y2="300" style="stroke-dasharray: 2 3"/>
+<circle class="pt-tree" cx="111.1" cy="43.1" r="3.6"/>
+<line class="d-rule" x1="541.5" y1="43.1" x2="541.5" y2="300" style="stroke-dasharray: 2 3"/>
+<circle class="pt-tree" cx="541.5" cy="43.1" r="3.6"/>
+<text class="d-s" x="143.2" y="55">steep side</text>
+<text class="d-s" x="593.7" y="116" text-anchor="end">gentle side</text>
+<line class="d-rule" x1="20" y1="200" x2="620" y2="200"/>
+<text class="d-h" x="20" y="222">Top view: the contour map</text>
+<path class="d-ln-acc" d="M185.2 300 A48.9 28.6 0 0 1 234 271.4 A122.2 28.6 0 0 1 356.2 300 A122.2 28.6 0 0 1 234 328.6 A48.9 28.6 0 0 1 185.2 300 Z"/>
+<path class="d-ln" d="M159.4 300 A74.7 43.7 0 0 1 234 256.3 A186.6 43.7 0 0 1 420.7 300 A186.6 43.7 0 0 1 234 343.7 A74.7 43.7 0 0 1 159.4 300 Z"/>
+<path class="d-ln" d="M140.5 300 A93.6 54.8 0 0 1 234 245.2 A234 54.8 0 0 1 468 300 A234 54.8 0 0 1 234 354.8 A93.6 54.8 0 0 1 140.5 300 Z"/>
+<path class="d-ln" d="M124.8 300 A109.3 64 0 0 1 234 236 A273.2 64 0 0 1 507.3 300 A273.2 64 0 0 1 234 364 A109.3 64 0 0 1 124.8 300 Z"/>
+<path class="d-ln" d="M111.1 300 A123 72 0 0 1 234 228 A307.5 72 0 0 1 541.5 300 A307.5 72 0 0 1 234 372 A123 72 0 0 1 111.1 300 Z"/>
+<circle class="pt-new" cx="234" cy="300" r="4.5"/>
+<text class="d-s" x="242" y="294">minimum</text>
+<text class="d-s" x="72.5" y="386">rings close together: steep</text>
+<text class="d-s" x="600" y="386" text-anchor="end">rings far apart: gentle</text>
+</svg>
+        </div>
+        <figcaption><b>From slices to rings.</b> An illustrative surface that is steep on one side of its minimum and gentle on the other, cut at five equally spaced loss levels. Dropping each crossing point onto the top view shows why ring spacing measures slope: the same loss step needs only a short horizontal distance where the surface is steep.</figcaption>
+      </figure>
+      <p>Two things to remember: the rings are taken at equal steps of the loss, and their spacing tells you the slope in each direction. With these you can picture a 3-D surface from its contour map and the other way round. Run on a contour map, gradient descent moves slowly where rings are far apart and quickly where they are packed together. In the lecture's plots the colour shows the loss level: dark red is high loss, dark blue is low, and pink is in between. From here on most demos are drawn as contour maps.</p>
+    </section>
+
+    <!-- ============ MODULES 5.4–5.5 ============ -->
+    <section id="momentum">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=R3jlvdclAHI&amp;t=60s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 1:00 intuition</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=R3jlvdclAHI&amp;t=213s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 3:33 update rule</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=R3jlvdclAHI&amp;t=335s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 5:35 unrolling the history</a>
+        </div>
+        <h2>Momentum-based gradient descent</h2>
+      </div>
+      <p>Gradient descent takes a long time to cross regions with a gentle slope because the gradients there are small. (Every algorithm in this lecture starts its first iteration by computing \(\nabla w_0\).)</p>
+      <p>The lecture's intuition: you are at the Velachery gate of IIT Madras and ask how to reach Phoenix Market City. Someone points right. You take a few cautious steps and ask again, and the next person also points right. After the third person says the same, you are confident and start walking faster. If you are repeatedly told to go in the same direction, take bigger steps in that direction, the way a ball gains momentum rolling down a slope. Even if the current gradient is small, a long history of pushes in one direction should speed you up.</p>
+      <div class="result">
+        <span class="lbl">Update rule · momentum-based gradient descent</span>
+        \[ u_t = \beta\,u_{t-1} + \nabla w_t, \qquad w_{t+1} = w_t - \eta\,u_t, \qquad u_{-1} = 0,\ \ w_0 = \text{rand}(),\ \ 0 \le \beta < 1 \]
+        <p>The same equations hold for \(b\). Besides the current gradient, the step uses the history of updates.</p>
+      </div>
+      <p>\(u_t\) is a history vector. Unrolling the recursion shows what it holds:</p>
+      <div class="eq">\[ \begin{aligned} u_0 &= \nabla w_0 \qquad (\text{since } u_{-1} = 0) \\ u_1 &= \beta u_0 + \nabla w_1 = \beta\,\nabla w_0 + \nabla w_1 \\ u_2 &= \beta u_1 + \nabla w_2 = \beta^2\nabla w_0 + \beta\,\nabla w_1 + \nabla w_2 \\ u_t &= \sum_{\tau=0}^{t}\beta^{\,t-\tau}\,\nabla w_\tau \end{aligned} \]</div>
+      <p>This is an exponentially weighted sum of the current and all past gradients. With the typical \(\beta = 0.9\), the current gradient has weight 1, the previous one 0.9, the one before 0.81, and gradients from long ago have almost no say. Because the history includes the current gradient plus many earlier pushes in the same direction, steps on a flat region are much larger than plain gradient descent's.</p>
+      <p>The slides' <code>do_mgd</code> code starts at \(w = b = -2\) with \(\eta = 1\) and \(\beta = 0.9\), initializes both histories to 0, sums the gradients over the data and then updates. Note: the code accumulates \(u \leftarrow \beta u + \eta\nabla w\) and then sets \(w \leftarrow w - u\). With a fixed \(\eta\) this is the same update with \(\eta\) folded into the history.</p>
+
+      <h3>Is moving fast always good? <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=R3jlvdclAHI&amp;t=826s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 13:46</a></h3>
+      <p>On the first surface, momentum leaves the plateau far faster than gradient descent, but it shoots past the minimum and has to come back. The analogy continues: so many people have told you to go right that you are now on a scooter, you zoom past the mall, take a U-turn, gather speed again and overshoot again.</p>
+      <p>A second data set gives a surface with flat regions on every side of a narrow, steep valley, so the error is high on both sides of the minimum. A ball dropped there would roll down, up the other side and back. Momentum does the same: it oscillates in and out of the minimum valley and takes many U-turns before it converges. Even so it converges faster than vanilla gradient descent. From \(w_0 = -2,\ b_0 = -4\) with \(\eta = 1\), after 50 iterations (two seconds of the animation at 25 iterations per second) momentum has reached an error of 0.00001 while gradient descent is still at 0.16. <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=R3jlvdclAHI&amp;t=1073s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 17:53</a></p>
+    </section>
+
+    <section id="nag">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=dIYDPtHWBNA&amp;t=60s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 1:00</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=dIYDPtHWBNA&amp;t=213s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 3:33 update rule</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=dIYDPtHWBNA&amp;t=305s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 5:05 the picture</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=dIYDPtHWBNA&amp;t=673s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 11:13 momentum vs NAG</a>
+        </div>
+        <h2>Nesterov accelerated gradient: look before you leap</h2>
+      </div>
+      <p>Can we reduce momentum's oscillations? The lecture sums up the intuition as look before you leap. Momentum's step has two parts: the history \(\beta u_{t-1}\), known before the step, and the gradient \(\nabla w_t\) at the current weights. We will move by at least the history, so make that move first, compute the gradient where it lands, and use that gradient for the second part.</p>
+      <div class="result">
+        <span class="lbl">Update rule · Nesterov accelerated gradient (NAG)</span>
+        \[ u_t = \beta\,u_{t-1} + \nabla\big(w_t - \beta\,u_{t-1}\big), \qquad w_{t+1} = w_t - \eta\,u_t, \qquad u_{-1} = 0,\ \ 0 \le \beta < 1 \]
+        <p>\(\nabla(\cdot)\) is the gradient of the loss evaluated at the point in the bracket: the partially updated, looked-ahead weights instead of \(w_t\).</p>
+      </div>
+      <p class="note">With \(\eta\) written outside the history, the history move actually reaches \(w_t - \eta\beta u_{t-1}\). The slide for this module writes \(w_t - \beta u_{t-1}\), which is the same when \(\eta = 1\), as in all the demos. The NAdam slides later write the look-ahead with \(\eta\), and the slides' <code>do_nag</code> code (whose history already includes \(\eta\)) evaluates the gradient at \(w - \beta v\).</p>
+      <p>A 1-D picture makes the difference clear. You are approaching the minimum from the left with a large accumulated history. At \(w_t\) both the history and the current negative slope push to the right, so momentum takes a big step and can land well past the minimum. NAG first makes only the history move. If that move has already crossed the minimum, the slope at the new point is positive and the gradient pulls back, so the combined step ends close to the minimum.</p>
+      <figure>
+        <div class="fig-scroll">
+<svg class="dg" viewBox="0 0 640 330" role="img" aria-label="Two copies of the same bowl-shaped loss curve with minimum at w equals 3. Left, momentum: from w_t it moves by the history and then by the gradient computed at w_t, and lands far past the minimum at 4.24. Right, NAG: it first moves by the history to the look-ahead point 3.4, computes the gradient there, which points back, and lands at 3.16, close to the minimum.">
+<defs><marker id="l05-f3-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker><marker id="l05-f3-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<text class="d-h" x="20" y="22">Momentum: gradient at wₜ</text>
+<line class="d-rule" x1="40" y1="196" x2="290" y2="196"/>
+<path class="d-ln" d="M40 50.8 L42.5 56 L45 61.2 L47.5 66.2 L50 71.2 L52.5 76 L55 80.8 L57.5 85.4 L60 90 L62.5 94.4 L65 98.8 L67.5 103.1 L70 107.2 L72.5 111.3 L75 115.3 L77.5 119.2 L80 123 L82.5 126.7 L85 130.3 L87.5 133.8 L90 137.2 L92.5 140.5 L95 143.7 L97.5 146.8 L100 149.9 L102.5 152.8 L105 155.6 L107.5 158.4 L110 161 L112.5 163.6 L115 166 L117.5 168.4 L120 170.6 L122.5 172.8 L125 174.8 L127.5 176.8 L130 178.7 L132.5 180.4 L135 182.1 L137.5 183.7 L140 185.2 L142.5 186.6 L145 187.9 L147.5 189.1 L150 190.2 L152.5 191.2 L155 192.1 L157.5 192.9 L160 193.6 L162.5 194.3 L165 194.8 L167.5 195.2 L170 195.6 L172.5 195.8 L175 196 L177.5 196 L180 196 L182.5 195.8 L185 195.6 L187.5 195.2 L190 194.8 L192.5 194.3 L195 193.6 L197.5 192.9 L200 192.1 L202.5 191.2 L205 190.2 L207.5 189.1 L210 187.9 L212.5 186.6 L215 185.2 L217.5 183.7 L220 182.1 L222.5 180.4 L225 178.7 L227.5 176.8 L230 174.8 L232.5 172.8 L235 170.6 L237.5 168.4 L240 166 L242.5 163.6 L245 161 L247.5 158.4 L250 155.6 L252.5 152.8 L255 149.9 L257.5 146.8 L260 143.7 L262.5 140.5 L265 137.2 L267.5 133.8 L270 130.3 L272.5 126.7 L275 123 L277.5 119.2 L280 115.3 L282.5 111.3 L285 107.2 L287.5 103.1 L290 98.8" style="stroke-width:2"/>
+<line class="d-rule" x1="177.5" y1="190" x2="177.5" y2="202"/>
+<text class="d-al" x="177.5" y="214" text-anchor="middle">min</text>
+<line class="d-ln-acc d-dash" x1="55.6" y1="91" x2="124.4" y2="183.4"/>
+<line class="d-rule" x1="90" y1="142.2" x2="90" y2="240" style="stroke-dasharray: 2 3"/>
+<circle class="pt-plain" cx="90" cy="137.2" r="5"/>
+<line class="d-rule" x1="202.5" y1="196.2" x2="202.5" y2="240" style="stroke-dasharray: 2 3"/>
+<circle class="pt-no" cx="202.5" cy="191.2" r="5"/>
+<line class="d-rule" x1="255" y1="154.9" x2="255" y2="240" style="stroke-dasharray: 2 3"/>
+<circle class="pt-new" cx="255" cy="149.9" r="5"/>
+<text class="d-s" x="82" y="129.2" text-anchor="end">wₜ</text>
+<line class="d-ln" x1="90" y1="248" x2="202.5" y2="248" marker-end="url(#l05-f3-ah)" style="stroke-width:2"/>
+<text class="d-s" x="146.2" y="266" text-anchor="middle">history ηβuₜ₋₁</text>
+<line class="d-ln-acc" x1="202.5" y1="282" x2="255" y2="282" marker-end="url(#l05-f3-aha)" style="stroke-width:2.4"/>
+<text class="d-s" x="255" y="302" text-anchor="end" style="fill: var(--accent)">η∇L(wₜ) pushes on</text>
+<text class="d-s" x="245" y="143.9" text-anchor="end">wₜ₊₁ = 4.24</text>
+<text class="d-s" x="210.5" y="209.2">after history</text>
+<text class="d-h" x="335" y="22">NAG: gradient at the look-ahead point</text>
+<line class="d-rule" x1="355" y1="196" x2="605" y2="196"/>
+<path class="d-ln" d="M355 50.8 L357.5 56 L360 61.2 L362.5 66.2 L365 71.2 L367.5 76 L370 80.8 L372.5 85.4 L375 90 L377.5 94.4 L380 98.8 L382.5 103.1 L385 107.2 L387.5 111.3 L390 115.3 L392.5 119.2 L395 123 L397.5 126.7 L400 130.3 L402.5 133.8 L405 137.2 L407.5 140.5 L410 143.7 L412.5 146.8 L415 149.9 L417.5 152.8 L420 155.6 L422.5 158.4 L425 161 L427.5 163.6 L430 166 L432.5 168.4 L435 170.6 L437.5 172.8 L440 174.8 L442.5 176.8 L445 178.7 L447.5 180.4 L450 182.1 L452.5 183.7 L455 185.2 L457.5 186.6 L460 187.9 L462.5 189.1 L465 190.2 L467.5 191.2 L470 192.1 L472.5 192.9 L475 193.6 L477.5 194.3 L480 194.8 L482.5 195.2 L485 195.6 L487.5 195.8 L490 196 L492.5 196 L495 196 L497.5 195.8 L500 195.6 L502.5 195.2 L505 194.8 L507.5 194.3 L510 193.6 L512.5 192.9 L515 192.1 L517.5 191.2 L520 190.2 L522.5 189.1 L525 187.9 L527.5 186.6 L530 185.2 L532.5 183.7 L535 182.1 L537.5 180.4 L540 178.7 L542.5 176.8 L545 174.8 L547.5 172.8 L550 170.6 L552.5 168.4 L555 166 L557.5 163.6 L560 161 L562.5 158.4 L565 155.6 L567.5 152.8 L570 149.9 L572.5 146.8 L575 143.7 L577.5 140.5 L580 137.2 L582.5 133.8 L585 130.3 L587.5 126.7 L590 123 L592.5 119.2 L595 115.3 L597.5 111.3 L600 107.2 L602.5 103.1 L605 98.8" style="stroke-width:2"/>
+<line class="d-rule" x1="492.5" y1="190" x2="492.5" y2="202"/>
+<text class="d-al" x="492.5" y="214" text-anchor="middle">min</text>
+<line class="d-ln-acc d-dash" x1="483.1" y1="204.4" x2="551.9" y2="178"/>
+<line class="d-rule" x1="405" y1="142.2" x2="405" y2="240" style="stroke-dasharray: 2 3"/>
+<circle class="pt-plain" cx="405" cy="137.2" r="5"/>
+<line class="d-rule" x1="517.5" y1="196.2" x2="517.5" y2="240" style="stroke-dasharray: 2 3"/>
+<circle class="pt-no" cx="517.5" cy="191.2" r="5"/>
+<line class="d-rule" x1="502.5" y1="200.2" x2="502.5" y2="240" style="stroke-dasharray: 2 3"/>
+<circle class="pt-new" cx="502.5" cy="195.2" r="5"/>
+<text class="d-s" x="397" y="129.2" text-anchor="end">wₜ</text>
+<line class="d-ln" x1="405" y1="248" x2="517.5" y2="248" marker-end="url(#l05-f3-ah)" style="stroke-width:2"/>
+<text class="d-s" x="461.2" y="266" text-anchor="middle">history ηβuₜ₋₁</text>
+<line class="d-ln-acc" x1="517.5" y1="282" x2="502.5" y2="282" marker-end="url(#l05-f3-aha)" style="stroke-width:2.4"/>
+<text class="d-s" x="517.5" y="302" text-anchor="end" style="fill: var(--accent)">η∇L(look-ahead) pulls back</text>
+<text class="d-s" x="492.5" y="169.2" text-anchor="end">wₜ₊₁ = 3.16</text>
+<text class="d-s" x="525.5" y="209.2">look-ahead</text>
+<line class="d-rule" x1="322" y1="10" x2="322" y2="318"/>
+</svg>
+        </div>
+        <figcaption><b>Where the gradient is taken.</b> The same history move (\(\eta\beta u_{t-1} = 1.8\)) on \(\mathcal{L} = \tfrac12(w-3)^2\) from \(w_t = 1.6\), with \(\eta = 0.6\). Momentum adds the gradient at \(w_t\), which still points right, and lands at 4.24. NAG adds the gradient at the look-ahead point 3.4, which points back, and lands at 3.16. Illustrative numbers.</figcaption>
+      </figure>
+      <p>The demo runs both on the oscillating surface. Momentum (blue in the video) takes a long U-turn, while NAG, having looked ahead and seen that it is overshooting, turns back sooner. Throughout the run NAG's oscillations are shorter. Looking ahead lets NAG correct its course faster than momentum, so its oscillations are smaller and it is less likely to escape the minimum valley.</p>
+    </section>
+
+    <!-- ============ MODULE 5.6 ============ -->
+    <section id="sgd">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=hXK16fgWjsc&amp;t=62s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 1:02</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=hXK16fgWjsc&amp;t=187s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 3:07 the cost</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=hXK16fgWjsc&amp;t=249s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 4:09 stochastic version</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=hXK16fgWjsc&amp;t=587s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 9:47 why it oscillates</a>
+        </div>
+        <h2>Stochastic gradient descent</h2>
+      </div>
+      <p>The algorithm so far (and its momentum and NAG versions) goes over the entire training data, adding up per-point gradients, and only then makes one update. That is because the loss is a sum (or average) over all training points, so its gradient is the sum of the per-point gradients. This is the true gradient with no approximation, and the theoretical guarantee from the Taylor argument holds: each step decreases the loss.</p>
+      <p>The flip side is cost. With a million training points, one update needs a million gradient computations. Even 100 updates, a small number by modern standards, take 100 million computations, and the weights will hardly have moved.</p>
+      <p><dfn>Stochastic gradient descent</dfn> moves the update inside the loop over the data: it updates after every single point. It treats one point's gradient as an estimate of the average gradient. With a million points it makes a million updates per epoch, where one <dfn>epoch</dfn> is one pass over the entire data and one <dfn>step</dfn> is one update of the parameters.</p>
+      <p>The price is that the gradient is now approximate, or stochastic, because it is estimated from a single point. It is like tossing a biased coin once to estimate the probability of heads. There is no longer a guarantee that each step decreases the loss.</p>
+      <p>In the demo, gradient descent (green) goes down smoothly while SGD (black) often goes off course and comes back. Each such swing is a point whose gradient was far from the true gradient. SGD makes greedy decisions: each point pushes the parameters in the direction most favourable to itself, without knowing how that affects the other points. An update that helps one point can hurt the next, so the points almost compete with each other.</p>
+    </section>
+
+    <section id="minibatch">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=hXK16fgWjsc&amp;t=678s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 11:18</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=hXK16fgWjsc&amp;t=803s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 13:23 k = 25</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=hXK16fgWjsc&amp;t=923s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 15:23 epochs and steps</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=hXK16fgWjsc&amp;t=955s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 15:55 stochastic momentum and NAG</a>
+        </div>
+        <h2>Mini-batch gradient descent</h2>
+      </div>
+      <p>The estimate can be improved by using more than one point. <dfn>Mini-batch gradient descent</dfn> keeps a count of points seen and updates after every <code>mini_batch_size</code> points, accumulating their gradients in between. In the coin analogy you now toss the coin 25 times instead of once. Waiting for a million tosses is too slow and one toss is too few; something in between, like 100, gives a fair estimate.</p>
+      <div class="result">
+        <span class="lbl">Update rule · mini-batch (and stochastic) gradient descent</span>
+        \[ w_{t+1} = w_t - \eta\sum_{i \in \mathcal{B}_t}\nabla w_t^{(i)}, \qquad \mathcal{B}_t = \text{the next } B \text{ training points} \]
+        <p>\(\nabla w_t^{(i)}\) is the gradient of point \(i\)'s loss at \(w_t\). \(B = 1\) gives stochastic gradient descent and \(B = N\) gives (batch) gradient descent. The slides' code sums the gradients over the batch; the same applies to \(b\).</p>
+      </div>
+      <p>With \(k = 25\) (the slides use a batch size of 25 and 500 epochs), the mini-batch path (blue) stays close to gradient descent (green), while SGD (black) oscillates much more. The larger \(k\), the more accurate the estimate. Some oscillation remains as long as the gradient is approximate, and with \(k = N\) you recover gradient descent exactly. In practice the batch is much smaller than the data set.</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Algorithm</th><th class="num">Steps in 1 epoch</th></tr></thead>
+          <tbody>
+            <tr><td>Vanilla (batch) gradient descent</td><td class="num">1</td></tr>
+            <tr><td>Stochastic gradient descent</td><td class="num">\(N\)</td></tr>
+            <tr><td>Mini-batch gradient descent</td><td class="num">\(N/B\)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">\(N\) is the number of data points and \(B\) the mini-batch size. With 1000 points and a batch of 100, mini-batch gradient descent makes 10 updates per epoch.</p>
+      <p>The same idea gives stochastic versions of momentum and NAG: the update lines move inside the loop over points. The slides run SGD with momentum at \(\beta = 0.5\) and stochastic NAG at \(\beta = 0.85\). Both oscillate, partly because of noisy estimates and partly from momentum's own overshoot, and early on they may head off in a different direction from the full-batch version because the first few points were not representative. The relative advantage survives: NAG still takes shorter U-turns than momentum. Both are far faster than plain SGD, which after 500 steps is still on the plateau with a high error while momentum and NAG are close to convergence. Mini-batch versions of momentum and NAG work the same way (left as an exercise in the slides).</p>
+      <p>In practice we use mini-batch versions of all these algorithms. The lecturer adds that modern models can be sensitive to the batch size: in his experiments with Transformers, batch sizes of 1024 and 4096 (usually powers of two) gave quite different results, and the common wisdom is that larger batches are better, while still far below the full data set. Papers and existing implementations are the best guide to a good batch size.</p>
+    </section>
+
+    <!-- ============ MODULES 5.7–5.8 ============ -->
+    <section id="lr-tips">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=-7ET3TUWi8M&amp;t=91s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 1:31 a larger rate?</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=-7ET3TUWi8M&amp;t=274s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 4:34 initial rate</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=-7ET3TUWi8M&amp;t=395s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 6:35 annealing</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=-7ET3TUWi8M&amp;t=698s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 11:38 momentum schedule</a>
+        </div>
+        <h2>Choosing and annealing the learning rate</h2>
+      </div>
+      <p>Couldn't a large learning rate fix the flat regions? Multiplying a small gradient by a large \(\eta\) still gives a big step. The demo sets \(\eta = 10\) instead of 1 on the first surface: the point does move fast on the plateau, but in steep regions the already large gradient is blown up further and the point oscillates. What we want is a learning rate that adjusts to the gradient, large on gentle slopes and small on steep ones. The adaptive algorithms of Module 5.9 do exactly that.</p>
+      <h3>The initial learning rate</h3>
+      <p>For standard problems such as machine translation, speech recognition or image recognition, start from the hyperparameters reported in the literature and search a small window around them. For a new problem where nothing is known, try values on a log scale: 0.0001, 0.001, 0.01, 0.1, 1.0. Run a few epochs with each and watch the loss: with rates that are too high it increases (you overshoot into high-loss regions), with good rates it decreases smoothly. Then do a finer search around the best value; if 0.1 was best, try 0.05, 0.2 and 0.3. These are heuristics with no clear winning strategy.</p>
+      <h3>Annealing</h3>
+      <p>Early in training the weights are random and a fairly high rate is fine, but near the minimum a high rate risks overshooting. <dfn>Annealing</dfn> means reducing the learning rate as training progresses.</p>
+      <ul>
+        <li><b>Step decay.</b> Halve the learning rate every 5 (or 10) epochs, using the epoch count as a proxy for how close you are to the minimum. Or halve it after an epoch whose validation error is higher than the previous epoch's, as in the procedure below.</li>
+        <li><b>Exponential decay.</b> \(\eta = \eta_0 e^{-kt}\), with hyperparameters \(\eta_0\) and \(k\) and step number \(t\). A large \(k\) decays quickly, a small \(k\) smoothly. (The slide prints the formula as \(\eta_0^{-kt}\).)</li>
+        <li><b>\(1/t\) decay.</b> \(\eta = \dfrac{\eta_0}{1 + kt}\), again with \(k\) controlling the speed of decay.</li>
+      </ul>
+      <ol class="algo">
+        <li class="algo-title">Validation-based step decay</li>
+        <li>After every epoch, save the weights and compute the loss on held-out validation data.</li>
+        <li>If the validation loss decreased, continue with the same learning rate.</li>
+        <li>If it increased, throw away the last epoch's updates, restore the weights saved at the end of the previous epoch, halve \(\eta\) and run the epoch again.</li>
+        <li>If the loss keeps increasing even after repeated halving, training has probably converged, so stop.</li>
+      </ol>
+      <p>Both decay formulas add the hyperparameter \(k\), which is itself hard to set. The lecturer's own preference is the validation-based rule: reduce the rate when the validation loss goes up.</p>
+      <h3>A schedule for momentum</h3>
+      <p>Sutskever et al. (2013) suggested increasing \(\beta\) over time:</p>
+      <div class="eq">\[ \beta_t = \min\!\Big(1 - 2^{\,-1-\log_2(\lfloor t/250\rfloor + 1)},\ \beta_{max}\Big), \qquad \beta_{max} \in \{0.999,\ 0.995,\ 0.99,\ 0.9,\ 0\} \]</div>
+      <p>For \(t < 250\), \(\log_2 1 = 0\) and the first term is \(1 - 2^{-1} = 0.5\). For \(250 \le t < 500\) it is \(1 - 2^{-2} = 0.75\), and for \(750 \le t < 1000\), \(\log_2 4 = 2\) gives \(1 - 2^{-3} = 0.875\). Each value is capped at \(\beta_{max}\), and \(\beta_{max} = 0\) means no momentum. (Equivalently, the first term is \(1 - \frac{1}{2(\lfloor t/250\rfloor + 1)}\).) Early on the history is as unreliable as the current gradient, so it gets little weight. Later the history summarizes many updates that brought you near the minimum, while a single faulty update could throw you away from it, so the history gets more weight.</p>
+    </section>
+
+    <section id="line-search">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=-7ET3TUWi8M&amp;t=883s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 14:43</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=-7ET3TUWi8M&amp;t=1070s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 17:50 demo</a>
+        </div>
+        <h2>Line search</h2>
+      </div>
+      <p>With one fixed learning rate you are married to it: too high and you oscillate, too low and you move slowly. <dfn>Line search</dfn> tries several learning rates at every step and keeps the best result.</p>
+      <ol class="algo">
+        <li class="algo-title">Gradient descent with line search</li>
+        <li>Compute \(\nabla w_t\) and \(\nabla b_t\) once.</li>
+        <li>For each \(\eta\) in \(\{0.1, 0.5, 1, 2, 10\}\), form the candidate \(w_t - \eta\nabla w_t,\ b_t - \eta\nabla b_t\) and compute its loss.</li>
+        <li>Keep the candidate with the lowest loss as \((w_{t+1}, b_{t+1})\) and discard the others.</li>
+        <li>Repeat from step 1.</li>
+      </ol>
+      <p>The flip side is that each step does many more computations: one extra loss evaluation per candidate rate. In return the choice becomes adaptive. On flat regions the large rates win, and near the valley the large rates would overshoot and raise the loss, so a small one is picked. In the demo (blue: gradient descent with fixed \(\eta = 1\); black: line search), line search moves quickly across the flat region, does not jump out of the valley, and converges much faster. It shows some oscillations, but these are different from the momentum and NAG oscillations.</p>
+    </section>
+
+    <!-- ============ MODULE 5.9 ============ -->
+    <section id="sparse">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=oqkfhBf71gc&amp;t=31s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 0:31</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=oqkfhBf71gc&amp;t=92s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 1:32 four inputs</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=oqkfhBf71gc&amp;t=433s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 7:13 sparse features</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=oqkfhBf71gc&amp;t=619s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 10:19 sparse and important</a>
+        </div>
+        <h2>Why one learning rate per parameter</h2>
+      </div>
+      <p>The discussion of learning rates kept asking for an adaptive rate: small on steep regions, large on gentle ones. The gradients are what they are, but the multiplier in front of them can change. A second argument for adaptation comes from the input features.</p>
+      <p>Take a sigmoid neuron with four inputs, \(\mathbf{x} = \{x^1, x^2, x^3, x^4\}\) and \(\mathbf{w} = \{w^1, w^2, w^3, w^4\}\), so \(y = f(\mathbf{x}) = \dfrac{1}{1+e^{-(\mathbf{w}^\top\mathbf{x} + b)}}\). Superscripts index the features within one training point; subscripts still index training points. For a single point \((\mathbf{x}, y)\):</p>
+      <div class="eq">\[ \nabla w^1 = \big(f(\mathbf{x}) - y\big)\, f(\mathbf{x})\big(1 - f(\mathbf{x})\big)\, x^1, \qquad \nabla w^2 = \big(f(\mathbf{x}) - y\big)\, f(\mathbf{x})\big(1 - f(\mathbf{x})\big)\, x^2, \qquad \dots \]</div>
+      <p>The formula is the one-input formula with the last \(x\) replaced by the matching feature, because the derivative of \(\mathbf{w}^\top\mathbf{x} = w^1x^1 + w^2x^2 + \cdots\) with respect to \(w^1\) is \(x^1\). For \(n\) points, sum these over the points.</p>
+      <p>Now suppose \(x^2\) is <dfn>sparse</dfn>: zero for most inputs. Then most terms in the sum for \(\nabla w^2\) are zero, its total gradient is small, and \(w^2\) receives few and small updates. The lecture's example is a feature "the actor is Aamir Khan" over the last 1000 Bollywood movies, which is on for perhaps four or five of them. You might shrug and let such a weight stay put, but sparse features can be important. A feature for the director Christopher Nolan is on for very few films, yet it is a strong signal of a good movie whenever it is present. If its weight starts small and barely moves, its information is lost. Real data has many such features.</p>
+      <p>So we want a different learning rate for each parameter that accounts for how often its feature appears: higher for rare features, lower for dense ones. With millions of features this cannot be a pile of if-else rules; it has to come out of the update equations.</p>
+    </section>
+
+    <section id="adagrad">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=WSvxne3oGr0&amp;t=61s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 1:01 update rule</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=WSvxne3oGr0&amp;t=243s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 4:03 sparse data</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=WSvxne3oGr0&amp;t=402s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 6:42 the right-angled path</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=WSvxne3oGr0&amp;t=557s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 9:17 AdaGrad in action</a>
+        </div>
+        <h2>AdaGrad: decay each rate by its own history</h2>
+      </div>
+      <p>The intuition: decay a parameter's learning rate in proportion to its update history. A dense feature has received large updates step after step, so be conservative with it. A sparse feature has received only tiny updates, so keep its rate high and let it move.</p>
+      <div class="result">
+        <span class="lbl">Update rule · AdaGrad</span>
+        \[ v_t = v_{t-1} + (\nabla w_t)^2, \qquad w_{t+1} = w_t - \frac{\eta}{\sqrt{v_t + \epsilon}}\,\nabla w_t \]
+        <p>A similar pair of equations holds for \(b_t\). \(v_t\) is the running sum of squared gradients, a record of how large this parameter's updates have been.</p>
+      </div>
+      <p>The effective learning rate \(\eta/\sqrt{v_t + \epsilon}\) is now inversely related to the update history. For a dense feature \(v_t\) grows quickly and the rate shrinks. For a sparse feature \(v_t\) has grown little even by \(t = 100\), so its rate stays high.</p>
+      <h3>Making a feature sparse</h3>
+      <p>A 2-D plot allows only two parameters, \(w\) and \(b\). The input for \(b\) is always 1, so it cannot be sparse; the only option is to make \(x\) sparse. The slides create 500 random \((x, y)\) pairs and set \(x = 0\) for roughly 80% of them. Every algorithm uses \(\eta_0 = 0.1\), and momentum uses \(\beta = 0.9\).</p>
+      <p>On the contour plot (horizontal axis \(w\), vertical axis \(b\)) the loss is high in two red, fairly flat regions and drops steeply into a blue valley. Gradient descent, momentum and NAG all do something odd: at first they move almost only along \(b\), with very little movement along \(w\). The feature for \(w\) is sparse, so \(w\) gets small gradients and few updates, while \(b\) is dense. Once in the valley there is nothing more to gain along \(b\), and they creep along \(w\) to the minimum. The path is a right angle instead of the direct diagonal; the lecturer jokes that these algorithms were never taught Pythagoras' theorem. Such sparsity is common in large networks with thousands of input features, so this has to be addressed.</p>
+      <p>AdaGrad moves along \(w\) as well as \(b\). For \(w\) the denominator \(\sqrt{v_t}\) stays small, and when it is below 1 the effective rate is even larger than \(\eta\), so \(w\) moves in proportion to \(b\). The momentum methods still arrive first, because AdaGrad has no momentum term (combining the two comes later, as Adam). And as AdaGrad nears the minimum it slows down a lot, because by then enough history has accumulated to shrink its rate. <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=WSvxne3oGr0&amp;t=713s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 11:53</a></p>
+      <h3>A closer look at the two histories <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=WSvxne3oGr0&amp;t=744s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 12:24</a></h3>
+      <div class="eq">\[ v_t^w = (\nabla w_0)^2 + (\nabla w_1)^2 + \cdots + (\nabla w_t)^2, \qquad v_t^b = (\nabla b_0)^2 + (\nabla b_1)^2 + \cdots + (\nabla b_t)^2 \]</div>
+      <p>Since \(\nabla w = (f(x) - y)f(x)(1 - f(x))\,x\) and \(x\) is zero most of the time, the gradient for \(w\) is zero at most steps. So \(v_t^w\) grows gradually and \(\eta/\sqrt{v_t + \epsilon}\) decays slowly; early on it can even exceed \(\eta\). The gradient for \(b\) has no factor \(x\) and is nonzero at almost every step, so \(v_t^b\) grows rapidly and the rate for \(b\) decays rapidly.</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Parameter</th><th>First history \(v_0\)</th><th>First effective rate \(\eta_0/\sqrt{v_0 + \epsilon}\)</th><th>Afterwards</th></tr></thead>
+          <tbody>
+            <tr><td>\(w\) (sparse)</td><td>0.019</td><td>\(0.1/\sqrt{0.019} = 0.72\)</td><td>decays gradually</td></tr>
+            <tr><td>\(b\) (dense)</td><td>\((-9.19)^2 = 84.45\)</td><td>\(0.1/\sqrt{84.45} \approx 0.01\)</td><td>\(v^b\) reaches five-digit values; the rate is killed</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Both start from \(\eta_0 = 0.1\). The sparse \(w\) gets a rate above \(\eta_0\), the dense \(b\) one far below it. That is the adaptive behaviour we wanted. <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=WSvxne3oGr0&amp;t=1111s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 18:31</a></p>
+      <p>Notice that \(v_t^w\) and \(v_t^b\) never become zero, and never decrease, even after the gradients have become zero near the minimum. A running sum keeps all its old terms. Near the minimum the gradients are small and the effective rate is also small, so AdaGrad cannot move fast in these flat regions. <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=WSvxne3oGr0&amp;t=1324s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 22:04</a></p>
+      <p>Why the square root? Using \(\eta/v_t\) would also make the rate inversely related to the history, but in practice the algorithm works less well without the root. The lecturer's guess is that \(v_t\) then grows so fast that it kills the rate too early, but he knows of no clear theoretical justification.</p>
+      <p class="callout">The flip side: over time the effective rate for \(b\) decays so much that \(b\) stops being updated. AdaGrad found the right \(w\) quickly but takes a long time to find the right \(b\), the mirror image of the other algorithms. <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=WSvxne3oGr0&amp;t=1447s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 24:07</a></p>
+    </section>
+
+    <section id="rmsprop">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=ubOy0NPI2cY&amp;t=35s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 0:35</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=ubOy0NPI2cY&amp;t=131s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 2:11 expanding vₜ</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=ubOy0NPI2cY&amp;t=303s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 5:03 demo</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=ubOy0NPI2cY&amp;t=400s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 6:40 why it oscillates</a>
+        </div>
+        <h2>RMSProp: let the history decay</h2>
+      </div>
+      <p>AdaGrad lets its denominator grow without limit, so after a while the frequent parameters receive tiny updates. The fix is to decay the denominator: shrink the old history at every step and add only a fraction of the current squared gradient.</p>
+      <div class="result">
+        <span class="lbl">Update rule · RMSProp</span>
+        \[ v_t = \beta\,v_{t-1} + (1-\beta)(\nabla w_t)^2, \qquad w_{t+1} = w_t - \frac{\eta}{\sqrt{v_t + \epsilon}}\,\nabla w_t, \qquad \beta \in [0, 1) \]
+        <p>A similar pair of equations holds for \(b_t\). Only the denominator has changed from AdaGrad.</p>
+      </div>
+      <p>Unroll both histories for \(b\) with \(\beta = 0.9\):</p>
+      <div class="eq">\[ \begin{aligned} \text{AdaGrad:}\quad v_2 &= \nabla b_0^2 + \nabla b_1^2 + \nabla b_2^2 \\ \text{RMSProp:}\quad v_0 &= 0.1\,\nabla b_0^2, \quad v_1 = 0.09\,\nabla b_0^2 + 0.1\,\nabla b_1^2, \quad v_2 = 0.081\,\nabla b_0^2 + 0.09\,\nabla b_1^2 + 0.1\,\nabla b_2^2 \\ v_t &= (1-\beta)\sum_{\tau=0}^{t}\beta^{\,t-\tau}\,\nabla b_\tau^2 \end{aligned} \]</div>
+      <p>This is the same exponentially weighted form as momentum's history (the slide rounds 0.081 to 0.08). RMSProp's \(v_2\) is much smaller than AdaGrad's because every term is a fraction and the old terms keep shrinking. So \(\eta/\sqrt{v_t + \epsilon}\) decays slowly for \(b\) compared with AdaGrad.</p>
+      <p>In the demo (the slides' code uses \(\eta = 0.1\), \(\beta = 0.5\) and changes only the line that updates \(v\)), RMSProp reaches the minimum much faster than AdaGrad, moving along the diagonal in proportion in \(w\) and \(b\) because it is less aggressive in decaying the rate. But then it starts oscillating around the minimum: the sigmoid already fits the points, yet the iterate keeps moving.</p>
+      <h3>Why RMSProp oscillates</h3>
+      <p>In AdaGrad, \(v_t\) only increases and then saturates. In RMSProp it can also decrease, and the slides' plots show the gradients \(\nabla w\) and \(\nabla b\) themselves oscillating after some iterations. The history works like a moving window: old squared gradients fade, so once recent gradients are small the current weighted sum is less than the earlier one. The learning rate can therefore increase, decrease or stay constant. Near the minimum, after the gradients have been close to zero for a while, both the remaining history and the new terms are tiny and \(v_t\) barely changes from step to step, so the effective learning rate becomes constant.</p>
+      <p>A constant rate can make the iterate oscillate. On a bowl, an update from one side can land at the mirror point on the other side, where the gradient has the same size and the next update brings it straight back. Even if the derivatives differ slightly, the point keeps jumping from one side to the other instead of settling. <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=ubOy0NPI2cY&amp;t=631s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 10:31</a></p>
+      <figure>
+        <div class="fig-scroll">
+<svg class="dg" viewBox="0 0 640 270" role="img" aria-label="Two copies of the loss w squared. Left: with an effective step of 1, each update sends w to minus w, so the iterate bounces between 1.5 and minus 1.5 forever. Right: with an effective step of 0.8, each update multiplies w by minus 0.6, so the zigzag shrinks toward the minimum.">
+<defs><marker id="l05-f4-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<text class="d-h" x="20" y="22">Effective rate 1: w ← −w</text>
+<line class="d-rule" x1="25.6" y1="216" x2="304.4" y2="216"/>
+<path class="d-ln" d="M32.4 48.7 L35.1 55.3 L37.7 61.8 L40.4 68.2 L43 74.4 L45.7 80.5 L48.3 86.4 L51 92.3 L53.6 97.9 L56.3 103.5 L58.9 108.9 L61.6 114.2 L64.2 119.4 L66.9 124.4 L69.5 129.3 L72.2 134 L74.8 138.6 L77.5 143.1 L80.1 147.5 L82.8 151.7 L85.4 155.8 L88.1 159.7 L90.7 163.5 L93.4 167.2 L96 170.8 L98.7 174.2 L101.4 177.5 L104 180.6 L106.7 183.6 L109.3 186.5 L112 189.2 L114.6 191.8 L117.3 194.3 L119.9 196.7 L122.6 198.9 L125.2 200.9 L127.9 202.9 L130.5 204.7 L133.2 206.4 L135.8 207.9 L138.5 209.3 L141.1 210.6 L143.8 211.7 L146.4 212.7 L149.1 213.6 L151.7 214.3 L154.4 214.9 L157 215.4 L159.7 215.7 L162.3 215.9 L165 216 L167.7 215.9 L170.3 215.7 L173 215.4 L175.6 214.9 L178.3 214.3 L180.9 213.6 L183.6 212.7 L186.2 211.7 L188.9 210.6 L191.5 209.3 L194.2 207.9 L196.8 206.4 L199.5 204.7 L202.1 202.9 L204.8 200.9 L207.4 198.9 L210.1 196.7 L212.7 194.3 L215.4 191.8 L218 189.2 L220.7 186.5 L223.3 183.6 L226 180.6 L228.6 177.5 L231.3 174.2 L234 170.8 L236.6 167.2 L239.3 163.5 L241.9 159.7 L244.6 155.8 L247.2 151.7 L249.9 147.5 L252.5 143.1 L255.2 138.6 L257.8 134 L260.5 129.3 L263.1 124.4 L265.8 119.4 L268.4 114.2 L271.1 108.9 L273.7 103.5 L276.4 97.9 L279 92.3 L281.7 86.4 L284.3 80.5 L287 74.4 L289.6 68.2 L292.3 61.8 L294.9 55.3 L297.6 48.7" style="stroke-width:2"/>
+<text class="d-al" x="165" y="232" text-anchor="middle">0</text>
+<line class="d-ln-acc" x1="261" y1="110" x2="69" y2="110" marker-end="url(#l05-f4-ah)"/>
+<line class="d-ln-acc" x1="69" y1="124" x2="261" y2="124" marker-end="url(#l05-f4-ah)"/>
+<circle class="pt-new" cx="267" cy="117" r="5"/>
+<circle class="pt-new" cx="63" cy="117" r="5"/>
+<text class="d-s" x="277" y="139">w = 1.5</text>
+<text class="d-s" x="53" y="139" text-anchor="end">w = −1.5</text>
+<text class="d-s" x="165" y="252" text-anchor="middle">same loss on both sides; no progress</text>
+<text class="d-h" x="335" y="22">Effective rate 0.8: w ← −0.6w</text>
+<line class="d-rule" x1="340.6" y1="216" x2="619.4" y2="216"/>
+<path class="d-ln" d="M347.4 48.7 L350.1 55.3 L352.7 61.8 L355.4 68.2 L358 74.4 L360.7 80.5 L363.3 86.4 L366 92.3 L368.6 97.9 L371.3 103.5 L373.9 108.9 L376.6 114.2 L379.2 119.4 L381.9 124.4 L384.5 129.3 L387.2 134 L389.8 138.6 L392.5 143.1 L395.1 147.5 L397.8 151.7 L400.4 155.8 L403.1 159.7 L405.7 163.5 L408.4 167.2 L411 170.8 L413.7 174.2 L416.4 177.5 L419 180.6 L421.7 183.6 L424.3 186.5 L427 189.2 L429.6 191.8 L432.3 194.3 L434.9 196.7 L437.6 198.9 L440.2 200.9 L442.9 202.9 L445.5 204.7 L448.2 206.4 L450.8 207.9 L453.5 209.3 L456.1 210.6 L458.8 211.7 L461.4 212.7 L464.1 213.6 L466.7 214.3 L469.4 214.9 L472 215.4 L474.7 215.7 L477.3 215.9 L480 216 L482.7 215.9 L485.3 215.7 L488 215.4 L490.6 214.9 L493.3 214.3 L495.9 213.6 L498.6 212.7 L501.2 211.7 L503.9 210.6 L506.5 209.3 L509.2 207.9 L511.8 206.4 L514.5 204.7 L517.1 202.9 L519.8 200.9 L522.4 198.9 L525.1 196.7 L527.7 194.3 L530.4 191.8 L533 189.2 L535.7 186.5 L538.3 183.6 L541 180.6 L543.6 177.5 L546.3 174.2 L549 170.8 L551.6 167.2 L554.3 163.5 L556.9 159.7 L559.6 155.8 L562.2 151.7 L564.9 147.5 L567.5 143.1 L570.2 138.6 L572.8 134 L575.5 129.3 L578.1 124.4 L580.8 119.4 L583.4 114.2 L586.1 108.9 L588.7 103.5 L591.4 97.9 L594 92.3 L596.7 86.4 L599.3 80.5 L602 74.4 L604.6 68.2 L607.3 61.8 L609.9 55.3 L612.6 48.7" style="stroke-width:2"/>
+<text class="d-al" x="480" y="232" text-anchor="middle">0</text>
+<line class="d-ln-acc" x1="582" y1="117" x2="418.8" y2="180.4" marker-end="url(#l05-f4-ah)" style="stroke-width:1.6"/>
+<line class="d-ln-acc" x1="418.8" y1="180.4" x2="516.7" y2="203.2" marker-end="url(#l05-f4-ah)" style="stroke-width:1.6"/>
+<line class="d-ln-acc" x1="516.7" y1="203.2" x2="458" y2="211.4" marker-end="url(#l05-f4-ah)" style="stroke-width:1.6"/>
+<line class="d-ln-acc" x1="458" y1="211.4" x2="493.2" y2="214.3" marker-end="url(#l05-f4-ah)" style="stroke-width:1.6"/>
+<line class="d-ln-acc" x1="493.2" y1="214.3" x2="472.1" y2="215.4" marker-end="url(#l05-f4-ah)" style="stroke-width:1.6"/>
+<line class="d-ln-acc" x1="472.1" y1="215.4" x2="484.8" y2="215.8" marker-end="url(#l05-f4-ah)" style="stroke-width:1.6"/>
+<circle class="pt-new" cx="582" cy="117" r="4.5"/>
+<circle class="pt-tree" cx="418.8" cy="180.4" r="3.5"/>
+<circle class="pt-tree" cx="516.7" cy="203.2" r="3.5"/>
+<circle class="pt-tree" cx="458" cy="211.4" r="3.5"/>
+<circle class="pt-tree" cx="493.2" cy="214.3" r="3.5"/>
+<circle class="pt-tree" cx="472.1" cy="215.4" r="3.5"/>
+<circle class="pt-tree" cx="484.8" cy="215.8" r="3.5"/>
+<text class="d-s" x="590" y="121">start</text>
+<text class="d-s" x="480" y="252" text-anchor="middle">1.5, −0.9, 0.54, −0.32, … → 0</text>
+<line class="d-rule" x1="322" y1="10" x2="322" y2="258"/>
+</svg>
+        </div>
+        <figcaption><b>A constant effective rate can bounce forever.</b> On \(\mathcal{L} = w^2\) the gradient step is \(w \leftarrow w - \eta_t\cdot 2w\). With \(\eta_t = 1\) this sends \(w\) to \(-w\), so the iterate swaps between 1.5 and −1.5. With \(\eta_t = 0.8\) each step multiplies \(w\) by −0.6 and the zigzag shrinks into the minimum. Illustrative numbers.</figcaption>
+      </figure>
+      <p>Setting the initial learning rate appropriately removes the oscillation in the demo: with \(\eta = 0.05\) and \(\epsilon = 10^{-4}\) (so the very first effective rate, with \(v = 0\), is \(0.05/\sqrt{10^{-4}} = 5\)), RMSProp converges without oscillating. The lecturer stresses that the lesson here is about RMSProp itself: it is sensitive to the initial learning rate, and a value that works on this toy problem may be hard to find on another. <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=ubOy0NPI2cY&amp;t=889s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 14:49</a></p>
+      <h3>Sensitivity to the initial learning rate <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=ubOy0NPI2cY&amp;t=923s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 15:23</a></h3>
+      <p>Keep the surface, the data and the start fixed and change only \(\eta_0\). With \(\eta_0 = 0.6\) the point oscillates widely between high-loss points, and its sigmoid is nowhere near the data. With \(\eta_0 = 0.1\) it moves more slowly and still oscillates, but between low-loss points. With \(\eta_0 = 0.05\) it converges. Converging, oscillating around an acceptable solution, or staying far off: any of the three can happen, depending only on \(\eta_0\).</p>
+      <p>Plotting the effective rate \(\eta_0/\sqrt{v_t + \epsilon}\) with \(\eta_0 = 0.6\) shows the good part of RMSProp. While the point descends the steep region, gradients grow, \(v_t\) grows and the rate falls. Once it reaches flat ground the new gradients are tiny and the old large ones carry high powers of \(\beta\), so \(v_t\) starts falling and the rate rises again. That matches the wish list: lower the rate on steep curvature, raise it on gentle curvature. With \(\eta_0 = 0.1\) the curve has the same shape but lower values: the rate falls more slowly yet stays lower, and later it cannot grow as much.</p>
+      <p>Could one \(\eta_0\) be best everywhere? The slides' numbers, taking the denominator to be 1.25 in a steep region and 0.1 in a flat region: <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=ubOy0NPI2cY&amp;t=1631s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 27:11</a></p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Region</th><th class="num">Denominator</th><th class="num">\(\eta_0 = 0.6\)</th><th class="num">\(\eta_0 = 0.1\)</th><th>Better choice</th></tr></thead>
+          <tbody>
+            <tr><td>Steep</td><td class="num">1.25</td><td class="num">0.48</td><td class="num">0.08</td><td>\(\eta_0 = 0.1\) (small rate)</td></tr>
+            <tr><td>Flat</td><td class="num">0.1</td><td class="num">6</td><td class="num">1</td><td>\(\eta_0 = 0.6\) (large rate)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The preferred \(\eta_0\) changes along the same surface, yet it is fixed once at the start. So we would like the numerator to change with the gradient as well, adjusting together with the denominator.</p>
+      <h3>Drawbacks so far <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=ubOy0NPI2cY&amp;t=1762s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 29:22</a></h3>
+      <ul>
+        <li>Both AdaGrad and RMSProp are sensitive to the initial learning rate, the initial parameter values and the corresponding initial gradients.</li>
+        <li>In AdaGrad, large initial gradients make \(v\) large from the start, so the learning rate stays low for the rest of training.</li>
+        <li>In AdaGrad, if a gentle curvature is met later there is no way to increase the learning rate, because \(v\) never comes down.</li>
+      </ul>
+      <p>RMSProp's decaying average fixes the last two, but the sensitivity to \(\eta_0\) remains. For well-studied data sets, such as standard machine-translation benchmarks, people know a good range for \(\eta_0\); for a new data set you may not.</p>
+    </section>
+
+    <section id="adadelta">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=EcX0rqjHR9k&amp;t=31s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 0:31</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=EcX0rqjHR9k&amp;t=189s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 3:09 one step behind</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=EcX0rqjHR9k&amp;t=282s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 4:42 steep region</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=EcX0rqjHR9k&amp;t=565s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 9:25 flat region</a>
+        </div>
+        <h2>AdaDelta: no initial learning rate</h2>
+      </div>
+      <p>AdaDelta avoids setting an initial learning rate at all. Each iteration does five things:</p>
+      <ol class="algo">
+        <li class="algo-title">AdaDelta · for t in range(1, N), with \(v_{-1} = u_{-1} = 0\)</li>
+        <li>Compute the gradient \(\nabla w_t\).</li>
+        <li>\(v_t = \beta v_{t-1} + (1-\beta)(\nabla w_t)^2\)</li>
+        <li>\(\Delta w_t = -\dfrac{\sqrt{u_{t-1} + \epsilon}}{\sqrt{v_t + \epsilon}}\,\nabla w_t\)</li>
+        <li>\(w_{t+1} = w_t + \Delta w_t\)</li>
+        <li>\(u_t = \beta u_{t-1} + (1-\beta)(\Delta w_t)^2\)</li>
+      </ol>
+      <div class="result">
+        <span class="lbl">Update rule · AdaDelta</span>
+        \[ \begin{gathered} v_t = \beta v_{t-1} + (1-\beta)(\nabla w_t)^2, \qquad \Delta w_t = -\frac{\sqrt{u_{t-1} + \epsilon}}{\sqrt{v_t + \epsilon}}\,\nabla w_t, \\ w_{t+1} = w_t + \Delta w_t, \qquad u_t = \beta u_{t-1} + (1-\beta)(\Delta w_t)^2 \end{gathered} \]
+      </div>
+      <p>There are now two histories. \(v_t\) tracks squared gradients \(\nabla w_t\), as in RMSProp. \(u_t\) tracks the squared updates \(\Delta w_t\); because the update uses \(\Delta w_t\), the method is called Adaptive Delta. The minus sign sits inside \(\Delta w_t\), so the weight update is \(w_t + \Delta w_t\). The effective learning rate \(\sqrt{u_{t-1} + \epsilon}/\sqrt{v_t + \epsilon}\) is a ratio of two histories, with no \(\eta_0\), and its numerator now depends on past gradients instead of being a constant as in RMSProp and AdaGrad. Two details matter: the \(u_t\) computed at step \(t\) is used only in the next iteration, so the numerator runs one step behind the denominator, and only a fraction \((1-\beta)\) of \((\Delta w_t)^2\) enters \(u_t\).</p>
+      <h3>Starting in a steep region</h3>
+      <p>Take \(\epsilon = 10^{-6}\) and \(\beta = 0.9\), and write everything in terms of the gradients:</p>
+      <div class="eq">\[ \begin{aligned} t = 0:&\quad v_0 = 0.1(\nabla w_0)^2, \quad \Delta w_0 = -\frac{\sqrt{\epsilon}}{\sqrt{v_0 + \epsilon}}\nabla w_0, \quad w_1 = w_0 + \Delta w_0, \\ &\quad u_0 = 0.1\Big(\frac{\sqrt{\epsilon}}{\sqrt{v_0 + \epsilon}}\nabla w_0\Big)^2 \\ t = 1:&\quad v_1 = 0.09(\nabla w_0)^2 + 0.1(\nabla w_1)^2, \quad \Delta w_1 = -\frac{\sqrt{u_0}}{\sqrt{v_1}}\nabla w_1, \quad u_1 = 0.09(\Delta w_0)^2 + 0.1(\Delta w_1)^2 \\ t = 2:&\quad v_2 = 0.081(\nabla w_0)^2 + 0.09(\nabla w_1)^2 + 0.1(\nabla w_2)^2, \quad \Delta w_2 = -\frac{\sqrt{u_1}}{\sqrt{v_2}}\nabla w_2 \end{aligned} \]</div>
+      <p>(From \(t = 1\) on, \(\epsilon\) is ignored because \(u\) is no longer zero.) Both histories grow at every step, but \(u_t\) stays smaller than \(v_t\): it takes only a fraction of squared steps that were themselves scaled down. At \(t = 2\) the numerator uses \(u_1\) while the denominator \(v_2\) already contains the newest, large gradient. So on a steep slope the ratio, and with it the effective rate, is small. Unlike RMSProp's \(\eta/\sqrt{v_t}\), though, the numerator also grows with the history, so AdaDelta does not cut the rate as aggressively on steep curvature.</p>
+      <h3>Entering a flat region</h3>
+      <p>Suppose the point has moved into low curvature. The newest gradients are small and get the largest weights in \(v_t\) (0.1, 0.09, …), while the earlier large ones now carry high powers of \(\beta\) (weights like 0.034 and 0.038 on the slide). After some iterations \(v_t\) starts decreasing. \(u_{t-1}\) lags one step behind and still remembers the larger earlier steps, so the ratio of numerator to denominator increases: if the gradient stays low, the effective learning rate grows. When the point enters a steep region again, \(v_t\) sees the large current gradient a step before \(u_{t-1}\) does, and the ratio falls. So AdaDelta lets the numerator increase or decrease based on the current and past gradients, which is what RMSProp lacked.</p>
+      <h3>Results <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=EcX0rqjHR9k&amp;t=751s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 12:31</a></h3>
+      <p>The slides' code starts at \(w = b = -4\) with \(\beta = 0.99\) and \(\epsilon = 10^{-4}\). Starting from a moderately high-curvature region, AdaDelta reaches the minimum after 35 iterations, while RMSProp oscillates and AdaGrad is slow. Its plots of \(v_t\) and \(u_t\) have the same shape but different magnitudes, so when \(v_t\) grows, \(u_t\) grows proportionally, and the other way round.</p>
+      <p>In a second comparison, the slides start RMSProp with \(\eta_0 = 0.013\) (as if chosen by chance) and AdaDelta at \(w_0 = -4,\ b_0 = -4\). AdaDelta converges more quickly because its learning rate adapts sensibly, while RMSProp decays its rate more aggressively.</p>
+      <p>All the algorithms so far on one surface, from the same start: gradient descent moves slowly; momentum and NAG oscillate (NAG less); all three first move along \(b\) because \(w\) is sparse. AdaGrad, RMSProp and AdaDelta move along \(w\) and \(b\) together, RMSProp shows its oscillation, and AdaDelta converges fastest. <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=EcX0rqjHR9k&amp;t=1089s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 18:09</a></p>
+    </section>
+
+    <section id="adam">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=m9g9Hij1h1A&amp;t=33s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 0:33</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=m9g9Hij1h1A&amp;t=99s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 1:39 bias-corrected moments</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=m9g9Hij1h1A&amp;t=168s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 2:48 the L2 view</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=m9g9Hij1h1A&amp;t=306s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 5:06 demo</a>
+        </div>
+        <h2>Adam: momentum plus an adaptive rate</h2>
+      </div>
+      <p><dfn>Adam</dfn> stands for adaptive moments. Its idea: do everything RMSProp and AdaDelta do to fix AdaGrad's decay problem, that is, divide by an exponentially weighted history of squared gradients. In addition, use a cumulative history of the gradients themselves, as momentum does, instead of only the current gradient.</p>
+      <div class="result">
+        <span class="lbl">Update rule · Adam</span>
+        \[ \begin{gathered} m_t = \beta_1 m_{t-1} + (1-\beta_1)\,\nabla w_t, \qquad \hat m_t = \frac{m_t}{1-\beta_1^{\,t}}, \\ v_t = \beta_2 v_{t-1} + (1-\beta_2)(\nabla w_t)^2, \qquad \hat v_t = \frac{v_t}{1-\beta_2^{\,t}}, \\ w_{t+1} = w_t - \frac{\eta}{\sqrt{\hat v_t} + \epsilon}\,\hat m_t \end{gathered} \]
+        <p>Typically \(\beta_1 = 0.9\) and \(\beta_2 = 0.999\).</p>
+      </div>
+      <p>\(m_t\) is classical momentum, written with weight \((1-\beta_1)\) on the current gradient. \(v_t\) is RMSProp's denominator. The hats are bias corrections, explained in the next section. Since \(\beta_2 = 0.999\), each new squared gradient enters \(v_t\) with a weight of only 0.001.</p>
+      <p>The lecture calls \(\sqrt{v_t}\) an \(L^2\) norm. Expanded, \(v_t = (1-\beta_2)\sum_\tau \beta_2^{\,t-\tau}(\nabla w_\tau)^2\). Ignoring the decay weights, this is the sum of squares of all past gradients, and its square root is the \(L^2\) norm of the vector of past gradients. So \(\sqrt{v_t}\) is an exponentially weighted \(L^2\) norm, a view that leads to AdaMax below.</p>
+      <p>The slides' code starts at \(w = b = -4\) with \(\eta = 0.1\), \(\beta_1 = 0.9\), \(\beta_2 = 0.999\) and \(\epsilon = 10^{-10}\). It uses per-point stochastic gradients and bias-corrects with exponent \(i + 1\), the epoch count. In the demo AdaDelta converges fastest on this surface, Adam is also faster than the others, and RMSProp has its usual oscillation. The lecturer notes this does not mean Adam always wins. Adam sits closer to RMSProp with momentum, and unlike AdaDelta it still has a learning rate \(\eta\).</p>
+    </section>
+
+    <section id="bias-correction">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=m9g9Hij1h1A&amp;t=373s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 6:13</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=m9g9Hij1h1A&amp;t=787s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 13:07 taking expectations</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=m9g9Hij1h1A&amp;t=1010s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 16:50 without correction</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=m9g9Hij1h1A&amp;t=1303s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 21:43 noisy observations</a>
+        </div>
+        <h2>Why Adam needs bias correction</h2>
+      </div>
+      <p>\(m_t\) is a running average of gradients. We do not want to rely too much on the current gradient, since one sudden large gradient would cause a large jump. What we really want is the expected gradient \(E[\nabla w_t]\), the gradient all the data points together would give, instead of a point estimate from one point or one mini-batch. We compute an exponential moving average instead. Ideally \(E[m_t]\) would equal \(E[\nabla w_t]\). Is that so?</p>
+      <p>Unroll \(m_t = \beta m_{t-1} + (1-\beta)\nabla w_t\) from \(m_0 = 0\) (writing \(\beta\) for \(\beta_1\)):</p>
+      <div class="eq">\[ \begin{aligned} m_1 &= \beta m_0 + (1-\beta)\nabla w_1 = (1-\beta)\nabla w_1 \\ m_2 &= \beta m_1 + (1-\beta)\nabla w_2 = (1-\beta)\big(\beta\nabla w_1 + \nabla w_2\big) \\ m_3 &= \beta m_2 + (1-\beta)\nabla w_3 = (1-\beta)\big(\beta^2\nabla w_1 + \beta\nabla w_2 + \nabla w_3\big) \\ m_t &= (1-\beta)\sum_{\tau=1}^{t}\beta^{\,t-\tau}\,\nabla w_\tau \end{aligned} \]</div>
+      <p>This is momentum's sum from Module 5.4 with an extra factor \((1-\beta)\). Take expectations of both sides. Constants come out, and the expectation of a sum is the sum of expectations:</p>
+      <div class="eq">\[ E[m_t] = E\Big[(1-\beta)\sum_{\tau=1}^{t}\beta^{\,t-\tau}\nabla w_\tau\Big] = (1-\beta)\sum_{\tau=1}^{t}\beta^{\,t-\tau}\,E[\nabla w_\tau] \]</div>
+      <p>Now assume that every \(\nabla w_\tau\) comes from the same distribution, so \(E[\nabla w_\tau] = E[\nabla w]\) for all \(\tau\). The randomness comes from which data points are picked at each step. As the weights move, the distribution of gradients could change, so this is a simplifying assumption. Under it, \(E[\nabla w]\) leaves the sum, and what remains is a geometric series with ratio \(\beta\):</p>
+      <div class="eq">\[ E[m_t] = E[\nabla w]\,(1-\beta)\big(\beta^{t-1} + \beta^{t-2} + \cdots + \beta^0\big) = E[\nabla w]\,(1-\beta)\,\frac{1-\beta^{t}}{1-\beta} = E[\nabla w]\,(1-\beta^{t}) \]</div>
+      <div class="result">
+        <span class="lbl">Result · bias correction</span>
+        \[ E\Big[\frac{m_t}{1-\beta^{t}}\Big] = E[\nabla w], \qquad \text{so} \quad \hat m_t = \frac{m_t}{1-\beta^{t}} \ \text{ has the expected value of the gradient.} \]
+        <p>The same derivation applies to \(v_t\), which is why Adam divides it by \(1 - \beta_2^{\,t}\).</p>
+      </div>
+      <p>Without the correction, \(m_t\) and \(v_t\) are biased toward their zero initialization by the factor \(1 - \beta^t\), which is far below 1 for small \(t\). With \(\beta_2 = 0.999\) this lasts for many steps.</p>
+      <h3>What goes wrong without it</h3>
+      <p>Look at the effective rate \(1/\sqrt{v_t}\) (taking \(\eta = 1\) and ignoring \(\epsilon\)) with \(\beta_2 = 0.999\), a first gradient of 0.1 and then a zero gradient:</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Step</th><th>\(v_t\) (no correction)</th><th class="num">\(1/\sqrt{v_t}\)</th><th>\(\hat v_t\) (corrected)</th><th class="num">\(1/\sqrt{\hat v_t}\)</th></tr></thead>
+          <tbody>
+            <tr><td>1, gradient 0.1</td><td>\(0.999\cdot 0 + 0.001(0.1)^2 = 0.00001\)</td><td class="num">316.22</td><td>\(0.00001/(1 - 0.999) = 0.01\)</td><td class="num">10</td></tr>
+            <tr><td>2, gradient 0</td><td>\(0.999\cdot 0.00001 = 0.00000999\)</td><td class="num">316.38</td><td>\(0.00000999/(1 - 0.999^2) \approx 0.0050\)</td><td class="num">≈ 14</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">The slide rounds \(1 - 0.999^2 = 0.001999\) to 0.0019 and gets 0.0052 and 13.8 in the last row.</p>
+      <p>Without correction the first effective rates are enormous. As the Adam paper puts it, skipping the correction leads to "initial steps that are much larger". Bias correction keeps the initial rates moderate.</p>
+      <p>The demo compares Adam with and without bias correction (\(\beta_2 = 0.999\), \(\eta_0 = 0.1\)). Adam without correction (blue) makes very large initial updates, rushes ahead and has to come back. It still converges on this toy surface, but in general a huge first step could land in a region from which only a worse minimum is reachable. The plots of the effective rates agree: without correction they reach values around 2 to 2.5, with correction they start smaller. With correction the rate for the sparse \(w\) also keeps increasing as the point enters the valley, where \(w\) still has to move, which is the behaviour we want. <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=m9g9Hij1h1A&amp;t=1142s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 19:02</a></p>
+      <h3>Noisy observations of a smooth curve</h3>
+      <p>A second view: gradients computed from mini-batches are noisy versions of the full-batch gradient, which would trace a smooth curve over the iterations. An exponential moving average smooths the noise, much like averaging over a recent window, since older points carry negligible powers of \(\beta\). Without correction the average starts at \(m_0 = 0\) and gives the first observation weight only \(1-\beta\). With \(\beta = 0.999\), a first value near 1 becomes 0.001, the estimate stays stuck near zero, and it takes many steps before the zero start is forgotten and the average reaches the true curve. With correction, \(\hat m_1 = (1-\beta)x_1/(1-\beta) = x_1\) (a first value of 0.5 gives exactly 0.5), so the estimate starts in the right place and stays close. <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=m9g9Hij1h1A&amp;t=1581s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 26:21</a></p>
+      <figure id="ema-fig">
+        <div class="controls">
+          <label for="ema-beta">Decay \(\beta\)</label>
+          <input type="range" id="ema-beta" min="0.5" max="0.99" step="0.01" value="0.9">
+          <output id="ema-beta-out" for="ema-beta">0.90</output>
+          <label class="check"><input type="checkbox" id="ema-raw" checked> without correction</label>
+          <label class="check"><input type="checkbox" id="ema-bc" checked> bias-corrected</label>
+          <label class="check"><input type="checkbox" id="ema-max"> max norm</label>
+        </div>
+        <div class="readouts">
+          <div><span class="k">true value at t = 1</span><span class="v" id="ema-true">–</span></div>
+          <div><span class="k">m₁ (no correction)</span><span class="v" id="ema-m1">–</span></div>
+          <div><span class="k">m̂₁ (corrected)</span><span class="v mine" id="ema-mh1">–</span></div>
+          <div><span class="k">mean |error|, t ≤ 10: raw / corrected</span><span class="v" id="ema-err">–</span></div>
+        </div>
+        <div class="status" id="ema-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="l05-ema-svg" viewBox="0 0 640 300" role="img" aria-label="Synthetic noisy observations of a smooth curve over 100 time steps, with the true curve dashed. The exponential moving average without bias correction starts near zero and lags the curve for the first steps; the bias-corrected average starts at the first observation. Optionally, the max-norm estimate max of beta times the previous value and the current absolute value is shown."></svg></div>
+        <figcaption><b>Exponential averaging with and without bias correction.</b> Synthetic data generated for these notes: 100 noisy observations (dots) of a smooth curve (dashed). The uncorrected average \(m_t = \beta m_{t-1} + (1-\beta)x_t\) starts at zero and is pulled toward it for roughly the first \(1/(1-\beta)\) steps; the corrected \(\hat m_t = m_t/(1-\beta^t)\) starts at \(x_1\). The max-norm estimate \(\max(\beta v_{t-1}, |x_t|)\) from the next section also has no zero bias, but it tracks the recent peaks instead of the average.</figcaption>
+      </figure>
+    </section>
+
+    <section id="adamax">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2mSof7c4Jo&amp;t=31s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M13 · 0:31</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2mSof7c4Jo&amp;t=185s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M13 · 3:05 p to infinity</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2mSof7c4Jo&amp;t=431s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M13 · 7:11 max in place of L2</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2mSof7c4Jo&amp;t=743s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M13 · 12:23 sparse gradients</a>
+        </div>
+        <h2>Max norm: MaxProp and AdaMax</h2>
+      </div>
+      <p>The \(L^p\) norm of a vector is</p>
+      <div class="eq">\[ L^p = \big(|x_1|^p + |x_2|^p + \cdots + |x_n|^p\big)^{1/p}, \qquad p \ge 1 \]</div>
+      <p>To visualize it, fix \(L^p = 1\) in two dimensions, so \(|x_1|^p + |x_2|^p = 1\), and vary \(p\). For \(p = 1\) the set is a diamond; the point \((0.5, -0.5)\) is on it because \(0.5 + 0.5 = 1\). For \(p = 2\) it is the unit circle. Any \(p \ge 1\) is allowed, but large \(p\) is numerically unstable: a small \(|x|\) raised to a high power becomes too small to represent, and a value above 1 blows up. That is one reason \(L^2\) is the usual choice.</p>
+      <figure>
+        <div class="fig-scroll">
+<svg class="dg" viewBox="0 0 640 300" role="img" aria-label="Left: the set of two-dimensional vectors with norm 1 for p equals 1 (a diamond), p equals 2 (a circle), p equals 4 (a rounded square) and p equals infinity (a square). Right: the p-norm of the vector (0.6, 0.9) plotted against p, falling from 1.5 at p equals 1 toward 0.9, the larger entry.">
+<text class="d-h" x="20" y="22">Vectors with ‖x‖ₚ = 1</text>
+<line class="d-rule" x1="6" y1="156" x2="258" y2="156"/>
+<line class="d-rule" x1="132" y1="31" x2="132" y2="281"/>
+<text class="d-al" x="256" y="150" text-anchor="end">x₁</text>
+<text class="d-al" x="138" y="42">x₂</text>
+<path class="d-ln" d="M232 156 L132 56 L32 156 L132 256 Z"/>
+<circle class="d-ln-acc" cx="132" cy="156" r="100" style="stroke-width:2"/>
+<path class="d-ln d-dash" d="M232 156 L232 149.4 L232 142.8 L232 136.1 L231.9 129.2 L231.7 122.2 L231.3 114.9 L230.6 107.4 L229.4 99.8 L227.6 92.2 L224.8 84.8 L221 77.9 L216.1 71.9 L210.1 67 L203.2 63.2 L195.8 60.4 L188.2 58.6 L180.6 57.4 L173.1 56.7 L165.8 56.3 L158.8 56.1 L151.9 56 L145.2 56 L138.6 56 L132 56 L125.4 56 L118.8 56 L112.1 56 L105.2 56.1 L98.2 56.3 L90.9 56.7 L83.4 57.4 L75.8 58.6 L68.2 60.4 L60.8 63.2 L53.9 67 L47.9 71.9 L43 77.9 L39.2 84.8 L36.4 92.2 L34.6 99.8 L33.4 107.4 L32.7 114.9 L32.3 122.2 L32.1 129.2 L32 136.1 L32 142.8 L32 149.4 L32 156 L32 162.6 L32 169.2 L32 175.9 L32.1 182.8 L32.3 189.8 L32.7 197.1 L33.4 204.6 L34.6 212.2 L36.4 219.8 L39.2 227.2 L43 234.1 L47.9 240.1 L53.9 245 L60.8 248.8 L68.2 251.6 L75.8 253.4 L83.4 254.6 L90.9 255.3 L98.2 255.7 L105.2 255.9 L112.1 256 L118.8 256 L125.4 256 L132 256 L138.6 256 L145.2 256 L151.9 256 L158.8 255.9 L165.8 255.7 L173.1 255.3 L180.6 254.6 L188.2 253.4 L195.8 251.6 L203.2 248.8 L210.1 245 L216.1 240.1 L221 234.1 L224.8 227.2 L227.6 219.8 L229.4 212.2 L230.6 204.6 L231.3 197.1 L231.7 189.8 L231.9 182.8 L232 175.9 L232 169.2 L232 162.6 L232 156 Z"/>
+<rect class="d-ln" x="32" y="56" width="200" height="200" style="stroke-width:2"/>
+<circle class="pt-new" cx="182.0" cy="206.0" r="4.5"/>
+<text class="d-s" x="173.0" y="210.0" text-anchor="end">(0.5, −0.5)</text>
+<line class="d-ln" x1="252" y1="44" x2="270" y2="44" style=""/>
+<text class="d-s" x="276" y="48">p = 1</text>
+<line class="d-ln-acc" x1="252" y1="64" x2="270" y2="64" style="stroke-width:2"/>
+<text class="d-s" x="276" y="68">p = 2</text>
+<line class="d-ln d-dash" x1="252" y1="84" x2="270" y2="84" style=""/>
+<text class="d-s" x="276" y="88">p = 4</text>
+<line class="d-ln" x1="252" y1="104" x2="270" y2="104" style="stroke-width:2"/>
+<text class="d-s" x="276" y="108">p = ∞ (max)</text>
+<line class="d-rule" x1="345" y1="10" x2="345" y2="290"/>
+<text class="d-h" x="362" y="22">‖(0.6, 0.9)‖ₚ as p grows</text>
+<line class="d-rule" x1="380" y1="250" x2="610" y2="250"/>
+<line class="d-rule" x1="380" y1="250" x2="380" y2="44"/>
+<text class="d-al" x="380" y="266" text-anchor="middle">1</text>
+<text class="d-al" x="400.9" y="266" text-anchor="middle">2</text>
+<text class="d-al" x="442.7" y="266" text-anchor="middle">4</text>
+<text class="d-al" x="484.5" y="266" text-anchor="middle">6</text>
+<text class="d-al" x="526.4" y="266" text-anchor="middle">8</text>
+<text class="d-al" x="568.2" y="266" text-anchor="middle">10</text>
+<text class="d-al" x="610" y="266" text-anchor="middle">12</text>
+<text class="d-al" x="610" y="282" text-anchor="end">p</text>
+<text class="d-al" x="374" y="229" text-anchor="end">0.9</text>
+<text class="d-al" x="374" y="154" text-anchor="end">1.2</text>
+<text class="d-al" x="374" y="79" text-anchor="end">1.5</text>
+<line class="d-ln d-dash" x1="380" y1="225" x2="610" y2="225"/>
+<text class="d-s" x="610" y="241" text-anchor="end">max(0.6, 0.9) = 0.9</text>
+<path class="d-ln-acc" d="M380 75 L382.1 97.2 L384.2 114.6 L386.3 128.5 L388.4 139.9 L390.5 149.4 L392.5 157.4 L394.6 164.2 L396.7 170 L398.8 175.1 L400.9 179.6 L403 183.5 L405.1 187 L407.2 190.1 L409.3 192.8 L411.4 195.3 L413.5 197.6 L415.5 199.6 L417.6 201.5 L419.7 203.1 L421.8 204.7 L423.9 206.1 L426 207.4 L428.1 208.5 L430.2 209.6 L432.3 210.6 L434.4 211.6 L436.5 212.4 L438.5 213.2 L440.6 213.9 L442.7 214.6 L444.8 215.3 L446.9 215.9 L449 216.4 L451.1 216.9 L453.2 217.4 L455.3 217.8 L457.4 218.3 L459.5 218.7 L461.5 219 L463.6 219.4 L465.7 219.7 L467.8 220 L469.9 220.3 L472 220.5 L474.1 220.8 L476.2 221 L478.3 221.2 L480.4 221.4 L482.5 221.6 L484.5 221.8 L486.6 222 L488.7 222.2 L490.8 222.3 L492.9 222.5 L495 222.6 L497.1 222.7 L499.2 222.8 L501.3 223 L503.4 223.1 L505.5 223.2 L507.5 223.3 L509.6 223.4 L511.7 223.4 L513.8 223.5 L515.9 223.6 L518 223.7 L520.1 223.7 L522.2 223.8 L524.3 223.9 L526.4 223.9 L528.5 224 L530.5 224 L532.6 224.1 L534.7 224.1 L536.8 224.2 L538.9 224.2 L541 224.2 L543.1 224.3 L545.2 224.3 L547.3 224.4 L549.4 224.4 L551.5 224.4 L553.5 224.4 L555.6 224.5 L557.7 224.5 L559.8 224.5 L561.9 224.5 L564 224.6 L566.1 224.6 L568.2 224.6 L570.3 224.6 L572.4 224.6 L574.5 224.7 L576.5 224.7 L578.6 224.7 L580.7 224.7 L582.8 224.7 L584.9 224.7 L587 224.8 L589.1 224.8 L591.2 224.8 L593.3 224.8 L595.4 224.8 L597.5 224.8 L599.5 224.8 L601.6 224.8 L603.7 224.8 L605.8 224.8 L607.9 224.8 L610 224.9" style="stroke-width:2"/>
+<circle class="pt-tree" cx="380" cy="75" r="4"/>
+<circle class="pt-tree" cx="400.9" cy="179.6" r="4"/>
+<text class="d-s" x="390" y="79">p = 1: 1.50</text>
+<text class="d-s" x="410.9" y="173.6">p = 2: 1.08</text>
+</svg>
+        </div>
+        <figcaption><b>As \(p\) grows, the norm becomes the max.</b> Left: unit balls for \(p = 1, 2, 4, \infty\); the \(L^\infty\) ball is the square \(\max(|x_1|, |x_2|) = 1\). Right: for the vector \((0.6, 0.9)\) the \(p\)-norm falls from 1.5 at \(p = 1\) toward 0.9, its largest entry.</figcaption>
+      </figure>
+      <p>As \(p \to \infty\) the norm simply becomes \(\max(|x_1|, \dots, |x_n|)\). A proof sketch: without loss of generality let \(|x_1|\) be the largest entry and factor it out,</p>
+      <div class="eq">\[ \big(|x_1|^p + \cdots + |x_n|^p\big)^{1/p} = |x_1|\Big(1 + \big(\tfrac{|x_2|}{|x_1|}\big)^p + \cdots + \big(\tfrac{|x_n|}{|x_1|}\big)^p\Big)^{1/p} \;\xrightarrow{\;p\to\infty\;}\; |x_1| \]</div>
+      <p>Every ratio is less than 1, so its \(p\)-th power vanishes, and what remains is the \(p\)-th root of \(|x_1|^p\). (Ties with \(|x_1|\) do not matter either, since \(k^{1/p} \to 1\).) The max is easy to compute and has no numerical instability.</p>
+      <h3>Replace the \(L^2\) norm by the max</h3>
+      <p>Adam's \(\sqrt{v_t}\) is an exponentially weighted \(L^2\) norm of the past gradients. Replace it by the \(L^\infty\) norm of the same weighted history:</p>
+      <div class="eq">\[ v_t = \max\big(\beta_2^{\,t-1}|\nabla w_1|,\ \beta_2^{\,t-2}|\nabla w_2|,\ \dots,\ |\nabla w_t|\big) = \max\big(\beta_2 v_{t-1},\ |\nabla w_t|\big) \]</div>
+      <p>The recursion is a pairwise max: the decayed max so far against the current gradient's magnitude. Three things drop out. The current gradient is no longer scaled by \((1-\beta)\). There is no square root, because the \(p\)-th root was already taken when the norm became the max. And there is no bias correction for \(v_t\), because the max is not pulled toward the zero initialization: \(v_1 = \max(0, |\nabla w_1|) = |\nabla w_1|\). On the noisy-observation example, \(\max(\beta v_{t-1}, |\text{noisy } f(t)|)\) starts at the first observation and zigzags along the peaks (tick "max norm" in the widget above).</p>
+      <h3>Why the max suits sparse features <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2mSof7c4Jo&amp;t=647s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M13 · 10:47</a></h3>
+      <p>Suppose the initial gradient is large and the following gradients are zero because \(x\) is sparse. When the gradient is zero because \(x = 0\), nothing was learned, so ideally the learning rate should not change, and especially not increase. Take 50% of inputs to be zero, so the gradient alternates between 1 and 0, with \(\beta_2 = 0.999\) and \(\eta_0 = 1\):</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Step</th><th class="num">\(\nabla w\)</th><th>Max norm \(v_t\)</th><th class="num">\(\eta_0/v_t\)</th><th>Exponential average \(\hat v_t\)</th><th class="num">\(\eta_0/\sqrt{\hat v_t}\)</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td class="num">1</td><td>\(\max(0, 1) = 1\)</td><td class="num">1</td><td>\(0.001/(1 - 0.999) = 1\)</td><td class="num">1</td></tr>
+            <tr><td>2</td><td class="num">0</td><td>\(\max(0.999, 0) = 0.999\)</td><td class="num">1.001</td><td>\(0.000999/(1 - 0.999^2) = 0.4997\)</td><td class="num">1.41</td></tr>
+            <tr><td>3</td><td class="num">1</td><td>\(\max(0.998, 1) = 1\)</td><td class="num">1</td><td>\(0.001998/(1 - 0.999^3) \approx 0.667\)</td><td class="num">1.22</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">The slides give steps 1 and 2; step 3 of the exponential average is computed here with the same rule.</p>
+      <p>With the max the rate stays almost constant, moving only between 1 and 1.001. With exponential averaging (even bias-corrected) the rate jumps to 1.41 on a zero gradient and keeps rising and falling with the zeros. So the max norm is useful when you do not want sparse features to disturb the learning rate.</p>
+      <p>For a smoother gradient profile, high for the first ten or so steps and then gradually decreasing, the exponential average in RMSProp keeps increasing the learning rate while the max norm is conservative about increasing it. On that smooth convex surface both converge eventually. Low rates on steep parts and high rates on gentle parts are what we want, and on a smooth convex surface increasing the rate does no harm, so there exponential averaging wins. <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2mSof7c4Jo&amp;t=1020s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M13 · 17:00</a></p>
+      <div class="result">
+        <span class="lbl">Update rule · MaxProp (RMSProp with the max norm)</span>
+        \[ v_t = \max\big(\beta v_{t-1},\ |\nabla w_t|\big), \qquad w_{t+1} = w_t - \frac{\eta}{v_t + \epsilon}\,\nabla w_t \]
+      </div>
+      <div class="result">
+        <span class="lbl">Update rule · AdaMax (Adam with the max norm)</span>
+        \[ \begin{gathered} m_t = \beta_1 m_{t-1} + (1-\beta_1)\nabla w_t, \qquad \hat m_t = \frac{m_t}{1-\beta_1^{\,t}}, \\ v_t = \max\big(\beta_2 v_{t-1},\ |\nabla w_t|\big), \qquad w_{t+1} = w_t - \frac{\eta}{v_t + \epsilon}\,\hat m_t \end{gathered} \]
+        <p>Only \(v_t\) changes from Adam, and it needs no bias correction. Using the max norm in place of the \(L^2\) norm was proposed in the same paper as Adam, and AdaMax is used in practice. <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2mSof7c4Jo&amp;t=1113s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M13 · 18:33</a></p>
+      </div>
+    </section>
+
+    <section id="nadam">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=fsTRJeWpZ_o&amp;t=30s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M14 · 0:30</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=fsTRJeWpZ_o&amp;t=155s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M14 · 2:35 NAG with gₜ</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=fsTRJeWpZ_o&amp;t=404s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M14 · 6:44 mₜ₋₁ used twice</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=fsTRJeWpZ_o&amp;t=686s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M14 · 11:26 rewritten NAG</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=fsTRJeWpZ_o&amp;t=808s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M14 · 13:28 update rule</a>
+        </div>
+        <h2>NAdam: Nesterov momentum inside Adam</h2>
+      </div>
+      <p>NAG is better than momentum-based gradient descent, and Adam uses momentum, so the obvious next step is to give Adam the Nesterov look-ahead. That is <dfn>NAdam</dfn>. To get there, the lecture first rewrites NAG in a form that ports easily.</p>
+      <p>Two forms of the momentum history are common: \(u_t = \beta u_{t-1} + \nabla w_t\) (Module 5.4) and \(m_t = \beta m_{t-1} + (1-\beta)\nabla w_t\) (Adam). They are interchangeable, and the derivation below drops the factor \((1-\beta)\) for brevity. NAG, written with a gradient variable \(g_t\):</p>
+      <div class="eq">\[ g_t = \nabla\big(w_t - \eta\beta m_{t-1}\big), \qquad m_t = \beta m_{t-1} + g_t, \qquad w_{t+1} = w_t - \eta\,m_t \]</div>
+      <p>Walk through it with \(\eta = 1\) and \(m_{-1} = 0\):</p>
+      <div class="eq">\[ \begin{aligned} &g_0 = \nabla w_0, \quad m_0 = g_0, \quad w_1 = w_0 - \nabla(w_0 - 0) = w_0 - \nabla w_0 \\ &g_1 = \nabla(w_1 - \beta m_0), \quad m_1 = \beta m_0 + g_1, \quad w_2 = w_1 - m_1 = w_1 - \big(\beta m_0 + \nabla(w_1 - \beta m_0)\big) \end{aligned} \]</div>
+      <p>The momentum vector \(m_{t-1}\) is used twice: once to build the temporary look-ahead point \(w_1 - \beta m_0\), whose gradient is computed and which is then thrown away, and once more in the history. That means two weight updates per step, which is costly for big networks, and the equations mix the time steps \(t-1\), \(t\) and \(t+1\). But \(\beta m_0\) is already known at the previous step, so the look-ahead could have been done there: \(w_1 - \beta m_0 = (w_0 - \nabla w_0) - \beta m_0\).</p>
+      <div class="result">
+        <span class="lbl">Update rule · NAG, rewritten</span>
+        \[ g_{t+1} = \nabla w_t, \qquad m_{t+1} = \beta m_t + g_{t+1}, \qquad w_{t+1} = w_t - \eta\big(\beta m_{t+1} + g_{t+1}\big) \]
+      </div>
+      <p>Walk through again with \(\eta = 1\) and \(m_0 = 0\):</p>
+      <div class="eq">\[ \begin{aligned} &g_1 = \nabla w_0, \quad m_1 = \beta m_0 + g_1 = g_1, \quad w_1 = w_0 - \beta g_1 - g_1 \\ &g_2 = \nabla w_1, \quad m_2 = \beta m_1 + g_2 = \beta g_1 + g_2, \quad w_2 = w_1 - \big(\beta(\beta g_1 + g_2) + g_2\big) \end{aligned} \]</div>
+      <p>Now the gradient is always taken at the current weights, with no temporary point. The look-ahead is applied in the momentum step: \(w_1\) already includes the extra \(-\beta g_1\), and the gradient of that looked-ahead point is computed at the next step. Only the time steps \(t\) and \(t+1\) appear. The lecturer compares it to moving one iteration of a while loop outside the loop: the look-ahead is done before entering the next iteration, so it is not repeated inside.</p>
+      <div class="result">
+        <span class="lbl">Update rule · NAdam</span>
+        \[ \begin{gathered} m_{t+1} = \beta_1 m_t + (1-\beta_1)\nabla w_t, \qquad \hat m_{t+1} = \frac{m_{t+1}}{1-\beta_1^{\,t+1}}, \\ v_{t+1} = \beta_2 v_t + (1-\beta_2)(\nabla w_t)^2, \qquad \hat v_{t+1} = \frac{v_{t+1}}{1-\beta_2^{\,t+1}}, \\ w_{t+1} = w_t - \frac{\eta}{\sqrt{\hat v_{t+1}} + \epsilon}\Big(\beta_1\hat m_{t+1} + \frac{(1-\beta_1)\nabla w_t}{1-\beta_1^{\,t+1}}\Big) \end{gathered} \]
+      </div>
+      <p>The first four equations are Adam's. Ignoring the scale factors, the last one is \(w_{t+1} = w_t - \frac{\eta}{\sqrt{\hat v_{t+1}} + \epsilon}\big(\beta\,\hat m_{t+1} + \nabla w_t\big)\): the history plus the current gradient, the same pattern as \(\beta m_{t+1} + g_{t+1}\) in the rewritten NAG. The \(\beta_1\) and \((1-\beta_1)\) are Adam's weights on history and current gradient, and the denominators \(1-\beta_1^{\,t+1}\) are bias correction. In the demo, NAdam (blue) has smaller oscillations than Adam (black): the Nesterov effect. <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=fsTRJeWpZ_o&amp;t=992s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M14 · 16:32</a></p>
+    </section>
+
+    <section id="race">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=EcX0rqjHR9k&amp;t=1089s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 18:09 all algorithms on one plot</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=m9g9Hij1h1A&amp;t=306s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 5:06 Adam joins</a>
+        </div>
+        <h2>Six optimizers on the lecture's toy surface</h2>
+      </div>
+      <p>The lecture's demos use several data sets and surfaces. The widget below runs six of the update rules, exactly as written in the result boxes above, on the two-point problem from Module 5.1, starting from the slides' \(w = b = -2\). Each optimizer starts with the learning rate from the slides' code.</p>
+      <figure id="race-fig">
+        <div class="controls">
+          <div class="opt-btns" role="group" aria-label="Optimizer">
+            <button class="btn opt" type="button" data-opt="gd" aria-pressed="false">GD</button>
+            <button class="btn opt" type="button" data-opt="mom" aria-pressed="true">Momentum</button>
+            <button class="btn opt" type="button" data-opt="nag" aria-pressed="false">NAG</button>
+            <button class="btn opt" type="button" data-opt="adagrad" aria-pressed="false">AdaGrad</button>
+            <button class="btn opt" type="button" data-opt="rmsprop" aria-pressed="false">RMSProp</button>
+            <button class="btn opt" type="button" data-opt="adam" aria-pressed="false">Adam</button>
+          </div>
+        </div>
+        <div class="controls">
+          <label for="race-eta">Learning rate η (log scale)</label>
+          <input type="range" id="race-eta" min="-2" max="1" step="0.05" value="0">
+          <output id="race-eta-out" for="race-eta">1.0</output>
+          <label class="check"><input type="checkbox" id="race-ghosts" checked> show the others faintly</label>
+          <button class="btn" id="race-play" type="button">Replay</button>
+          <button class="btn" id="race-reset" type="button">Reset start</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">loss at start</span><span class="v" id="race-l0">–</span></div>
+          <div><span class="k">loss after 200 steps</span><span class="v mine" id="race-lend">–</span></div>
+          <div><span class="k">first step with L &lt; 0.001</span><span class="v" id="race-hit">–</span></div>
+          <div><span class="k">start (w, b)</span><span class="v" id="race-start">–</span></div>
+        </div>
+        <div class="status" id="race-status" aria-live="polite"></div>
+        <div class="chart-wrap sq"><svg id="l05-race-svg" viewBox="0 0 400 400" role="img" aria-label="Contour plot of the loss of a sigmoid neuron fitted to the points (0.5, 0.2) and (2.5, 0.9), over w and b from minus 6 to 6, with darker shading for higher loss. The minimum is marked near w 1.79, b minus 2.28. The selected optimizer's 200 iterates are drawn as dots joined by a line from the start point; the other optimizers' paths can be shown faintly."></svg></div>
+        <figcaption><b>Same surface, same start, six update rules.</b> Loss \(\tfrac12\sum_i (f(x_i) - y_i)^2\) for the slides' points \((0.5, 0.2)\) and \((2.5, 0.9)\); stronger shading means higher loss and the ring marks the minimum. Each dot is one iterate, so dense dots mean small steps. Settings: \(\beta = 0.9\) for momentum, NAG and RMSProp, \(\beta_1 = 0.9\), \(\beta_2 = 0.999\) for Adam, \(\epsilon = 10^{-8}\), 200 full-batch steps. Click or tap the plot to move the start. With only two data points no feature is sparse, so AdaGrad's advantage from the lecture's sparse example does not show here.</figcaption>
+      </figure>
+      <p>Things to look for, all from the lecture: GD's dots bunch together on the plateau around the start; momentum leaves the plateau sooner but swings past the valley floor; NAG's swings are shorter; AdaGrad's steps keep shrinking as its sum grows; RMSProp gets close fast but can keep hopping around the minimum when its step size stops shrinking; Adam combines momentum's direction with RMSProp's scaling. Then change \(\eta\) for one optimizer, or move the start onto the flat region near \((-4, -4)\), and see which rules still cope.</p>
+    </section>
+
+    <section id="which-optimizer">
+      <div class="sec-head">
+        <a class="ts" href="https://www.youtube.com/watch?v=fsTRJeWpZ_o&amp;t=1023s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M14 · 17:03</a>
+        <h2>Which optimizer should you use?</h2>
+      </div>
+      <p>The slides call this the million-dollar question. Adam seems to be more or less the default choice now, with \(\beta_1 = 0.9\), \(\beta_2 = 0.999\) and \(\epsilon = 10^{-8}\). It is supposed to be robust to the initial learning rate, but the authors have observed that \(\eta = 0.001\) or \(0.0001\) works best for sequence generation problems. Many papers also report that SGD with momentum (Nesterov or classical) and a simple annealing schedule works well in practice, again typically starting with \(\eta = 0.001\) or \(0.0001\) for sequence generation. Adam might just be the best choice overall, but some works point out that Adam fails to converge in some cases, and models trained with Adam often do not generalize as well.</p>
+      <p>The lecturer's advice: Adam is the default in most papers he has seen, and if you do not know anything else, use Adam or one of its variants such as NAdam. People who really know how to set the initial learning rate, the momentum and the learning-rate schedule for (momentum) gradient descent report results as good as Adam's, but that expertise takes time to build. The slides close the topic with Pedro Domingos's remark that newcomers start with off-the-shelf optimizers and later replace them with custom-designed ones.</p>
+      <div class="tbl-wrap">
+        <table class="opt-table">
+          <thead><tr><th>Method</th><th>Update (per parameter)</th><th>What it adds</th><th>Weak spot</th></tr></thead>
+          <tbody>
+            <tr><td>GD</td><td>\(w_{t+1} = w_t - \eta\nabla w_t\)</td><td>Step against the true gradient; loss decreases every step for small \(\eta\)</td><td>Crawls on gentle slopes; one pass over all data per step</td></tr>
+            <tr><td>Momentum</td><td>\(u_t = \beta u_{t-1} + \nabla w_t\), \(w_{t+1} = w_t - \eta u_t\)</td><td>Exponentially weighted history of gradients; fast on plateaus</td><td>Overshoots, oscillates in and out of the valley</td></tr>
+            <tr><td>NAG</td><td>\(u_t = \beta u_{t-1} + \nabla(w_t - \beta u_{t-1})\), \(w_{t+1} = w_t - \eta u_t\)</td><td>Gradient at the look-ahead point; shorter U-turns</td><td>Still oscillates a little; look-ahead costs a second weight update</td></tr>
+            <tr><td>SGD / mini-batch</td><td>Any rule above with the gradient of 1 or \(B\) points</td><td>\(N\) or \(N/B\) cheap steps per epoch</td><td>Noisy steps; no guarantee each step lowers the loss</td></tr>
+            <tr><td>Line search</td><td>Best of \(w_t - \eta\nabla w_t\) over \(\eta \in \{0.1, 0.5, 1, 2, 10\}\)</td><td>Picks a large rate on flat parts, small near the valley</td><td>One extra loss evaluation per candidate</td></tr>
+            <tr><td>AdaGrad</td><td>\(v_t = v_{t-1} + (\nabla w_t)^2\), \(w_{t+1} = w_t - \frac{\eta}{\sqrt{v_t+\epsilon}}\nabla w_t\)</td><td>Per-parameter rate; rare features keep a high rate</td><td>\(v_t\) never shrinks, so dense parameters' rates die</td></tr>
+            <tr><td>RMSProp</td><td>\(v_t = \beta v_{t-1} + (1-\beta)(\nabla w_t)^2\), same update</td><td>Decaying history; the rate can rise again</td><td>Sensitive to \(\eta_0\); can oscillate near the minimum</td></tr>
+            <tr><td>AdaDelta</td><td>\(\Delta w_t = -\frac{\sqrt{u_{t-1}+\epsilon}}{\sqrt{v_t+\epsilon}}\nabla w_t\), \(u_t = \beta u_{t-1} + (1-\beta)(\Delta w_t)^2\)</td><td>No \(\eta_0\); numerator adapts with the history of steps</td><td>None raised in the lecture</td></tr>
+            <tr><td>Adam</td><td>\(\hat m_t, \hat v_t\) bias-corrected, \(w_{t+1} = w_t - \frac{\eta}{\sqrt{\hat v_t}+\epsilon}\hat m_t\)</td><td>Momentum + RMSProp + bias correction; the usual default</td><td>Reported non-convergence in some cases; weaker generalization</td></tr>
+            <tr><td>MaxProp</td><td>\(v_t = \max(\beta v_{t-1}, |\nabla w_t|)\), \(w_{t+1} = w_t - \frac{\eta}{v_t+\epsilon}\nabla w_t\)</td><td>\(L^\infty\) norm; rate unmoved by zero gradients</td><td>Slow to raise the rate; exponential averaging wins on smooth convex surfaces</td></tr>
+            <tr><td>AdaMax</td><td>Adam's \(\hat m_t\) with \(v_t = \max(\beta_2 v_{t-1}, |\nabla w_t|)\)</td><td>Max norm inside Adam; no bias correction for \(v_t\)</td><td>As MaxProp</td></tr>
+            <tr><td>NAdam</td><td>Adam with \(\beta_1\hat m_{t+1} + \frac{(1-\beta_1)\nabla w_t}{1-\beta_1^{t+1}}\) in the numerator</td><td>Nesterov look-ahead in Adam; smaller oscillations</td><td>None raised in the lecture</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Typical constants from the slides: \(\beta = 0.9\) for momentum and RMSProp, \(\beta_1 = 0.9\), \(\beta_2 = 0.999\), \(\epsilon = 10^{-8}\) for Adam.</p>
+    </section>
+
+    <!-- ============ MODULE 5.10 ============ -->
+    <section id="lr-schemes">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=Lqauh9dJzNc&amp;t=30s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M15 · 0:30</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Lqauh9dJzNc&amp;t=90s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M15 · 1:30 saddle points</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Lqauh9dJzNc&amp;t=303s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M15 · 5:03 triangular schedule</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Lqauh9dJzNc&amp;t=489s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M15 · 8:09 escaping the saddle</a>
+        </div>
+        <h2>Learning-rate schemes and cyclical rates</h2>
+      </div>
+      <p>The last module adds a few more learning-rate schedulers to the map of schemes:</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Based on epochs</th><th>Based on validation</th><th>Based on gradients</th></tr></thead>
+          <tbody>
+            <tr><td>Step decay, exponential decay (Module 5.7)</td><td>Line search (Module 5.8)</td><td>AdaGrad, RMSProp, AdaDelta</td></tr>
+            <tr><td>Cyclical, cosine annealing, warm restart (this module)</td><td>Log search</td><td>Adam, AdaMax, NAdam</td></tr>
+            <tr><td></td><td></td><td>AMSGrad, AdamW (listed, not covered)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Log search is line search over learning rates on a log scale. The gradient-based schemes are the adaptive optimizers of Module 5.9.</p>
+      <h3>Cyclical learning rate</h3>
+      <p>Consider a loss surface shaped like a saddle. Seen from one side, a point at the end of a valley looks like a minimum, but in another direction you could still go further down. Deep-learning losses are not convex, and multiple papers report that training often stalls at saddle points. Start at the slide's yellow point with an exponentially decaying learning rate: by the time the point reaches the saddle the rate has become tiny, and although escape is possible the algorithm has no way out.</p>
+      <p>The rationale of the cyclical learning rate (CLR) paper: the difficulty in minimizing the loss often comes from saddle points rather than poor local minima, so a scheme that can increase the rate near saddle points helps. Adaptive methods can do this, but they keep extra histories per parameter, an additional computational cost. A simple alternative is to vary the learning rate cyclically between a low and a high value. If the rate is high when you need it low, or the other way round, you only have to wait out the cycle. The triangular schedule:</p>
+      <div class="eq">\[ \eta_t = \eta_{min} + (\eta_{max} - \eta_{min})\cdot\max\Big(0,\ 1 - \Big|\frac{t}{\mu} - 2\Big\lfloor 1 + \frac{t}{2\mu}\Big\rfloor + 1\Big|\Big) \]</div>
+      <p>\(\mu\) is the step size, the number of iterations to go from the minimum rate to the maximum. With \(\eta_{max} = 0.5\), \(\eta_{min} = 0.01\) and \(\mu = 20\), at \(t = 20\): \(\lfloor 1 + 20/40\rfloor = 1\), so the middle term is \(|20/20 - 2 + 1| = 0\), the max is \(\max(0, 1 - 0) = 1\), and \(\eta_{20} = 0.01 + 0.49 \cdot 1 = 0.5 = \eta_{max}\). At \(t = 30\) the middle term is \(|1.5 - 2 + 1| = 0.5\), giving \(\eta_{30} = 0.01 + 0.49\cdot 0.5 = 0.255\), halfway down again.</p>
+      <p>The slides' code wraps this as <code>cyclic_lr(iteration, max_lr=0.1, base_lr=0.001, step_size=30)</code> and uses it inside gradient descent for both \(w\) and \(b\), starting from \(w = -2,\ b = 0.0001\). In the demo, gradient descent with an exponentially decaying rate (black) enters the valley and gets stuck at the saddle. The cyclical version (blue) waits until its rate rises, gets pushed out, and continues down.</p>
+    </section>
+
+    <section id="cosine">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=Lqauh9dJzNc&amp;t=549s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M15 · 9:09</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Lqauh9dJzNc&amp;t=671s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M15 · 11:11 warm restart</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Lqauh9dJzNc&amp;t=702s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M15 · 11:42 warm start</a>
+        </div>
+        <h2>Cosine annealing, warm restarts and warm start</h2>
+      </div>
+      <p>Changing the rate cyclically can also speed up convergence. In the slides' example, gradient descent with a cosine schedule converges much faster than with the fixed rate of 1 and reaches the minimum at the 46th iteration. Run longer, it crosses the minimum, but a technique such as early stopping (<a href="lecture-06.html">Lecture 6</a>) can roll back to the best point.</p>
+      <div class="eq">\[ \eta_t = \eta_{min} + \frac{\eta_{max} - \eta_{min}}{2}\left(1 + \cos\Big(\pi\,\frac{t \bmod (T+1)}{T}\Big)\right) \]</div>
+      <p>\(\eta_{max}\) and \(\eta_{min}\) are the largest and smallest rates, \(t\) is the current epoch, and \(T\) is the restart interval (which can be adaptive). At \(t = 0\) the cosine is 1 and \(\eta_t = \eta_{max}\); at \(t = T\) it is \(\cos\pi = -1\) and \(\eta_t = \eta_{min}\). With \(\eta_{max} = 1\), \(\eta_{min} = 0.1\) and \(T = 50\): at \(t = 50\), \((50 \bmod 51)/50 = 1\) gives \(\eta = 0.1\), and at \(t = 51\), \(51 \bmod 51 = 0\) sends the rate straight back to 1. The abrupt jump after every \(T\) steps is why this is called a <dfn>warm restart</dfn>: instead of climbing back gradually, as the triangular schedule does, it restarts from a warm, high rate and anneals down again. The slide notes this is a version of the paper's formula modified for batch gradient descent; the original works with SGD and restarts after a given epoch \(T_i\).</p>
+      <p><dfn>Warm start</dfn> (warmup) is popular in the Transformer literature (<a href="lecture-14.html">Lecture 14</a>). All the schedules so far, and the adaptive methods, start with some rate and decay it. Warm start lets the rate rise gradually to its maximum first and only then decays it. At the start the parameters are random and the gradients unreliable, so the steps are kept small; as confidence grows the rate increases, and from the peak onward it decays. This is the default schedule for Transformer-based architectures. The number of warmup steps sets how long the rise lasts: the lecture compares 2000 and 4000 warmup steps (the slide uses 4000), and the shorter warmup rises more steeply before decaying.</p>
+      <p class="note">Standard form (not in the lecture): the original Transformer schedule is \(\eta = d_{model}^{-0.5}\cdot\min\big(\text{step}^{-0.5},\ \text{step}\cdot\text{warmup}^{-1.5}\big)\), a linear rise followed by a decay proportional to \(1/\sqrt{\text{step}}\). It is used for the last panel below.</p>
+      <figure>
+        <div class="fig-scroll">
+<svg class="dg" viewBox="0 0 660 410" role="img" aria-label="Six small plots of learning rate against time. Step decay halves the rate every 5 epochs. Exponential and 1 over t decay fall smoothly. The triangular cyclical rate rises and falls between 0.01 and 0.5 every 40 iterations. Cosine annealing falls from 1 to 0.1 over 50 iterations and then jumps back to 1. Warm start rises linearly for the warmup steps and then decays.">
+<text class="d-t" x="20" y="34">Step decay</text>
+<text class="d-s" x="20" y="50">halve every 5 epochs</text>
+<line class="d-rule" x1="46" y1="176" x2="226" y2="176"/>
+<line class="d-rule" x1="46" y1="60" x2="46" y2="176"/>
+<text class="d-al" x="41" y="68" text-anchor="end">1</text>
+<text class="d-al" x="41" y="180" text-anchor="end">0</text>
+<text class="d-al" x="226" y="191" text-anchor="end">epoch 30</text>
+<path class="d-ln-acc" d="M46 64 L76 64 L76 120 L106 120 L106 148 L136 148 L136 162 L166 162 L166 169 L196 169 L196 172.5 L226 172.5" style="stroke-width:2"/>
+<text class="d-t" x="232" y="34">Exponential decay</text>
+<text class="d-s" x="232" y="50">η₀e^(−kt), k = 0.1</text>
+<line class="d-rule" x1="258" y1="176" x2="438" y2="176"/>
+<line class="d-rule" x1="258" y1="60" x2="258" y2="176"/>
+<text class="d-al" x="253" y="68" text-anchor="end">1</text>
+<text class="d-al" x="253" y="180" text-anchor="end">0</text>
+<text class="d-al" x="438" y="191" text-anchor="end">epoch 30</text>
+<path class="d-ln-acc" d="M258 64 L261 69.5 L264 74.7 L267 79.6 L270 84.3 L273 88.8 L276 93 L279 97.1 L282 100.9 L285 104.6 L288 108.1 L291 111.4 L294 114.5 L297 117.5 L300 120.4 L303 123.1 L306 125.7 L309 128.1 L312 130.5 L315 132.7 L318 134.8 L321 136.8 L324 138.7 L327 140.5 L330 142.3 L333 143.9 L336 145.5 L339 147 L342 148.4 L345 149.7 L348 151 L351 152.2 L354 153.4 L357 154.5 L360 155.5 L363 156.5 L366 157.5 L369 158.4 L372 159.2 L375 160.1 L378 160.8 L381 161.6 L384 162.3 L387 163 L390 163.6 L393 164.2 L396 164.8 L399 165.3 L402 165.8 L405 166.3 L408 166.8 L411 167.3 L414 167.7 L417 168.1 L420 168.5 L423 168.8 L426 169.2 L429 169.5 L432 169.8 L435 170.1 L438 170.4" style="stroke-width:2"/>
+<text class="d-t" x="444" y="34">1/t decay</text>
+<text class="d-s" x="444" y="50">η₀/(1 + kt), k = 0.5</text>
+<line class="d-rule" x1="470" y1="176" x2="650" y2="176"/>
+<line class="d-rule" x1="470" y1="60" x2="470" y2="176"/>
+<text class="d-al" x="465" y="68" text-anchor="end">1</text>
+<text class="d-al" x="465" y="180" text-anchor="end">0</text>
+<text class="d-al" x="650" y="191" text-anchor="end">epoch 30</text>
+<path class="d-ln-acc" d="M470 64 L473 86.4 L476 101.3 L479 112 L482 120 L485 126.2 L488 131.2 L491 135.3 L494 138.7 L497 141.5 L500 144 L503 146.1 L506 148 L509 149.6 L512 151.1 L515 152.4 L518 153.6 L521 154.7 L524 155.6 L527 156.5 L530 157.3 L533 158.1 L536 158.8 L539 159.4 L542 160 L545 160.6 L548 161.1 L551 161.5 L554 162 L557 162.4 L560 162.8 L563 163.2 L566 163.6 L569 163.9 L572 164.2 L575 164.5 L578 164.8 L581 165.1 L584 165.3 L587 165.6 L590 165.8 L593 166 L596 166.3 L599 166.5 L602 166.7 L605 166.9 L608 167 L611 167.2 L614 167.4 L617 167.5 L620 167.7 L623 167.9 L626 168 L629 168.1 L632 168.3 L635 168.4 L638 168.5 L641 168.7 L644 168.8 L647 168.9 L650 169" style="stroke-width:2"/>
+<text class="d-t" x="20" y="230">Triangular (cyclical)</text>
+<text class="d-s" x="20" y="246">η 0.01 to 0.5, μ = 20</text>
+<line class="d-rule" x1="46" y1="372" x2="226" y2="372"/>
+<line class="d-rule" x1="46" y1="256" x2="46" y2="372"/>
+<text class="d-al" x="41" y="264" text-anchor="end">0.5</text>
+<text class="d-al" x="41" y="376" text-anchor="end">0</text>
+<text class="d-al" x="226" y="387" text-anchor="end">iteration 120</text>
+<path class="d-ln-acc" d="M46 369.8 L47.5 364.3 L49 358.8 L50.5 353.3 L52 347.8 L53.5 342.3 L55 336.8 L56.5 331.3 L58 325.9 L59.5 320.4 L61 314.9 L62.5 309.4 L64 303.9 L65.5 298.4 L67 292.9 L68.5 287.4 L70 282 L71.5 276.5 L73 271 L74.5 265.5 L76 260 L77.5 265.5 L79 271 L80.5 276.5 L82 282 L83.5 287.4 L85 292.9 L86.5 298.4 L88 303.9 L89.5 309.4 L91 314.9 L92.5 320.4 L94 325.9 L95.5 331.3 L97 336.8 L98.5 342.3 L100 347.8 L101.5 353.3 L103 358.8 L104.5 364.3 L106 369.8 L107.5 364.3 L109 358.8 L110.5 353.3 L112 347.8 L113.5 342.3 L115 336.8 L116.5 331.3 L118 325.9 L119.5 320.4 L121 314.9 L122.5 309.4 L124 303.9 L125.5 298.4 L127 292.9 L128.5 287.4 L130 282 L131.5 276.5 L133 271 L134.5 265.5 L136 260 L137.5 265.5 L139 271 L140.5 276.5 L142 282 L143.5 287.4 L145 292.9 L146.5 298.4 L148 303.9 L149.5 309.4 L151 314.9 L152.5 320.4 L154 325.9 L155.5 331.3 L157 336.8 L158.5 342.3 L160 347.8 L161.5 353.3 L163 358.8 L164.5 364.3 L166 369.8 L167.5 364.3 L169 358.8 L170.5 353.3 L172 347.8 L173.5 342.3 L175 336.8 L176.5 331.3 L178 325.9 L179.5 320.4 L181 314.9 L182.5 309.4 L184 303.9 L185.5 298.4 L187 292.9 L188.5 287.4 L190 282 L191.5 276.5 L193 271 L194.5 265.5 L196 260 L197.5 265.5 L199 271 L200.5 276.5 L202 282 L203.5 287.4 L205 292.9 L206.5 298.4 L208 303.9 L209.5 309.4 L211 314.9 L212.5 320.4 L214 325.9 L215.5 331.3 L217 336.8 L218.5 342.3 L220 347.8 L221.5 353.3 L223 358.8 L224.5 364.3 L226 369.8" style="stroke-width:2"/>
+<text class="d-t" x="232" y="230">Cosine, warm restarts</text>
+<text class="d-s" x="232" y="246">η 0.1 to 1, T = 50</text>
+<line class="d-rule" x1="258" y1="372" x2="438" y2="372"/>
+<line class="d-rule" x1="258" y1="256" x2="258" y2="372"/>
+<text class="d-al" x="253" y="264" text-anchor="end">1</text>
+<text class="d-al" x="253" y="376" text-anchor="end">0</text>
+<text class="d-al" x="438" y="387" text-anchor="end">iteration 150</text>
+<path class="d-ln-acc" d="M258 260 L259.2 260.1 L260.4 260.4 L261.6 260.9 L262.8 261.6 L264 262.5 L265.2 263.5 L266.4 264.8 L267.6 266.2 L268.8 267.8 L270 269.6 L271.2 271.6 L272.4 273.7 L273.6 275.9 L274.8 278.3 L276 280.8 L277.2 283.4 L278.4 286.1 L279.6 288.9 L280.8 291.8 L282 294.8 L283.2 297.9 L284.4 301 L285.6 304.1 L286.8 307.2 L288 310.4 L289.2 313.6 L290.4 316.7 L291.6 319.8 L292.8 322.9 L294 326 L295.2 329 L296.4 331.9 L297.6 334.7 L298.8 337.4 L300 340 L301.2 342.5 L302.4 344.9 L303.6 347.1 L304.8 349.2 L306 351.2 L307.2 353 L308.4 354.6 L309.6 356 L310.8 357.3 L312 358.3 L313.2 359.2 L314.4 359.9 L315.6 360.4 L316.8 360.7 L318 360.8 M319.2 260 L320.4 260.1 L321.6 260.4 L322.8 260.9 L324 261.6 L325.2 262.5 L326.4 263.5 L327.6 264.8 L328.8 266.2 L330 267.8 L331.2 269.6 L332.4 271.6 L333.6 273.7 L334.8 275.9 L336 278.3 L337.2 280.8 L338.4 283.4 L339.6 286.1 L340.8 288.9 L342 291.8 L343.2 294.8 L344.4 297.9 L345.6 301 L346.8 304.1 L348 307.2 L349.2 310.4 L350.4 313.6 L351.6 316.7 L352.8 319.8 L354 322.9 L355.2 326 L356.4 329 L357.6 331.9 L358.8 334.7 L360 337.4 L361.2 340 L362.4 342.5 L363.6 344.9 L364.8 347.1 L366 349.2 L367.2 351.2 L368.4 353 L369.6 354.6 L370.8 356 L372 357.3 L373.2 358.3 L374.4 359.2 L375.6 359.9 L376.8 360.4 L378 360.7 L379.2 360.8 M380.4 260 L381.6 260.1 L382.8 260.4 L384 260.9 L385.2 261.6 L386.4 262.5 L387.6 263.5 L388.8 264.8 L390 266.2 L391.2 267.8 L392.4 269.6 L393.6 271.6 L394.8 273.7 L396 275.9 L397.2 278.3 L398.4 280.8 L399.6 283.4 L400.8 286.1 L402 288.9 L403.2 291.8 L404.4 294.8 L405.6 297.9 L406.8 301 L408 304.1 L409.2 307.2 L410.4 310.4 L411.6 313.6 L412.8 316.7 L414 319.8 L415.2 322.9 L416.4 326 L417.6 329 L418.8 331.9 L420 334.7 L421.2 337.4 L422.4 340 L423.6 342.5 L424.8 344.9 L426 347.1 L427.2 349.2 L428.4 351.2 L429.6 353 L430.8 354.6 L432 356 L433.2 357.3 L434.4 358.3 L435.6 359.2 L436.8 359.9 L438 360.4" style="stroke-width:2"/>
+<line class="d-ln-acc d-dash" x1="318.6" y1="360.8" x2="319.2" y2="260" style="stroke-width:1"/>
+<line class="d-ln-acc d-dash" x1="379.8" y1="360.8" x2="380.4" y2="260" style="stroke-width:1"/>
+<text class="d-t" x="444" y="230">Warm start (warmup)</text>
+<text class="d-s" x="444" y="246">warmup 4000 (solid), 2000 (dashed)</text>
+<line class="d-rule" x1="470" y1="372" x2="650" y2="372"/>
+<line class="d-rule" x1="470" y1="256" x2="470" y2="372"/>
+<text class="d-al" x="465" y="264" text-anchor="end">peak</text>
+<text class="d-al" x="465" y="376" text-anchor="end">0</text>
+<text class="d-al" x="650" y="387" text-anchor="end">step 20000</text>
+<path class="d-ln-acc" d="M470 372 L506 292.8 L508.2 295.2 L510.5 297.3 L512.8 299.3 L515 301.2 L517.2 302.9 L519.5 304.5 L521.8 305.9 L524 307.3 L526.2 308.6 L528.5 309.9 L530.8 311 L533 312.1 L535.2 313.2 L537.5 314.2 L539.8 315.1 L542 316 L544.2 316.9 L546.5 317.7 L548.8 318.5 L551 319.2 L553.2 319.9 L555.5 320.6 L557.8 321.3 L560 321.9 L562.2 322.5 L564.5 323.1 L566.8 323.7 L569 324.2 L571.2 324.8 L573.5 325.3 L575.8 325.8 L578 326.3 L580.2 326.7 L582.5 327.2 L584.8 327.6 L587 328.1 L589.2 328.5 L591.5 328.9 L593.8 329.3 L596 329.7 L598.2 330 L600.5 330.4 L602.8 330.8 L605 331.1 L607.2 331.4 L609.5 331.8 L611.8 332.1 L614 332.4 L616.2 332.7 L618.5 333 L620.8 333.3 L623 333.6 L625.2 333.9 L627.5 334.1 L629.8 334.4 L632 334.7 L634.2 334.9 L636.5 335.2 L638.8 335.4 L641 335.7 L643.2 335.9 L645.5 336.1 L647.8 336.4 L650 336.6" style="stroke-width:2"/>
+<path class="d-ln d-dash" d="M470 372 L488 260 L490.2 266.4 L492.5 271.8 L494.8 276.5 L497 280.6 L499.2 284.1 L501.5 287.3 L503.8 290.2 L506 292.8 L508.2 295.2 L510.5 297.3 L512.8 299.3 L515 301.2 L517.2 302.9 L519.5 304.5 L521.8 305.9 L524 307.3 L526.2 308.6 L528.5 309.9 L530.8 311 L533 312.1 L535.2 313.2 L537.5 314.2 L539.8 315.1 L542 316 L544.2 316.9 L546.5 317.7 L548.8 318.5 L551 319.2 L553.2 319.9 L555.5 320.6 L557.8 321.3 L560 321.9 L562.2 322.5 L564.5 323.1 L566.8 323.7 L569 324.2 L571.2 324.8 L573.5 325.3 L575.8 325.8 L578 326.3 L580.2 326.7 L582.5 327.2 L584.8 327.6 L587 328.1 L589.2 328.5 L591.5 328.9 L593.8 329.3 L596 329.7 L598.2 330 L600.5 330.4 L602.8 330.8 L605 331.1 L607.2 331.4 L609.5 331.8 L611.8 332.1 L614 332.4 L616.2 332.7 L618.5 333 L620.8 333.3 L623 333.6 L625.2 333.9 L627.5 334.1 L629.8 334.4 L632 334.7 L634.2 334.9 L636.5 335.2 L638.8 335.4 L641 335.7 L643.2 335.9 L645.5 336.1 L647.8 336.4 L650 336.6" style="stroke-width:2"/>
+</svg>
+        </div>
+        <figcaption><b>The learning-rate schedules of this lecture, to scale.</b> Top: the annealing rules of Module 5.7 with \(\eta_0 = 1\) (the values of \(k\) are chosen for the plot). Bottom: the triangular cyclical rate with the slide's \(\eta_{min} = 0.01\), \(\eta_{max} = 0.5\), \(\mu = 20\); cosine annealing with the slide's \(\eta_{max} = 1\), \(\eta_{min} = 0.1\), \(T = 50\), whose vertical dashes are the warm restarts; and warm start with 4000 and 2000 warmup steps, scaled so the 2000-step peak is 1.</figcaption>
+      </figure>
+      <p>Any of these schedules can be used together with the optimization algorithms above.</p>
+    </section>
+
+    <!-- ============ REVISION ============ -->
+    <section id="terms">
+      <div class="sec-head"><h2>Key terms</h2></div>
+      <dl class="terms">
+        <div><dt>Gradient descent rule</dt><dd>\(w_{t+1} = w_t - \eta\nabla w_t\): the direction that makes the first-order Taylor change most negative.</dd></div>
+        <div><dt>Contour map</dt><dd>Top view of equal-loss slices; close rings mean a steep slope, distant rings a gentle one.</dd></div>
+        <div><dt>Momentum</dt><dd>Update with the history \(u_t = \beta u_{t-1} + \nabla w_t = \sum_\tau \beta^{t-\tau}\nabla w_\tau\) instead of the current gradient alone.</dd></div>
+        <div><dt>Nesterov look-ahead</dt><dd>Compute the gradient after the history move, \(\nabla(w_t - \beta u_{t-1})\), to brake before overshooting.</dd></div>
+        <div><dt>Epoch and step</dt><dd>An epoch is one pass over the data; a step is one parameter update (1, \(N\) or \(N/B\) per epoch).</dd></div>
+        <div><dt>Mini-batch</dt><dd>\(B\) points whose summed gradient estimates the true gradient; \(B = 1\) is SGD, \(B = N\) is batch GD.</dd></div>
+        <div><dt>Annealing</dt><dd>Reducing the learning rate during training: step, exponential, \(1/t\) or validation-based decay.</dd></div>
+        <div><dt>Line search</dt><dd>Trying several learning rates each step and keeping the update with the lowest loss.</dd></div>
+        <div><dt>Effective learning rate</dt><dd>The actual multiplier of the gradient, such as \(\eta/\sqrt{v_t + \epsilon}\) in AdaGrad and RMSProp.</dd></div>
+        <div><dt>Sparse feature</dt><dd>An input that is zero for most data points, so its weight gets small, rare gradients.</dd></div>
+        <div><dt>Bias correction</dt><dd>Dividing an exponential average started at 0 by \(1-\beta^t\) so its expectation equals the gradient's.</dd></div>
+        <div><dt>Max (\(L^\infty\)) norm</dt><dd>The limit of the \(L^p\) norm as \(p \to \infty\); in AdaMax, \(v_t = \max(\beta_2 v_{t-1}, |\nabla w_t|)\).</dd></div>
+        <div><dt>Warm restart</dt><dd>Jumping the learning rate back to its maximum at the end of each cosine-annealing cycle.</dd></div>
+        <div><dt>Warm start (warmup)</dt><dd>Raising the learning rate from small to its peak over the first steps, then decaying it.</dd></div>
+      </dl>
+    </section>
+
+    <section id="test">
+      <div class="sec-head"><h2>Test yourself</h2></div>
+      <div class="quiz">
+        <details><summary><span class="q">Q1</span><span>Starting from \(\mathcal{L}(\boldsymbol\theta + \eta\mathbf{u}) \approx \mathcal{L}(\boldsymbol\theta) + \eta\,\mathbf{u}^\top\nabla\mathcal{L}(\boldsymbol\theta)\), why is \(\mathbf{u} = -\nabla\mathcal{L}\) the best direction, and why does gradient descent crawl on a plateau?</span><span class="tog"></span></summary>
+          <p>The change in loss is \(\eta\,\mathbf{u}^\top\nabla\mathcal{L} = \eta\,k\cos\beta\) with \(k = \lVert\mathbf{u}\rVert\lVert\nabla\mathcal{L}\rVert\), most negative at \(\beta = 180^\circ\), the direction opposite to the gradient. The step is \(\eta\nabla w\), so where the gradient is tiny, as on a plateau, the step is tiny too. With \(\eta = 1\) and a gradient of 0.002 the weight moves by only 0.002.</p></details>
+        <details><summary><span class="q">Q2</span><span>With \(\beta = 0.9\), write \(u_3\) for momentum in terms of the gradients. What weight does \(\nabla w_0\) get?</span><span class="tog"></span></summary>
+          <p>\(u_3 = \beta^3\nabla w_0 + \beta^2\nabla w_1 + \beta\nabla w_2 + \nabla w_3\), which with \(\beta = 0.9\) is \(0.729\nabla w_0 + 0.81\nabla w_1 + 0.9\nabla w_2 + \nabla w_3\). The oldest gradient has weight 0.729, and the weights keep shrinking by a factor 0.9 per step back in time.</p></details>
+        <details><summary><span class="q">Q3</span><span>Why does NAG take shorter U-turns than momentum?</span><span class="tog"></span></summary>
+          <p>It first moves by the history and computes the gradient there. If the history move has already crossed the minimum, that gradient points back and partly cancels the history, so the combined step stops near the minimum. Momentum uses the gradient at \(w_t\), which still points forward, and adds it to the history, overshooting further.</p></details>
+        <details><summary><span class="q">Q4</span><span>A data set has 1000 points. How many parameter updates are made in one epoch by batch GD, SGD and mini-batch GD with \(B = 100\)? What does each gain or lose?</span><span class="tog"></span></summary>
+          <p>1, 1000 and 10. Batch GD uses the true gradient, so each step reduces the loss, but each step is expensive. SGD steps are cheap but noisy, since each point pulls the parameters its own way. Mini-batches average 100 gradients for a better estimate at a moderate cost.</p></details>
+        <details><summary><span class="q">Q5</span><span>In the AdaGrad demo, \(\eta_0 = 0.1\), the first squared gradient for \(b\) is 84.45 and the first history for \(w\) is 0.019. Compute both first effective rates and explain the difference.</span><span class="tog"></span></summary>
+          <p>For \(b\): \(0.1/\sqrt{84.45} \approx 0.011\). For \(w\): \(0.1/\sqrt{0.019} \approx 0.72\). The feature for \(w\) is zero for about 80% of the points, so its gradients are small and its accumulated history stays small, which keeps its rate high. \(b\)'s input is always 1, so its history grows fast and its rate decays fast.</p></details>
+        <details><summary><span class="q">Q6</span><span>Why can RMSProp end up oscillating around the minimum, which AdaGrad does not?</span><span class="tog"></span></summary>
+          <p>RMSProp's \(v_t\) is an exponentially decaying average, so once the gradients have been tiny for a while it settles to a nearly constant value and the effective rate \(\eta_0/\sqrt{v_t + \epsilon}\) becomes constant. A constant rate can send the iterate back and forth between two points on either side of the minimum. AdaGrad's sum never decreases, so its rate keeps falling (which causes the opposite problem of stalling).</p></details>
+        <details><summary><span class="q">Q7</span><span>Show that \(E[m_t] = (1-\beta^t)E[\nabla w]\) for Adam's first moment, and compute \(\hat m_1\).</span><span class="tog"></span></summary>
+          <p>Unrolling from \(m_0 = 0\) gives \(m_t = (1-\beta)\sum_{\tau=1}^t\beta^{t-\tau}\nabla w_\tau\). Assuming every gradient has the same expectation, \(E[m_t] = E[\nabla w](1-\beta)\sum_{k=0}^{t-1}\beta^k\), and the geometric sum makes this \(E[\nabla w](1-\beta^t)\). For \(t = 1\), \(m_1 = (1-\beta)\nabla w_1\) and \(\hat m_1 = m_1/(1-\beta) = \nabla w_1\), the first gradient itself instead of a value shrunk toward zero.</p></details>
+        <details><summary><span class="q">Q8</span><span>With the triangular schedule \(\eta_{min} = 0.01\), \(\eta_{max} = 0.5\), \(\mu = 20\), what is \(\eta_{40}\)? And with cosine annealing, \(\eta_{max} = 1\), \(\eta_{min} = 0.1\), \(T = 50\), what is \(\eta_{25}\)?</span><span class="tog"></span></summary>
+          <p>Triangular: \(\lfloor 1 + 40/40\rfloor = 2\), so the middle term is \(|40/20 - 4 + 1| = 1\), the max is \(\max(0, 0) = 0\), and \(\eta_{40} = \eta_{min} = 0.01\), the bottom of the cycle. Cosine: \(\cos(\pi\cdot 25/50) = \cos(\pi/2) = 0\), so \(\eta_{25} = 0.1 + 0.45\cdot(1 + 0) = 0.55\), halfway between the extremes.</p></details>
+      </div>
+    </section>
+
+    <!-- PAGER:START --><nav class="pager" aria-label="Previous and next lecture"><a href="index.html"><span class="dir">← All lectures</span><span class="nm">Course map</span></a><a class="next" href="lecture-08.html"><span class="dir">Lecture 8 →</span><span class="nm">Convolutional neural networks</span></a></nav><!-- PAGER:END -->
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the official lecture slides and the module videos' YouTube auto-generated captions. Timestamp links open the video at that moment. Charts marked synthetic use data generated for these notes. Not an official IIT Madras resource.</div>
+</footer>
+
+<script src="notes.js"></script>
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const mkRand = s0 => { let seed = s0; return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
+  const fmt = v => { if (!isFinite(v)) return '–'; const a = Math.abs(v); const s = a === 0 ? '0' : a >= 0.01 ? v.toFixed(a >= 1 ? 2 : 3) : v.toExponential(1); return s.replace(/-/g, '−'); };
+
+  /* ---------- Six optimizers on the toy error surface ---------- */
+  (() => {
+    const svg = document.getElementById('l05-race-svg'); if (!svg) return;
+    const X = [0.5, 2.5], Y = [0.2, 0.9], T = 200, EPS = 1e-8, LO = -6, HI = 6;
+    const sig = z => 1 / (1 + Math.exp(-z));
+    const loss = (w, b) => { let s = 0; for (let i = 0; i < 2; i++) { const e = sig(w * X[i] + b) - Y[i]; s += e * e; } return 0.5 * s; };
+    const grad = (w, b) => { let dw = 0, db = 0; for (let i = 0; i < 2; i++) { const f = sig(w * X[i] + b), g = (f - Y[i]) * f * (1 - f); dw += g * X[i]; db += g; } return [dw, db]; };
+    const OPT = {
+      gd: { name: 'GD', eta: 1, note: 'Each step is η times the gradient, so the dots bunch up where the surface is flat and spread out on the steep wall of the valley.' },
+      mom: { name: 'Momentum', eta: 1, note: 'The history keeps it moving across the plateau, then carries it past the valley floor: count the U-turns.' },
+      nag: { name: 'NAG', eta: 1, note: 'The gradient is taken after the history move, so it brakes earlier and its U-turns are shorter than momentum’s.' },
+      adagrad: { name: 'AdaGrad', eta: 0.1, note: 'Each rate is η/√(sum of squared gradients). The sum only grows, so the steps keep shrinking.' },
+      rmsprop: { name: 'RMSProp', eta: 0.1, note: 'The decaying average lets the rate recover, but near the minimum the step size stays near η, so it can keep hopping around the minimum.' },
+      adam: { name: 'Adam', eta: 0.1, note: 'Momentum’s averaged direction with RMSProp’s scaling and bias correction: early steps are about η in size.' }
+    };
+    const run = (key, eta, start) => {
+      let w = start[0], b = start[1];
+      const P = [[w, b]], u = [0, 0], v = [0, 0], m = [0, 0];
+      for (let t = 1; t <= T; t++) {
+        const g = key === 'nag' ? grad(w - eta * 0.9 * u[0], b - eta * 0.9 * u[1]) : grad(w, b);
+        const d = [0, 0];
+        for (let k = 0; k < 2; k++) {
+          const gk = g[k];
+          if (key === 'gd') d[k] = eta * gk;
+          else if (key === 'mom' || key === 'nag') { u[k] = 0.9 * u[k] + gk; d[k] = eta * u[k]; }
+          else if (key === 'adagrad') { v[k] += gk * gk; d[k] = eta * gk / Math.sqrt(v[k] + EPS); }
+          else if (key === 'rmsprop') { v[k] = 0.9 * v[k] + 0.1 * gk * gk; d[k] = eta * gk / Math.sqrt(v[k] + EPS); }
+          else { m[k] = 0.9 * m[k] + 0.1 * gk; v[k] = 0.999 * v[k] + 0.001 * gk * gk; const mh = m[k] / (1 - Math.pow(0.9, t)), vh = v[k] / (1 - Math.pow(0.999, t)); d[k] = eta * mh / (Math.sqrt(vh) + EPS); }
+        }
+        w -= d[0]; b -= d[1];
+        if (!isFinite(w) || !isFinite(b) || Math.abs(w) > 1e3 || Math.abs(b) > 1e3) { P.diverged = true; break; }
+        P.push([w, b]);
+      }
+      return P;
+    };
+    const X0 = 40, X1 = 392, Y0 = 8, Y1 = 360;
+    const sx = w => X0 + (w - LO) / (HI - LO) * (X1 - X0), sy = b => Y1 - (b - LO) / (HI - LO) * (Y1 - Y0);
+    const defs = mk('defs', {}, svg);
+    const cp = mk('clipPath', { id: 'l05-race-clip' }, defs); mk('rect', { x: X0, y: Y0, width: X1 - X0, height: Y1 - Y0 }, cp);
+    /* shading and contours */
+    const G = 64, cw = (X1 - X0) / G, NB = 14, bands = Array.from({ length: NB }, () => '');
+    for (let i = 0; i < G; i++) for (let j = 0; j < G; j++) {
+      const w = LO + (i + 0.5) * (HI - LO) / G, b = HI - (j + 0.5) * (HI - LO) / G;
+      const q = Math.min(NB - 1, Math.floor(loss(w, b) / 0.7 * NB));
+      bands[q] += 'M' + (X0 + i * cw).toFixed(2) + ' ' + (Y0 + j * cw).toFixed(2) + 'h' + cw.toFixed(2) + 'v' + cw.toFixed(2) + 'h-' + cw.toFixed(2) + 'z';
+    }
+    bands.forEach((d, q) => { if (d) mk('path', { d, class: 'r-heat', 'fill-opacity': (0.03 + 0.34 * (q + 0.5) / NB).toFixed(3) }, svg); });
+    const N = 96, Z = [];
+    for (let j = 0; j <= N; j++) { Z.push([]); for (let i = 0; i <= N; i++) Z[j].push(loss(LO + i * (HI - LO) / N, LO + j * (HI - LO) / N)); }
+    const gx = i => sx(LO + i * (HI - LO) / N), gy = j => sy(LO + j * (HI - LO) / N);
+    const gIso = mk('g', {}, svg);
+    [0.01, 0.03, 0.06, 0.1, 0.2, 0.3, 0.4, 0.45, 0.5, 0.6].forEach(lev => {
+      let d = '';
+      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+        const c = [[i, j, Z[j][i]], [i + 1, j, Z[j][i + 1]], [i + 1, j + 1, Z[j + 1][i + 1]], [i, j + 1, Z[j + 1][i]]], pts = [];
+        for (let e = 0; e < 4; e++) {
+          const p = c[e], q = c[(e + 1) % 4];
+          if ((p[2] < lev) !== (q[2] < lev)) { const r = (lev - p[2]) / (q[2] - p[2]); pts.push([gx(p[0] + r * (q[0] - p[0])), gy(p[1] + r * (q[1] - p[1]))]); }
+        }
+        for (let k = 0; k + 1 < pts.length; k += 2) d += 'M' + pts[k][0].toFixed(1) + ' ' + pts[k][1].toFixed(1) + 'L' + pts[k + 1][0].toFixed(1) + ' ' + pts[k + 1][1].toFixed(1);
+      }
+      mk('path', { d, class: 'r-iso' }, gIso);
+    });
+    mk('rect', { x: X0, y: Y0, width: X1 - X0, height: Y1 - Y0, class: 'r-frame' }, svg);
+    for (let v = -6; v <= 6; v += 2) {
+      mk('text', { x: sx(v), y: Y1 + 15, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = String(v).replace('-', '−');
+      mk('text', { x: X0 - 6, y: sy(v) + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = String(v).replace('-', '−');
+    }
+    mk('text', { x: X1, y: Y1 + 30, 'text-anchor': 'end', class: 'c-title' }, svg).textContent = 'w';
+    mk('text', { x: 6, y: Y0 + 10, class: 'c-title' }, svg).textContent = 'b';
+    const wStar = 1.7918, bStar = -2.2822;
+    mk('circle', { cx: sx(wStar), cy: sy(bStar), r: 7, class: 'r-min' }, svg);
+    const gGhost = mk('g', { 'clip-path': 'url(#l05-race-clip)' }, svg);
+    const ghosts = {}; Object.keys(OPT).forEach(k => { ghosts[k] = mk('polyline', { class: 'r-ghost' }, gGhost); });
+    const gSel = mk('g', { 'clip-path': 'url(#l05-race-clip)' }, svg);
+    const path = mk('polyline', { class: 'r-path' }, gSel), gDots = mk('g', {}, gSel);
+    const endDot = mk('circle', { r: 5, class: 'r-end' }, gSel);
+    const startDot = mk('circle', { r: 6, class: 'r-start' }, svg);
+    const slider = document.getElementById('race-eta'), out = document.getElementById('race-eta-out'), ghostBox = document.getElementById('race-ghosts');
+    const oL0 = document.getElementById('race-l0'), oLend = document.getElementById('race-lend'), oHit = document.getElementById('race-hit'), oStart = document.getElementById('race-start'), status = document.getElementById('race-status');
+    const btns = [...document.querySelectorAll('#race-fig .opt')];
+    const etas = {}; Object.keys(OPT).forEach(k => { etas[k] = OPT[k].eta; });
+    const START = [-2, -2];
+    let start = START.slice(), sel = 'mom', paths = {}, timer = null;
+    const ptsStr = (P, n) => P.slice(0, n).map(p => sx(p[0]).toFixed(1) + ',' + sy(p[1]).toFixed(1)).join(' ');
+    const computeAll = () => { Object.keys(OPT).forEach(k => { paths[k] = run(k, etas[k], start); }); };
+    const drawSel = n => {
+      const P = paths[sel], k = Math.min(n, P.length);
+      path.setAttribute('points', ptsStr(P, k));
+      while (gDots.firstChild) gDots.removeChild(gDots.firstChild);
+      for (let i = 1; i < k; i++) mk('circle', { cx: sx(P[i][0]).toFixed(1), cy: sy(P[i][1]).toFixed(1), r: 1.7, class: 'r-dot' }, gDots);
+      const e = P[k - 1]; endDot.setAttribute('cx', sx(e[0])); endDot.setAttribute('cy', sy(e[1]));
+    };
+    const drawGhosts = () => { Object.keys(OPT).forEach(k => { ghosts[k].setAttribute('points', ghostBox.checked && k !== sel ? ptsStr(paths[k], paths[k].length) : ''); }); };
+    const readouts = () => {
+      const P = paths[sel], L = P.map(p => loss(p[0], p[1])), hit = L.findIndex(l => l < 1e-3);
+      oL0.textContent = fmt(L[0]); oLend.textContent = P.diverged ? 'diverged' : fmt(L[L.length - 1]);
+      oHit.textContent = hit < 0 ? 'not within 200' : String(hit);
+      oStart.textContent = '(' + fmt(start[0]) + ', ' + fmt(start[1]) + ')';
+      const o = OPT[sel], eta = etas[sel];
+      let msg = o.name + ' with η = ' + fmt(eta) + '. ';
+      if (P.diverged) msg += 'The iterates blew up: this η is far too large for this rule.';
+      else if (L[L.length - 1] > 0.05) msg += 'After 200 steps it is still far from the minimum. ' + o.note;
+      else msg += o.note;
+      status.textContent = msg;
+    };
+    const stop = () => { if (timer) { cancelAnimationFrame(timer); timer = null; } };
+    const animate = () => {
+      stop(); drawGhosts(); readouts();
+      if (reduce) { drawSel(T + 1); return; }
+      let n = 1;
+      const tick = () => { n += 2; drawSel(n); if (n <= paths[sel].length) timer = requestAnimationFrame(tick); else timer = null; };
+      drawSel(1); timer = requestAnimationFrame(tick);
+    };
+    const setSlider = () => { slider.value = Math.log10(etas[sel]).toFixed(2); out.textContent = fmt(etas[sel]); };
+    const placeStart = () => { startDot.setAttribute('cx', sx(start[0])); startDot.setAttribute('cy', sy(start[1])); };
+    const full = () => { stop(); drawGhosts(); drawSel(T + 1); readouts(); };
+    btns.forEach(bt => bt.addEventListener('click', () => {
+      sel = bt.dataset.opt; btns.forEach(x => x.setAttribute('aria-pressed', String(x === bt))); setSlider(); animate();
+    }));
+    slider.addEventListener('input', () => { etas[sel] = Math.pow(10, parseFloat(slider.value)); out.textContent = fmt(etas[sel]); paths[sel] = run(sel, etas[sel], start); full(); });
+    ghostBox.addEventListener('change', drawGhosts);
+    document.getElementById('race-play').addEventListener('click', animate);
+    document.getElementById('race-reset').addEventListener('click', () => { start = START.slice(); placeStart(); computeAll(); animate(); });
+    svg.addEventListener('click', ev => {
+      const ctm = svg.getScreenCTM(); if (!ctm) return;
+      const p = svg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY;
+      const q = p.matrixTransform(ctm.inverse());
+      if (q.x < X0 || q.x > X1 || q.y < Y0 || q.y > Y1) return;
+      start = [LO + (q.x - X0) / (X1 - X0) * (HI - LO), LO + (Y1 - q.y) / (Y1 - Y0) * (HI - LO)].map(v => Math.max(-5.8, Math.min(5.8, v)));
+      placeStart(); computeAll(); animate();
+    });
+    placeStart(); computeAll(); setSlider(); full();
+  })();
+
+  /* ---------- Exponential averaging with and without bias correction ---------- */
+  (() => {
+    const svg = document.getElementById('l05-ema-svg'); if (!svg) return;
+    const rand = mkRand(5052);
+    const normal = () => { let u = 0; while (u === 0) u = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rand()); };
+    const TT = 100, truth = t => 0.6 + 0.3 * Math.sin(2 * Math.PI * (t + 6) / 70);
+    const obs = []; for (let t = 1; t <= TT; t++) obs.push(truth(t) + 0.12 * normal());
+    const X0 = 50, X1 = 620, Y0 = 20, Y1 = 262;
+    const sx = t => X0 + t / TT * (X1 - X0), sy = v => Y1 - v / 1.25 * (Y1 - Y0);
+    [0, 0.5, 1].forEach(v => {
+      mk('line', { x1: X0, x2: X1, y1: sy(v), y2: sy(v), class: 'c-faint' }, svg);
+      mk('text', { x: X0 - 8, y: sy(v) + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = v.toFixed(1);
+    });
+    [0, 20, 40, 60, 80, 100].forEach(t => { mk('text', { x: sx(t), y: Y1 + 16, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = t; });
+    mk('line', { x1: X0, x2: X1, y1: Y1, y2: Y1, class: 'c-axis' }, svg);
+    mk('text', { x: X1, y: Y1 + 32, 'text-anchor': 'end', class: 'c-title' }, svg).textContent = 'time step t';
+    const gObs = mk('g', {}, svg);
+    obs.forEach((v, i) => mk('circle', { cx: sx(i + 1).toFixed(1), cy: sy(v).toFixed(1), r: 2.4, class: 'e-obs' }, gObs));
+    const tl = []; for (let t = 1; t <= TT; t += 0.5) tl.push(sx(t).toFixed(1) + ',' + sy(truth(t)).toFixed(1));
+    mk('polyline', { points: tl.join(' '), class: 'e-true' }, svg);
+    const lRaw = mk('polyline', { class: 'e-raw' }, svg), lMax = mk('polyline', { class: 'e-max' }, svg), lBc = mk('polyline', { class: 'e-bc' }, svg);
+    const legend = [['e-true', 'true curve'], ['e-raw', 'mₜ, no correction'], ['e-bc', 'm̂ₜ, corrected'], ['e-max', 'max(βvₜ₋₁, |xₜ|)']];
+    legend.forEach((l, i) => {
+      const x = 360 + (i % 2) * 140, y = 34 + Math.floor(i / 2) * 18;
+      mk('line', { x1: x, x2: x + 20, y1: y, y2: y, class: l[0] }, svg);
+      mk('text', { x: x + 26, y: y + 4, class: 'c-note' }, svg).textContent = l[1];
+    });
+    const slider = document.getElementById('ema-beta'), out = document.getElementById('ema-beta-out');
+    const cRaw = document.getElementById('ema-raw'), cBc = document.getElementById('ema-bc'), cMax = document.getElementById('ema-max');
+    const oTrue = document.getElementById('ema-true'), oM1 = document.getElementById('ema-m1'), oMh1 = document.getElementById('ema-mh1'), oErr = document.getElementById('ema-err'), status = document.getElementById('ema-status');
+    const draw = () => {
+      const beta = parseFloat(slider.value);
+      let m = 0, v = 0; const raw = [], bc = [], mx = [];
+      obs.forEach((x, i) => { const t = i + 1; m = beta * m + (1 - beta) * x; v = Math.max(beta * v, Math.abs(x)); raw.push(m); bc.push(m / (1 - Math.pow(beta, t))); mx.push(v); });
+      const pl = a => a.map((y, i) => sx(i + 1).toFixed(1) + ',' + sy(y).toFixed(1)).join(' ');
+      lRaw.setAttribute('points', cRaw.checked ? pl(raw) : ''); lBc.setAttribute('points', cBc.checked ? pl(bc) : ''); lMax.setAttribute('points', cMax.checked ? pl(mx) : '');
+      out.textContent = beta.toFixed(2);
+      oTrue.textContent = truth(1).toFixed(2); oM1.textContent = raw[0].toFixed(3); oMh1.textContent = bc[0].toFixed(3);
+      let eR = 0, eB = 0; for (let i = 0; i < 10; i++) { eR += Math.abs(raw[i] - truth(i + 1)); eB += Math.abs(bc[i] - truth(i + 1)); }
+      oErr.textContent = (eR / 10).toFixed(2) + ' / ' + (eB / 10).toFixed(2);
+      const lag = Math.round(1 / (1 - beta));
+      status.textContent = 'β = ' + beta.toFixed(2) + ': the first observation gets weight ' + (1 - beta).toFixed(2) + ' in m₁, so the uncorrected average starts at ' + raw[0].toFixed(2) + ' and needs roughly ' + lag + ' steps to catch up. Dividing by 1 − βᵗ removes that pull toward zero.';
+    };
+    [slider, cRaw, cBc, cMax].forEach(el => el.addEventListener('input', draw));
+    [cRaw, cBc, cMax].forEach(el => el.addEventListener('change', draw));
+    draw();
+  })();
+})();
+</script>
+</body>
+</html>
