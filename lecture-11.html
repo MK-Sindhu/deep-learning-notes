@@ -1,0 +1,1008 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lecture 11 · RNNs and BPTT · DL Notes</title>
+<meta name="description" content="CS6910 Deep Learning (IIT Madras) notes, Lecture 11: sequence learning problems, recurrent neural networks, backpropagation through time, vanishing and exploding gradients, and truncated BPTT.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<style>
+.dg .sb { font-size: 9.5px; }
+.controls select { font: 500 14px/1.3 var(--font-head); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 8px; }
+.c-act { stroke: var(--accent); stroke-width: 2.4; fill: none; stroke-linejoin: round; }
+.c-act-pt { fill: var(--accent); stroke: var(--surface); stroke-width: 1.2; }
+.c-act-clip { fill: var(--surface); stroke: var(--accent); stroke-width: 1.4; }
+.c-bound { stroke: var(--ink-2); stroke-width: 1.6; stroke-dasharray: 6 4; fill: none; }
+.c-one { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; }
+</style>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <!-- PARTNAV:START --><nav class="partnav" aria-label="Lectures"><a href="index.html">DL Notes</a><span class="sep">/</span><span>Lecture 11</span><span class="sep">·</span><a href="lecture-09.html">← Lecture 9</a></nav><!-- PARTNAV:END -->
+    <div class="eyebrow">CS6910 · Deep Learning · IIT Madras</div>
+    <h1>Recurrent neural networks and backpropagation through time</h1>
+    <p class="lede">When the inputs form a sequence of dependent items of any length, a recurrent network applies one shared cell at every time step and carries a state from step to step. Training it by backpropagation through time multiplies one Jacobian per step, which is why its gradients vanish or explode.</p>
+    <div class="meta">
+      <span><b>Lecture 11</b></span>
+      <span>Instructor <b>Prof. Mitesh M. Khapra</b></span>
+      <span>About <b>51 min</b> of video</span>
+      <span><b>5</b> modules</span>
+    </div>
+    <div class="watch">
+      <a class="btn solid" href="https://www.cse.iitm.ac.in/~miteshk/CS7015/Slides/Teaching/pdf/Lecture14.pdf" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>Slides</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=_BBTTS9gx7Q" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 8:43</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=ym5qG-3kJ10" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 9:47</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=Xeb6OjnVn8g" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 14:23</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=EB1SoyivHFU" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 11:04</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=gZ65vyTNipM" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 6:58</a>
+    </div>
+  </div>
+</header>
+
+<div class="page gutter">
+  <nav class="toc" aria-label="Contents">
+    <div>
+      <h4>Module 14.1 · Sequences</h4>
+      <ul>
+        <li><a href="#fixed-inputs">Fixed-size inputs so far</a></li>
+        <li><a href="#autocomplete">Sequence learning problems</a></li>
+        <li><a href="#seq-examples">Outputs: every step or the end</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 14.2 · RNNs</h4>
+      <ul>
+        <li><a href="#wishlist">A wishlist, one function</a></li>
+        <li><a href="#feed-all">Feeding all inputs fails</a></li>
+        <li><a href="#recurrence">The recurrent connection</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 14.3 · BPTT</h4>
+      <ul>
+        <li><a href="#dimensions">Parameter shapes</a></li>
+        <li><a href="#total-loss">The loss on “deep”</a></li>
+        <li><a href="#grad-v">Gradient for V</a></li>
+        <li><a href="#grad-w">W: explicit and implicit</a></li>
+        <li><a href="#bptt-formula">The BPTT formula</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 14.4 · Gradients</h4>
+      <ul>
+        <li><a href="#jacobian">A product of Jacobians</a></li>
+        <li><a href="#bound">The bound (γλ)ᵗ⁻ᵏ</a></li>
+        <li><a href="#truncated">Truncation and clipping</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 14.5 · Gory details</h4>
+      <ul>
+        <li><a href="#gory-shapes">Shape of every factor</a></li>
+        <li><a href="#tensor">The sparse tensor</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Revision</h4>
+      <ul>
+        <li><a href="#terms">Key terms</a></li>
+        <li><a href="#test">Test yourself</a></li>
+        <li><a href="index.html">All lectures</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="glance" id="glance">
+      <h2>At a glance</h2>
+      <ul>
+        <li><dfn>Sequence learning problems</dfn> have inputs that depend on each other and arrive in sequences of any length, with the same task at every time step. Outputs may be needed at every step (auto-completion, part-of-speech tagging) or only at the end (the sentiment of a review, the activity in a video).</li>
+        <li>A <b>recurrent neural network</b> computes \(\mathbf{s}_i = \sigma(U\mathbf{x}_i + W\mathbf{s}_{i-1} + \mathbf{b})\) and \(\mathbf{y}_i = O(V\mathbf{s}_i + \mathbf{c})\) with the same parameters at every step. The state \(\mathbf{s}_i\) carries information from all earlier inputs.</li>
+        <li>The loss is the sum of per-step cross-entropies. Its gradient with respect to \(V\) is ordinary backpropagation. For \(W\) it is not, because \(\mathbf{s}_{t-1}\) also depends on \(W\). Splitting the derivative into explicit and implicit parts gives <b>backpropagation through time</b>: \(\frac{\partial L_t}{\partial W} = \frac{\partial L_t}{\partial \mathbf{s}_t}\sum_{k=1}^{t}\frac{\partial \mathbf{s}_t}{\partial \mathbf{s}_k}\frac{\partial^+ \mathbf{s}_k}{\partial W}\).</li>
+        <li>\(\partial\mathbf{s}_t/\partial\mathbf{s}_k\) is a product of \(t-k\) Jacobians \(\operatorname{diag}(\sigma'(\mathbf{a}_j))\,W\), each with norm at most \(\gamma\lambda\) (\(\gamma = \tfrac14\) for the logistic, 1 for tanh; \(\lambda \ge \lVert W\rVert\)). So \(\lVert\partial\mathbf{s}_t/\partial\mathbf{s}_k\rVert \le (\gamma\lambda)^{t-k}\): the gradient vanishes if \(\gamma\lambda &lt; 1\) and can explode if \(\gamma\lambda &gt; 1\).</li>
+        <li>Remedies in this lecture: <b>truncated BPTT</b> (at most \(\tau\) factors per product) and <b>gradient clipping</b>. LSTMs and GRUs in Lecture 12 go further. The tensor \(\partial^+\mathbf{s}_k/\partial W\) looks frightening but is sparse: its only non-zero entries are \(\sigma'(a_{kp})\,s_{k-1,r}\) where \(q = p\).</li>
+      </ul>
+    </div>
+
+    <!-- ============ MODULE 14.1 ============ -->
+    <section id="fixed-inputs">
+      <div class="sec-head">
+        <a class="ts" href="https://www.youtube.com/watch?v=_BBTTS9gx7Q&amp;t=12s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 0:12</a>
+        <h2>So far, inputs had a fixed size and were independent</h2>
+      </div>
+      <p>Every network in the course so far took an input of one fixed size. The convolutional networks of <a href="lecture-08.html">Lecture 8</a> classified images that were all scaled or cropped to the same size, at training time and at test time (32 × 32 on the slide; the video also mentions 227 × 227). The word2vec models of <a href="lecture-10.html">Lecture 10</a> read a fixed window of \(k\) context words.</p>
+      <p>Each input was also processed on its own. Show a CNN an apple and it predicts apple, whatever the previous image was: a car, a mango or another apple. The computations, outputs and decisions for two successive inputs have nothing to do with each other.</p>
+    </section>
+
+    <section id="autocomplete">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=_BBTTS9gx7Q&amp;t=89s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 1:29</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=_BBTTS9gx7Q&amp;t=123s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 2:03 three observations</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=_BBTTS9gx7Q&amp;t=225s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 3:45 the name</a>
+        </div>
+        <h2>Sequence learning problems</h2>
+      </div>
+      <p>Many applications break both assumptions. Take auto-completion, familiar from typing messages on a phone. Given the first character d, the model should predict e. Given that e, it predicts the next character, and so on until the word “deep” is complete and it predicts ⟨stop⟩.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 640 270" role="img" aria-label="Four copies of the same small network side by side. Inputs d, e, e, p at the bottom; each copy has a hidden layer and predicts the next character: e, e, p, stop. No connections run between the copies.">
+            <defs><marker id="l11-f1-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-s" x="335" y="22" text-anchor="middle">four copies of one network: a character in, the next character out</text>
+            <text class="d-row" x="20" y="59">output</text>
+            <text class="d-row" x="20" y="134">hidden</text>
+            <text class="d-row" x="20" y="209">input</text>
+
+            <rect class="b-ok" x="108" y="40" width="64" height="30" rx="6"/><text class="d-t" x="140" y="60" text-anchor="middle">e</text>
+            <rect class="d-box-acc" x="108" y="115" width="64" height="30" rx="6"/>
+            <rect class="d-box" x="108" y="190" width="64" height="30" rx="6"/><text class="d-t" x="140" y="210" text-anchor="middle">d</text>
+            <line class="d-ln" x1="140" y1="190" x2="140" y2="148" marker-end="url(#l11-f1-ah)"/>
+            <line class="d-ln" x1="140" y1="115" x2="140" y2="73" marker-end="url(#l11-f1-ah)"/>
+            <text class="d-al" x="140" y="242" text-anchor="middle">t = 1</text>
+
+            <rect class="b-ok" x="238" y="40" width="64" height="30" rx="6"/><text class="d-t" x="270" y="60" text-anchor="middle">e</text>
+            <rect class="d-box-acc" x="238" y="115" width="64" height="30" rx="6"/>
+            <rect class="d-box" x="238" y="190" width="64" height="30" rx="6"/><text class="d-t" x="270" y="210" text-anchor="middle">e</text>
+            <line class="d-ln" x1="270" y1="190" x2="270" y2="148" marker-end="url(#l11-f1-ah)"/>
+            <line class="d-ln" x1="270" y1="115" x2="270" y2="73" marker-end="url(#l11-f1-ah)"/>
+            <text class="d-al" x="270" y="242" text-anchor="middle">t = 2</text>
+
+            <rect class="b-ok" x="368" y="40" width="64" height="30" rx="6"/><text class="d-t" x="400" y="60" text-anchor="middle">p</text>
+            <rect class="d-box-acc" x="368" y="115" width="64" height="30" rx="6"/>
+            <rect class="d-box" x="368" y="190" width="64" height="30" rx="6"/><text class="d-t" x="400" y="210" text-anchor="middle">e</text>
+            <line class="d-ln" x1="400" y1="190" x2="400" y2="148" marker-end="url(#l11-f1-ah)"/>
+            <line class="d-ln" x1="400" y1="115" x2="400" y2="73" marker-end="url(#l11-f1-ah)"/>
+            <text class="d-al" x="400" y="242" text-anchor="middle">t = 3</text>
+
+            <rect class="b-ok" x="498" y="40" width="64" height="30" rx="6"/><text class="d-t" x="530" y="60" text-anchor="middle">⟨stop⟩</text>
+            <rect class="d-box-acc" x="498" y="115" width="64" height="30" rx="6"/>
+            <rect class="d-box" x="498" y="190" width="64" height="30" rx="6"/><text class="d-t" x="530" y="210" text-anchor="middle">p</text>
+            <line class="d-ln" x1="530" y1="190" x2="530" y2="148" marker-end="url(#l11-f1-ah)"/>
+            <line class="d-ln" x1="530" y1="115" x2="530" y2="73" marker-end="url(#l11-f1-ah)"/>
+            <text class="d-al" x="530" y="242" text-anchor="middle">t = 4</text>
+
+            <text class="d-s" x="20" y="264">nothing passes between the copies, so the copy at t = 2 never learns that the first character was d</text>
+          </svg>
+        </div>
+        <figcaption><b>Auto-completion of “deep”, one network per character.</b> Each column is a full feedforward network (input layer, hidden layer, output layer) drawn as three boxes. Every column does the same job, but as drawn they are independent, so no prediction can use the characters before its own input.</figcaption>
+      </figure>
+
+      <p>Three things are different from the earlier networks.</p>
+      <ol>
+        <li><b>Successive inputs depend on each other.</b> To predict what follows an e, you want to know what came before it too. The lecture's example: if the previous character was z and the current one is e, a b is likely next; ignore the z and many characters could follow the e.</li>
+        <li><b>The length is not fixed.</b> “deep” has 4 characters, “learn” 5 and “machine” 7, so the number of inputs and the number of predictions both vary.</li>
+        <li><b>Every step does the same task.</b> Each network takes one character as input and produces one character as output.</li>
+      </ol>
+      <p>Problems like this are called <dfn>sequence learning problems</dfn>: the model reads a sequence of dependent inputs and produces an output, or several. Each input corresponds to one <dfn>time step</dfn>: input 1 at time step 1, input 2 at time step 2, and so on.</p>
+    </section>
+
+    <section id="seq-examples">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=_BBTTS9gx7Q&amp;t=259s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 4:19 tagging</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=_BBTTS9gx7Q&amp;t=365s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 6:05 sentiment</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=_BBTTS9gx7Q&amp;t=435s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 7:15 video</a>
+        </div>
+        <h2>Outputs at every step, or only at the end</h2>
+      </div>
+      <p><b>Part-of-speech tagging.</b> For the sentence “man is a social animal”, predict the tag of each word: noun, verb, article, adjective, noun. Once the model has seen the adjective <i>social</i>, it can be almost sure the next word is a noun, and that it is not an article or a verb. So the current output depends on the previous input as well as the current one. Sentences can have any number of words; an average Wikipedia sentence has about 25. Here an output is wanted at every time step, and every step does the same task: a word in, a tag out.</p>
+      <p><b>Sentiment of a movie review.</b> Sometimes only the final output matters. To label “The movie was boring and long” as positive or negative, the model has to read the whole review. A prediction made right after “boring” would be premature, since the review could have gone on “but I still loved it”. The answer depends on earlier words as well as the last one. We can still picture the same network at every step, each taking a word and producing a ± output; we just ignore every output except the last.</p>
+      <p><b>Activity in a video.</b> Sequences need not be made of words. A video is a sequence of images, and deciding that someone is performing Surya Namaskar needs the whole sequence: stopping partway would show only one posture of it. Speech is another kind of sequence, which the lecture mentions without developing.</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Task</th><th>Input at each step</th><th>Output</th><th>Outputs used</th></tr></thead>
+          <tbody>
+            <tr><td>Auto-completion</td><td>a character</td><td>the next character</td><td>every step</td></tr>
+            <tr><td>Part-of-speech tagging</td><td>a word</td><td>its tag</td><td>every step</td></tr>
+            <tr><td>Sentiment of a review</td><td>a word</td><td>+ or − polarity</td><td>last step only</td></tr>
+            <tr><td>Activity in a video</td><td>a frame (image)</td><td>the activity</td><td>last step only</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ MODULE 14.2 ============ -->
+    <section id="wishlist">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=ym5qG-3kJ10&amp;t=12s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 0:12</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=ym5qG-3kJ10&amp;t=74s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 1:14 one step</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=ym5qG-3kJ10&amp;t=150s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 2:30 sharing</a>
+        </div>
+        <h2>A wishlist, and one function for every time step</h2>
+      </div>
+      <p>How should a model for such tasks look? The lecture first lists what it must do:</p>
+      <ol>
+        <li>Account for the dependence between inputs.</li>
+        <li>Account for a variable number of inputs.</li>
+        <li>Make sure the function executed at each time step is the same.</li>
+      </ol>
+      <p>Start with the function at one time step. It has an input, a hidden representation and an output, like any feedforward network:</p>
+      <div class="eq">\[ \mathbf{s}_i = \sigma(U\mathbf{x}_i + \mathbf{b}), \qquad \mathbf{y}_i = O(V\mathbf{s}_i + \mathbf{c}), \qquad i = \text{time step} \]</div>
+      <p class="note">\(O\) is the output function (a softmax, say), named separately from the hidden nonlinearity \(\sigma\).</p>
+      <p>To execute the same function at every step, share the network across steps, which means sharing its parameters: the same \(U, V, \mathbf{b}, \mathbf{c}\) at every time step. Sharing also makes the network agnostic to the length of the input. The same function is computed at every step, so the number of steps does not matter: we create as many copies of the network as there are time steps and run each one. That settles items 2 and 3. The copies still don't exchange anything, so item 1 is open.</p>
+    </section>
+
+    <section id="feed-all">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=ym5qG-3kJ10&amp;t=185s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 3:05</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=ym5qG-3kJ10&amp;t=254s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 4:14 why it fails</a>
+        </div>
+        <h2>An infeasible fix: feed in every previous input</h2>
+      </div>
+      <p>One way to make the output depend on earlier inputs is to feed them all in: \(\mathbf{x}_1\) at step 1, \(\mathbf{x}_1, \mathbf{x}_2\) at step 2, \(\mathbf{x}_1, \mathbf{x}_2, \mathbf{x}_3\) at step 3, and so on. This handles dependence, but it breaks the other two items on the wishlist.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 270" role="img" aria-label="Four networks. The first reads x1, the second x1 and x2, the third x1 to x3, the fourth x1 to x4. Each has its own input weights, so each computes a different function f1, f2, f3, f4.">
+            <defs><marker id="l11-f2-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-s" x="80" y="26" text-anchor="middle">y₁ = f₁(x₁)</text>
+            <text class="d-s" x="215" y="26" text-anchor="middle">y₂ = f₂(x₁, x₂)</text>
+            <text class="d-s" x="370" y="26" text-anchor="middle">y₃ = f₃(x₁, x₂, x₃)</text>
+            <text class="d-s" x="550" y="26" text-anchor="middle">y₄ = f₄(x₁, …, x₄)</text>
+
+            <rect class="b-ok" x="50" y="40" width="60" height="28" rx="6"/><text class="d-t" x="80" y="59" text-anchor="middle">y₁</text>
+            <rect class="d-box-acc" x="50" y="110" width="60" height="28" rx="6"/>
+            <line class="d-ln" x1="80" y1="110" x2="80" y2="71" marker-end="url(#l11-f2-ah)"/>
+            <rect class="d-box" x="65" y="190" width="30" height="26" rx="5"/><text class="d-s" x="80" y="207" text-anchor="middle">x₁</text>
+            <line class="d-ln" x1="80" y1="190" x2="80" y2="141" marker-end="url(#l11-f2-ah)"/>
+            <text class="d-s" x="80" y="238" text-anchor="middle">weights u₁</text>
+
+            <rect class="b-ok" x="185" y="40" width="60" height="28" rx="6"/><text class="d-t" x="215" y="59" text-anchor="middle">y₂</text>
+            <rect class="d-box-acc" x="185" y="110" width="60" height="28" rx="6"/>
+            <line class="d-ln" x1="215" y1="110" x2="215" y2="71" marker-end="url(#l11-f2-ah)"/>
+            <rect class="d-box" x="182" y="190" width="30" height="26" rx="5"/><text class="d-s" x="197" y="207" text-anchor="middle">x₁</text>
+            <rect class="d-box" x="218" y="190" width="30" height="26" rx="5"/><text class="d-s" x="233" y="207" text-anchor="middle">x₂</text>
+            <line class="d-ln" x1="197" y1="190" x2="211" y2="141" marker-end="url(#l11-f2-ah)"/>
+            <line class="d-ln" x1="233" y1="190" x2="219" y2="141" marker-end="url(#l11-f2-ah)"/>
+            <text class="d-s" x="215" y="238" text-anchor="middle">u₁, u₂</text>
+
+            <rect class="b-ok" x="340" y="40" width="60" height="28" rx="6"/><text class="d-t" x="370" y="59" text-anchor="middle">y₃</text>
+            <rect class="d-box-acc" x="340" y="110" width="60" height="28" rx="6"/>
+            <line class="d-ln" x1="370" y1="110" x2="370" y2="71" marker-end="url(#l11-f2-ah)"/>
+            <rect class="d-box" x="319" y="190" width="30" height="26" rx="5"/><text class="d-s" x="334" y="207" text-anchor="middle">x₁</text>
+            <rect class="d-box" x="355" y="190" width="30" height="26" rx="5"/><text class="d-s" x="370" y="207" text-anchor="middle">x₂</text>
+            <rect class="d-box" x="391" y="190" width="30" height="26" rx="5"/><text class="d-s" x="406" y="207" text-anchor="middle">x₃</text>
+            <line class="d-ln" x1="334" y1="190" x2="362" y2="141" marker-end="url(#l11-f2-ah)"/>
+            <line class="d-ln" x1="370" y1="190" x2="370" y2="141" marker-end="url(#l11-f2-ah)"/>
+            <line class="d-ln" x1="406" y1="190" x2="378" y2="141" marker-end="url(#l11-f2-ah)"/>
+            <text class="d-s" x="370" y="238" text-anchor="middle">u₁, u₂, u₃</text>
+
+            <rect class="b-ok" x="520" y="40" width="60" height="28" rx="6"/><text class="d-t" x="550" y="59" text-anchor="middle">y₄</text>
+            <rect class="d-box-acc" x="520" y="110" width="60" height="28" rx="6"/>
+            <line class="d-ln" x1="550" y1="110" x2="550" y2="71" marker-end="url(#l11-f2-ah)"/>
+            <rect class="d-box" x="481" y="190" width="30" height="26" rx="5"/><text class="d-s" x="496" y="207" text-anchor="middle">x₁</text>
+            <rect class="d-box" x="517" y="190" width="30" height="26" rx="5"/><text class="d-s" x="532" y="207" text-anchor="middle">x₂</text>
+            <rect class="d-box" x="553" y="190" width="30" height="26" rx="5"/><text class="d-s" x="568" y="207" text-anchor="middle">x₃</text>
+            <rect class="d-box" x="589" y="190" width="30" height="26" rx="5"/><text class="d-s" x="604" y="207" text-anchor="middle">x₄</text>
+            <line class="d-ln" x1="496" y1="190" x2="538" y2="141" marker-end="url(#l11-f2-ah)"/>
+            <line class="d-ln" x1="532" y1="190" x2="546" y2="141" marker-end="url(#l11-f2-ah)"/>
+            <line class="d-ln" x1="568" y1="190" x2="554" y2="141" marker-end="url(#l11-f2-ah)"/>
+            <line class="d-ln" x1="604" y1="190" x2="562" y2="141" marker-end="url(#l11-f2-ah)"/>
+            <text class="d-s" x="550" y="238" text-anchor="middle">u₁, …, u₄</text>
+
+            <text class="d-s" x="20" y="262">a sequence of length 100 would need f₁, …, f₁₀₀, the last with input weights u₁, …, u₁₀₀</text>
+          </svg>
+        </div>
+        <figcaption><b>Feeding every previous input.</b> The network at step \(t\) has \(t\) inputs and its own input weights, so each step computes a different function, and the number of functions grows with the length of the sequence.</figcaption>
+      </figure>
+
+      <ul>
+        <li><b>The function changes from step to step.</b> \(\mathbf{y}_1 = f_1(\mathbf{x}_1)\), \(\mathbf{y}_2 = f_2(\mathbf{x}_1, \mathbf{x}_2)\), \(\mathbf{y}_3 = f_3(\mathbf{x}_1, \mathbf{x}_2, \mathbf{x}_3)\). A network with two inputs needs weights \(u_1, u_2\) and one with three needs \(u_1, u_2, u_3\), so these are different functions with different parameters.</li>
+        <li><b>The network is sensitive to sequence length.</b> A sequence of length 10 needs \(f_1, \dots, f_{10}\) and one of length 100 needs \(f_1, \dots, f_{100}\). Some weights could be shared between \(f_{99}\) and \(f_{100}\), but the count still grows with the length. And if the longest training sequence had 25 steps while a test sequence has 30, there are no trained parameters for steps 26 to 30 at all.</li>
+      </ul>
+    </section>
+
+    <section id="recurrence">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=ym5qG-3kJ10&amp;t=317s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 5:17</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=ym5qG-3kJ10&amp;t=454s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 7:34 the state</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=ym5qG-3kJ10&amp;t=521s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 8:41 the examples again</a>
+        </div>
+        <h2>The fix: a recurrent connection</h2>
+      </div>
+      <p>The solution is to add a <dfn>recurrent connection</dfn>: the previous state is fed into the current step through a weight matrix \(W\).</p>
+      <div class="result">
+        <span class="lbl">Recurrent neural network</span>
+        \[ \mathbf{s}_i = \sigma(U\mathbf{x}_i + W\mathbf{s}_{i-1} + \mathbf{b}), \qquad \mathbf{y}_i = O(V\mathbf{s}_i + \mathbf{c}) \qquad \text{or} \qquad \mathbf{y}_i = f(\mathbf{x}_i, \mathbf{s}_{i-1}, W, U, V, \mathbf{b}, \mathbf{c}) \]
+        <p>\(\mathbf{s}_i\) is the <dfn>state</dfn> of the network at time step \(i\). The parameters \(W, U, V, \mathbf{b}, \mathbf{c}\) are shared across time steps, and a fixed starting state \(\mathbf{s}_0\) takes care of the first step.</p>
+      </div>
+      <p>Check it against the wishlist.</p>
+      <ul>
+        <li><b>Same function at every step.</b> The equations are written for a general step \(i\) with the same parameters. Only step 1 needs a convention, the assumed \(\mathbf{s}_0\).</li>
+        <li><b>Any length.</b> The same network, with the same parameters, computes \(\mathbf{y}_1, \dots, \mathbf{y}_{10}\) or \(\mathbf{y}_{100}\).</li>
+        <li><b>Dependence on earlier inputs.</b> \(\mathbf{s}_i\) depends on \(\mathbf{x}_i\) and on \(\mathbf{s}_{i-1}\), which depends on \(\mathbf{x}_{i-1}\) and \(\mathbf{s}_{i-2}\), and so on back to \(\mathbf{s}_0\). Recursively, the output at step \(i\) depends on every input so far, and no parameters are added per step.</li>
+      </ul>
+      <p>You will often read about “the state of an RNN” (or of an LSTM or GRU). It means this vector: an encoding of everything the network has read so far. The network is called a recurrent neural network because of the recurrent connection. It can be drawn compactly as one cell whose state feeds back into itself, or unrolled into one copy per time step.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 680 290" role="img" aria-label="Left: a compact RNN cell with input x i, state s i and output y i, weights U and V, and a loop labelled W from the state back to itself. Right: the same network unrolled, a starting state s0 followed by states s1, s2, s3, ..., sn connected left to right by W; each state receives its input through U and produces its output through V.">
+            <defs>
+              <marker id="l11-f3-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="l11-f3-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <text class="d-row" x="80" y="24" text-anchor="middle">compact</text>
+            <rect class="b-ok" x="57" y="40" width="46" height="30" rx="6"/><text class="d-t" x="80" y="60" text-anchor="middle">y<tspan class="sb" dy="3">i</tspan></text>
+            <rect class="d-box-acc" x="57" y="120" width="46" height="30" rx="6"/><text class="d-t" x="80" y="140" text-anchor="middle">s<tspan class="sb" dy="3">i</tspan></text>
+            <rect class="d-box" x="57" y="200" width="46" height="30" rx="6"/><text class="d-t" x="80" y="220" text-anchor="middle">x<tspan class="sb" dy="3">i</tspan></text>
+            <line class="d-ln" x1="80" y1="200" x2="80" y2="153" marker-end="url(#l11-f3-ah)"/><text class="d-s" x="87" y="181">U</text>
+            <line class="d-ln" x1="80" y1="120" x2="80" y2="73" marker-end="url(#l11-f3-ah)"/><text class="d-s" x="87" y="101">V</text>
+            <path class="d-ln-acc" d="M103 128 C 150 106, 150 164, 106 142" marker-end="url(#l11-f3-aha)"/>
+            <text class="d-t" x="146" y="139" style="fill: var(--accent)">W</text>
+
+            <line class="d-ln" x1="174" y1="135" x2="222" y2="135" marker-end="url(#l11-f3-ah)"/>
+            <text class="d-s" x="198" y="126" text-anchor="middle">unroll</text>
+
+            <circle class="d-off" cx="262" cy="135" r="15"/><text class="d-s" x="262" y="139" text-anchor="middle">s₀</text>
+            <line class="d-ln-acc" x1="277" y1="135" x2="309" y2="135" marker-end="url(#l11-f3-aha)"/><text class="d-s" x="293" y="127" text-anchor="middle" style="fill: var(--accent)">W</text>
+
+            <rect class="b-ok" x="312" y="40" width="46" height="30" rx="6"/><text class="d-t" x="335" y="60" text-anchor="middle">y₁</text>
+            <rect class="d-box-acc" x="312" y="120" width="46" height="30" rx="6"/><text class="d-t" x="335" y="140" text-anchor="middle">s₁</text>
+            <rect class="d-box" x="312" y="200" width="46" height="30" rx="6"/><text class="d-t" x="335" y="220" text-anchor="middle">x₁</text>
+            <line class="d-ln" x1="335" y1="200" x2="335" y2="153" marker-end="url(#l11-f3-ah)"/><text class="d-s" x="342" y="181">U</text>
+            <line class="d-ln" x1="335" y1="120" x2="335" y2="73" marker-end="url(#l11-f3-ah)"/><text class="d-s" x="342" y="101">V</text>
+            <line class="d-ln-acc" x1="358" y1="135" x2="399" y2="135" marker-end="url(#l11-f3-aha)"/><text class="d-s" x="379" y="127" text-anchor="middle" style="fill: var(--accent)">W</text>
+
+            <rect class="b-ok" x="402" y="40" width="46" height="30" rx="6"/><text class="d-t" x="425" y="60" text-anchor="middle">y₂</text>
+            <rect class="d-box-acc" x="402" y="120" width="46" height="30" rx="6"/><text class="d-t" x="425" y="140" text-anchor="middle">s₂</text>
+            <rect class="d-box" x="402" y="200" width="46" height="30" rx="6"/><text class="d-t" x="425" y="220" text-anchor="middle">x₂</text>
+            <line class="d-ln" x1="425" y1="200" x2="425" y2="153" marker-end="url(#l11-f3-ah)"/><text class="d-s" x="432" y="181">U</text>
+            <line class="d-ln" x1="425" y1="120" x2="425" y2="73" marker-end="url(#l11-f3-ah)"/><text class="d-s" x="432" y="101">V</text>
+            <line class="d-ln-acc" x1="448" y1="135" x2="489" y2="135" marker-end="url(#l11-f3-aha)"/><text class="d-s" x="469" y="127" text-anchor="middle" style="fill: var(--accent)">W</text>
+
+            <rect class="b-ok" x="492" y="40" width="46" height="30" rx="6"/><text class="d-t" x="515" y="60" text-anchor="middle">y₃</text>
+            <rect class="d-box-acc" x="492" y="120" width="46" height="30" rx="6"/><text class="d-t" x="515" y="140" text-anchor="middle">s₃</text>
+            <rect class="d-box" x="492" y="200" width="46" height="30" rx="6"/><text class="d-t" x="515" y="220" text-anchor="middle">x₃</text>
+            <line class="d-ln" x1="515" y1="200" x2="515" y2="153" marker-end="url(#l11-f3-ah)"/><text class="d-s" x="522" y="181">U</text>
+            <line class="d-ln" x1="515" y1="120" x2="515" y2="73" marker-end="url(#l11-f3-ah)"/><text class="d-s" x="522" y="101">V</text>
+            <line class="d-ln-acc" x1="538" y1="135" x2="555" y2="135" marker-end="url(#l11-f3-aha)"/>
+            <text class="d-t" x="570" y="140" text-anchor="middle">…</text>
+            <line class="d-ln-acc" x1="584" y1="135" x2="599" y2="135" marker-end="url(#l11-f3-aha)"/>
+
+            <rect class="b-ok" x="602" y="40" width="46" height="30" rx="6"/><text class="d-t" x="625" y="60" text-anchor="middle">y<tspan class="sb" dy="3">n</tspan></text>
+            <rect class="d-box-acc" x="602" y="120" width="46" height="30" rx="6"/><text class="d-t" x="625" y="140" text-anchor="middle">s<tspan class="sb" dy="3">n</tspan></text>
+            <rect class="d-box" x="602" y="200" width="46" height="30" rx="6"/><text class="d-t" x="625" y="220" text-anchor="middle">x<tspan class="sb" dy="3">n</tspan></text>
+            <line class="d-ln" x1="625" y1="200" x2="625" y2="153" marker-end="url(#l11-f3-ah)"/><text class="d-s" x="632" y="181">U</text>
+            <line class="d-ln" x1="625" y1="120" x2="625" y2="73" marker-end="url(#l11-f3-ah)"/><text class="d-s" x="632" y="101">V</text>
+
+            <text class="d-s" x="240" y="262">the same U, V, W (and b, c) in every copy · s₀ is a fixed starting state</text>
+          </svg>
+        </div>
+        <figcaption><b>One cell, two drawings.</b> Folded, the RNN is a single cell whose state loops back through \(W\). Unrolled, it is one copy per time step, and the recurrent weight \(W\) carries the state from each step to the next. The output at step \(n\) depends on \(\mathbf{x}_1, \dots, \mathbf{x}_n\) through the chain of states.</figcaption>
+      </figure>
+
+      <p>Go back to the earlier problems and add the recurrent connection between time steps. When predicting the character after the second e, the network now has information about the d and the first e. In the review, the final prediction has information from every word before it.</p>
+    </section>
+
+    <!-- ============ MODULE 14.3 ============ -->
+    <section id="dimensions">
+      <div class="sec-head">
+        <a class="ts" href="https://www.youtube.com/watch?v=Xeb6OjnVn8g&amp;t=12s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 0:12</a>
+        <h2>The shapes of the parameters</h2>
+      </div>
+      <p>After proposing a network, the next job is to train it. The training algorithm is <dfn>backpropagation through time</dfn> (BPTT). First pin down the sizes, because a gradient with respect to a parameter has the same shape as that parameter.</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Quantity</th><th>Role</th><th>Shape on the slide</th></tr></thead>
+          <tbody>
+            <tr><td>\(\mathbf{x}_i\)</td><td>input at step \(i\)</td><td>\(\mathbb{R}^n\)</td></tr>
+            <tr><td>\(\mathbf{s}_i\)</td><td>state at step \(i\)</td><td>\(\mathbb{R}^d\)</td></tr>
+            <tr><td>\(\mathbf{y}_i\)</td><td>output over \(k\) classes</td><td>\(\mathbb{R}^k\)</td></tr>
+            <tr><td>\(U\)</td><td>input to state</td><td>\(\mathbb{R}^{n\times d}\)</td></tr>
+            <tr><td>\(V\)</td><td>state to output</td><td>\(\mathbb{R}^{d\times k}\)</td></tr>
+            <tr><td>\(W\)</td><td>state to state (recurrent)</td><td>\(\mathbb{R}^{d\times d}\)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note"><b>Shape convention (not on the slide).</b> The slide's shapes fit a row-vector convention, in which \(\mathbf{x}_i^\top U\) is \(1 \times d\). With the column-vector equations used on this page, \(U\mathbf{x}_i\) needs \(U \in \mathbb{R}^{d\times n}\) and \(V\mathbf{s}_i\) needs \(V \in \mathbb{R}^{k\times d}\). These are only transposes. \(W\) is \(d \times d\) either way, and the parameter count \(nd + d^2 + dk + d + k\) does not depend on the length of the sequence.</p>
+    </section>
+
+    <section id="total-loss">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=Xeb6OjnVn8g&amp;t=81s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 1:21</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Xeb6OjnVn8g&amp;t=146s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 2:26 output and loss</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Xeb6OjnVn8g&amp;t=216s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 3:36 total loss</a>
+        </div>
+        <h2>Running example: the loss on “deep”</h2>
+      </div>
+      <p>Why does training need a module of its own, if it is just backpropagation? A concrete example shows where plain backpropagation needs care. Return to auto-completion, and for simplicity assume the vocabulary has only four characters: d, e, p and ⟨stop⟩, so \(k = 4\). The inputs are d, e, e, p and the targets are the next characters e, e, p, ⟨stop⟩.</p>
+      <p>Each step chooses one of 4 classes, so the output function is a <b>softmax</b> and the loss is <b>cross-entropy</b> (<a href="lecture-04.html">Lecture 4</a>). Suppose \(U, V, W\) are initialized randomly and the network predicts these distributions:</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th class="num">t</th><th>Input</th><th>Predicted d · e · p · ⟨stop⟩</th><th>True next</th><th class="num">\(y_{tc}\)</th><th class="num">\(L_t = -\log y_{tc}\)</th></tr></thead>
+          <tbody>
+            <tr><td class="num">1</td><td>d</td><td>0.2 · 0.7 · 0.1 · 0.1</td><td>e</td><td class="num">0.7</td><td class="num">0.357</td></tr>
+            <tr><td class="num">2</td><td>e</td><td>0.2 · 0.7 · 0.1 · 0.1</td><td>e</td><td class="num">0.7</td><td class="num">0.357</td></tr>
+            <tr><td class="num">3</td><td>e</td><td>0.2 · 0.1 · 0.7 · 0.1</td><td>p</td><td class="num">0.7</td><td class="num">0.357</td></tr>
+            <tr><td class="num">4</td><td>p</td><td>0.2 · 0.1 · 0.7 · 0.1</td><td>⟨stop⟩</td><td class="num">0.1</td><td class="num">2.303</td></tr>
+            <tr><td></td><td colspan="4"><b>Total loss</b> \(\mathcal{L}(\theta)\)</td><td class="num"><b>3.373</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">The true distribution at each step is one-hot on the true next character. The loss column is worked out here with natural logarithms; the slide shows only the probabilities. Its illustrative distributions add up to 1.1 rather than 1, so read them as rough numbers.</p>
+      <p>Two questions follow: what is the total loss, and how do we backpropagate it to update the parameters \(\theta = \{U, V, W, \mathbf{b}, \mathbf{c}\}\)? A loss can be incurred at each of the \(T\) steps, and the total is simply their sum.</p>
+      <div class="result">
+        <span class="lbl">Total loss</span>
+        \[ \mathcal{L}(\theta) = \sum_{t=1}^{T} L_t(\theta), \qquad L_t(\theta) = -\log y_{tc} \]
+        <p>\(y_{tc}\) is the predicted probability of the true character \(c\) at time step \(t\), and \(T\) is the number of time steps. (The class index \(c\) is unrelated to the output bias \(\mathbf{c}\).)</p>
+      </div>
+      <p>Backpropagation needs the gradients of \(\mathcal{L}\) with respect to \(W, U, V, \mathbf{b}, \mathbf{c}\). Once we have them, the update is the usual gradient descent step (<a href="lecture-05.html">Lecture 5</a>).</p>
+    </section>
+
+    <section id="grad-v">
+      <div class="sec-head">
+        <a class="ts" href="https://www.youtube.com/watch?v=Xeb6OjnVn8g&amp;t=284s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 4:44</a>
+        <h2>The gradient with respect to V is ordinary backpropagation</h2>
+      </div>
+      <p>Start with the easy parameter. Because the loss is a sum, so is its gradient:</p>
+      <div class="eq">\[ \frac{\partial \mathcal{L}(\theta)}{\partial V} = \sum_{t=1}^{T} \frac{\partial L_t(\theta)}{\partial V} \]</div>
+      <p>\(V\) is a matrix, so strictly this is \(\nabla_V \mathcal{L}(\theta)\), a matrix of the same shape as \(V\), and the sum adds \(T\) such matrices. Each term is the gradient of a loss with respect to the weights of an output layer, the shortest chain in backpropagation, which <a href="lecture-04.html">Lecture 4</a> derived. Nothing new is needed.</p>
+      <p class="callout">For reference, from Lecture 4 (not repeated on this slide): with a softmax output and cross-entropy loss, \(\partial L_t / \partial(V\mathbf{s}_t + \mathbf{c}) = \mathbf{y}_t - \mathbf{e}_c\), where \(\mathbf{e}_c\) is the one-hot vector of the true character. With \(V \in \mathbb{R}^{k\times d}\) this gives \(\partial L_t/\partial V = (\mathbf{y}_t - \mathbf{e}_c)\,\mathbf{s}_t^\top\).</p>
+    </section>
+
+    <section id="grad-w">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=Xeb6OjnVn8g&amp;t=346s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 5:46</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Xeb6OjnVn8g&amp;t=417s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 6:57 ordered network</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Xeb6OjnVn8g&amp;t=516s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 8:36 explicit and implicit</a>
+        </div>
+        <h2>The gradient with respect to W: an ordered network</h2>
+      </div>
+      <p>Again the loss is a sum, \(\frac{\partial\mathcal{L}(\theta)}{\partial W} = \sum_{t=1}^{T}\frac{\partial L_t(\theta)}{\partial W}\). By the chain rule, \(\partial L_t/\partial W\) is the sum of the gradients along all paths from \(L_t\) to \(W\). Which paths are there? Take \(L_4\):</p>
+      <ul>
+        <li>\(L_4\) depends on \(\mathbf{s}_4\);</li>
+        <li>\(\mathbf{s}_4\) depends on \(\mathbf{s}_3\) and \(W\);</li>
+        <li>\(\mathbf{s}_3\) depends on \(\mathbf{s}_2\) and \(W\);</li>
+        <li>\(\mathbf{s}_2\) depends on \(\mathbf{s}_1\) and \(W\);</li>
+        <li>\(\mathbf{s}_1\) depends on \(\mathbf{s}_0\) and \(W\), where \(\mathbf{s}_0\) is a constant starting state.</li>
+      </ul>
+      <p>This is an <dfn>ordered network</dfn>: its state variables are computed one at a time in a fixed order (first \(\mathbf{s}_1\), then \(\mathbf{s}_2\), and so on), because each needs the one before. The chain rule gives</p>
+      <div class="eq">\[ \frac{\partial L_4(\theta)}{\partial W} = \frac{\partial L_4(\theta)}{\partial \mathbf{s}_4}\,\frac{\partial \mathbf{s}_4}{\partial W} \]</div>
+      <p>The first factor is the gradient of the loss with respect to the last hidden layer. It depends on \(V\) only, and backpropagation already computes it. The second factor is the difficulty. Leave out \(U\mathbf{x}_4\), which does not involve \(W\), and recall</p>
+      <div class="eq">\[ \mathbf{s}_4 = \sigma(W\mathbf{s}_3 + \mathbf{b}) \]</div>
+      <p>We cannot differentiate this treating \(\mathbf{s}_3\) as a constant, because \(\mathbf{s}_3\) itself depends on \(W\), the very parameter we are differentiating with respect to. In such a network the total derivative \(\partial\mathbf{s}_4/\partial W\) has two parts:</p>
+      <ul>
+        <li><b>Explicit</b>, written \(\partial^+\mathbf{s}_4/\partial W\): the derivative with all other inputs (here \(\mathbf{s}_3\)) treated as constants.</li>
+        <li><b>Implicit</b>: the sum over all indirect paths from \(\mathbf{s}_4\) to \(W\), which pass through \(\mathbf{s}_3\), \(\mathbf{s}_2\) and \(\mathbf{s}_1\).</li>
+      </ul>
+
+      <h3>Expanding the total derivative <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=Xeb6OjnVn8g&amp;t=586s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 9:46</a></h3>
+      <p>Split \(\partial\mathbf{s}_4/\partial W\), then split each total derivative that the split produces:</p>
+      <div class="eq">\[ \begin{aligned} \frac{\partial \mathbf{s}_4}{\partial W} &amp;= \underbrace{\frac{\partial^+ \mathbf{s}_4}{\partial W}}_{\text{explicit}} + \underbrace{\frac{\partial \mathbf{s}_4}{\partial \mathbf{s}_3}\,\frac{\partial \mathbf{s}_3}{\partial W}}_{\text{implicit}} \\ \rule{0pt}{2.4em}\frac{\partial \mathbf{s}_3}{\partial W} &amp;= \frac{\partial^+ \mathbf{s}_3}{\partial W} + \frac{\partial \mathbf{s}_3}{\partial \mathbf{s}_2}\,\frac{\partial \mathbf{s}_2}{\partial W} \\ \rule{0pt}{2.2em}\frac{\partial \mathbf{s}_2}{\partial W} &amp;= \frac{\partial^+ \mathbf{s}_2}{\partial W} + \frac{\partial \mathbf{s}_2}{\partial \mathbf{s}_1}\,\frac{\partial \mathbf{s}_1}{\partial W} \\ \rule{0pt}{2.2em}\frac{\partial \mathbf{s}_1}{\partial W} &amp;= \frac{\partial^+ \mathbf{s}_1}{\partial W} \end{aligned} \]</div>
+      <p>The last line has no implicit part: \(\mathbf{s}_1\) depends on \(\mathbf{s}_0\), and \(\mathbf{s}_0\) is a constant with no connection to \(W\). Substituting from the bottom up:</p>
+      <div class="eq">\[ \frac{\partial \mathbf{s}_4}{\partial W} = \frac{\partial^+ \mathbf{s}_4}{\partial W} + \frac{\partial \mathbf{s}_4}{\partial \mathbf{s}_3}\frac{\partial^+ \mathbf{s}_3}{\partial W} + \frac{\partial \mathbf{s}_4}{\partial \mathbf{s}_3}\frac{\partial \mathbf{s}_3}{\partial \mathbf{s}_2}\frac{\partial^+ \mathbf{s}_2}{\partial W} + \frac{\partial \mathbf{s}_4}{\partial \mathbf{s}_3}\frac{\partial \mathbf{s}_3}{\partial \mathbf{s}_2}\frac{\partial \mathbf{s}_2}{\partial \mathbf{s}_1}\frac{\partial^+ \mathbf{s}_1}{\partial W} \]</div>
+      <p class="note">The notation is loose. \(\mathbf{s}_4\) is a vector and \(W\) a matrix, so \(\partial\mathbf{s}_4/\partial W\) is a tensor, while \(\partial\mathbf{s}_4/\partial\mathbf{s}_3\) is a matrix. The <a href="#gory-shapes">gory details</a> below work out every shape.</p>
+    </section>
+
+    <section id="bptt-formula">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=Xeb6OjnVn8g&amp;t=651s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 10:51</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Xeb6OjnVn8g&amp;t=748s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 12:28 general formula</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=Xeb6OjnVn8g&amp;t=781s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 13:01 the name</a>
+        </div>
+        <h2>Short-circuiting the paths: the BPTT formula</h2>
+      </div>
+      <p>For a compact formula, the lecture short-circuits the chains of Jacobians. Write \(\frac{\partial \mathbf{s}_4}{\partial \mathbf{s}_3}\frac{\partial \mathbf{s}_3}{\partial \mathbf{s}_2}\) as \(\frac{\partial \mathbf{s}_4}{\partial \mathbf{s}_2}\), write the three-factor chain as \(\frac{\partial\mathbf{s}_4}{\partial\mathbf{s}_1}\), and write the first term as \(\frac{\partial\mathbf{s}_4}{\partial\mathbf{s}_4}\frac{\partial^+\mathbf{s}_4}{\partial W}\), which is fair because \(\frac{\partial\mathbf{s}_4}{\partial\mathbf{s}_4}\) is the identity. This is the chain rule read in reverse, so nothing is approximated.</p>
+      <div class="eq">\[ \frac{\partial \mathbf{s}_4}{\partial W} = \frac{\partial \mathbf{s}_4}{\partial \mathbf{s}_4}\frac{\partial^+ \mathbf{s}_4}{\partial W} + \frac{\partial \mathbf{s}_4}{\partial \mathbf{s}_3}\frac{\partial^+ \mathbf{s}_3}{\partial W} + \frac{\partial \mathbf{s}_4}{\partial \mathbf{s}_2}\frac{\partial^+ \mathbf{s}_2}{\partial W} + \frac{\partial \mathbf{s}_4}{\partial \mathbf{s}_1}\frac{\partial^+ \mathbf{s}_1}{\partial W} = \sum_{k=1}^{4} \frac{\partial \mathbf{s}_4}{\partial \mathbf{s}_k}\,\frac{\partial^+ \mathbf{s}_k}{\partial W} \]</div>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 680 310" role="img" aria-label="The chain s0, s1, s2, s3, s4, L4. One shared node W sends an explicit arrow to each of s1 to s4. Brackets above the chain mark the Jacobians from s4 back to s3, s2 and s1. The path from W into s1 and along the chain to L4 is highlighted.">
+            <defs>
+              <marker id="l11-f4-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="l11-f4-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <text class="d-s" x="20" y="24">each term: a Jacobian along the chain, times one explicit derivative of a state with respect to W</text>
+
+            <path class="d-ln-acc" d="M190 72 V60 H520 V72"/>
+            <text class="d-s" x="182" y="65" text-anchor="end" style="fill: var(--accent)">∂s₄/∂s₁</text>
+            <path class="d-ln" d="M300 100 V88 H520 V100"/>
+            <text class="d-s" x="292" y="93" text-anchor="end">∂s₄/∂s₂</text>
+            <path class="d-ln" d="M410 128 V116 H520 V128"/>
+            <text class="d-s" x="402" y="121" text-anchor="end">∂s₄/∂s₃</text>
+
+            <rect class="d-off" x="45" y="150" width="50" height="32" rx="6"/><text class="d-s" x="70" y="170" text-anchor="middle">s₀</text>
+            <text class="d-al" x="70" y="200" text-anchor="middle">constant</text>
+            <rect class="d-box" x="165" y="150" width="50" height="32" rx="6"/><text class="d-t" x="190" y="171" text-anchor="middle">s₁</text>
+            <rect class="d-box" x="275" y="150" width="50" height="32" rx="6"/><text class="d-t" x="300" y="171" text-anchor="middle">s₂</text>
+            <rect class="d-box" x="385" y="150" width="50" height="32" rx="6"/><text class="d-t" x="410" y="171" text-anchor="middle">s₃</text>
+            <rect class="d-box" x="495" y="150" width="50" height="32" rx="6"/><text class="d-t" x="520" y="171" text-anchor="middle">s₄</text>
+            <rect class="pill" x="597" y="150" width="60" height="32" rx="16"/><text class="d-t" x="627" y="171" text-anchor="middle">L₄(θ)</text>
+
+            <line class="d-ln" x1="95" y1="166" x2="162" y2="166" marker-end="url(#l11-f4-ah)"/>
+            <line class="d-ln-acc" x1="215" y1="166" x2="272" y2="166" marker-end="url(#l11-f4-aha)"/>
+            <line class="d-ln-acc" x1="325" y1="166" x2="382" y2="166" marker-end="url(#l11-f4-aha)"/>
+            <line class="d-ln-acc" x1="435" y1="166" x2="492" y2="166" marker-end="url(#l11-f4-aha)"/>
+            <line class="d-ln-acc" x1="545" y1="166" x2="594" y2="166" marker-end="url(#l11-f4-aha)"/>
+            <text class="d-s" x="570" y="146" text-anchor="middle">∂L₄/∂s₄</text>
+
+            <circle class="node-acc" cx="355" cy="272" r="20"/><text class="d-t" x="355" y="277" text-anchor="middle">W</text>
+            <line class="d-ln-acc" x1="337" y1="263" x2="194" y2="186" marker-end="url(#l11-f4-aha)"/>
+            <line class="d-ln" x1="347" y1="254" x2="303" y2="186" marker-end="url(#l11-f4-ah)"/>
+            <line class="d-ln" x1="363" y1="254" x2="407" y2="186" marker-end="url(#l11-f4-ah)"/>
+            <line class="d-ln" x1="373" y1="263" x2="516" y2="186" marker-end="url(#l11-f4-ah)"/>
+            <text class="d-s" x="268" y="240" text-anchor="end" style="fill: var(--accent)">∂⁺s₁/∂W</text>
+            <text class="d-s" x="442" y="240">∂⁺s₄/∂W</text>
+
+            <text class="d-s" x="20" y="302">accent: the k = 1 path W → s₁ → s₂ → s₃ → s₄ → L₄ · the k = 4 term has ∂s₄/∂s₄ = I</text>
+          </svg>
+        </div>
+        <figcaption><b>Four ways for \(W\) to reach \(L_4\).</b> The shared \(W\) enters every state directly (the explicit derivatives \(\partial^+\mathbf{s}_k/\partial W\)). A path that enters at \(\mathbf{s}_k\) then travels along the chain to \(\mathbf{s}_4\), which contributes the Jacobian \(\partial\mathbf{s}_4/\partial\mathbf{s}_k\). Adding the four paths gives \(\sum_{k=1}^{4} \frac{\partial \mathbf{s}_4}{\partial \mathbf{s}_k}\frac{\partial^+ \mathbf{s}_k}{\partial W}\).</figcaption>
+      </figure>
+
+      <p>Put back the first factor \(\partial L_4/\partial\mathbf{s}_4\), then replace 4 by a general step \(t\):</p>
+      <div class="result">
+        <span class="lbl">Backpropagation through time</span>
+        \[ \frac{\partial L_t(\theta)}{\partial W} = \frac{\partial L_t(\theta)}{\partial \mathbf{s}_t} \sum_{k=1}^{t} \frac{\partial \mathbf{s}_t}{\partial \mathbf{s}_k}\,\frac{\partial^+ \mathbf{s}_k}{\partial W}, \qquad \frac{\partial \mathcal{L}(\theta)}{\partial W} = \sum_{t=1}^{T} \frac{\partial L_t(\theta)}{\partial W} \]
+        <p>The algorithm is called backpropagation through time because the gradient is propagated back over all previous time steps. With this gradient in hand, training is the usual gradient descent update.</p>
+      </div>
+      <p>That leaves \(U\), which the lecture leaves as an exercise, saying it works out very similarly. It then turns to a problem hidden in this formula. <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=Xeb6OjnVn8g&amp;t=815s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>13:35</a></p>
+      <p class="callout">Completing the exercise (not in the lecture): \(U\) also enters every state explicitly, through \(U\mathbf{x}_k\), so \(\frac{\partial L_t}{\partial U} = \frac{\partial L_t}{\partial \mathbf{s}_t}\sum_{k=1}^{t}\frac{\partial\mathbf{s}_t}{\partial\mathbf{s}_k}\frac{\partial^+\mathbf{s}_k}{\partial U}\). The explicit part is worked out for \(W\) <a href="#tensor">below</a>; for \(U\), \(\mathbf{x}_k\) takes the place of \(\mathbf{s}_{k-1}\). The bias \(\mathbf{b}\) follows the same pattern, while \(\mathbf{c}\), like \(V\), only touches each step's output.</p>
+    </section>
+
+    <!-- ============ MODULE 14.4 ============ -->
+    <section id="jacobian">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=EB1SoyivHFU&amp;t=12s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 0:12</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=EB1SoyivHFU&amp;t=78s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 1:18 one factor</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=EB1SoyivHFU&amp;t=176s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 2:56 the diagonal matrix</a>
+        </div>
+        <h2>\(\partial\mathbf{s}_t/\partial\mathbf{s}_k\) is a product of Jacobians</h2>
+      </div>
+      <p>The BPTT formula sums over \(k = 1, \dots, t\). For the loss at the last step, \(t = T\), and for \(k = 1\), the term \(\partial\mathbf{s}_T/\partial\mathbf{s}_1\) links the last state to the first. Take one such \(\partial\mathbf{s}_t/\partial\mathbf{s}_k\) and undo the short-circuit:</p>
+      <div class="eq">\[ \frac{\partial \mathbf{s}_t}{\partial \mathbf{s}_k} = \frac{\partial \mathbf{s}_t}{\partial \mathbf{s}_{t-1}}\,\frac{\partial \mathbf{s}_{t-1}}{\partial \mathbf{s}_{t-2}} \cdots \frac{\partial \mathbf{s}_{k+1}}{\partial \mathbf{s}_k} = \prod_{j=k}^{t-1} \frac{\partial \mathbf{s}_{j+1}}{\partial \mathbf{s}_j} \]</div>
+      <p>That is \(t - k\) factors, multiplied with later steps on the left. Look at one factor, reindexed as \(\partial\mathbf{s}_j/\partial\mathbf{s}_{j-1}\). Write the pre-activation and the state separately and apply the chain rule:</p>
+      <div class="eq">\[ \mathbf{a}_j = W\mathbf{s}_{j-1} + U\mathbf{x}_j + \mathbf{b}, \qquad \mathbf{s}_j = \sigma(\mathbf{a}_j), \qquad \frac{\partial \mathbf{s}_j}{\partial \mathbf{s}_{j-1}} = \frac{\partial \mathbf{s}_j}{\partial \mathbf{a}_j}\,\frac{\partial \mathbf{a}_j}{\partial \mathbf{s}_{j-1}} \]</div>
+      <p>Both factors are \(d \times d\) matrices, since each is a vector differentiated with respect to a vector. In the first, \(\mathbf{a}_j = [a_{j1}, \dots, a_{jd}]\) and \(\mathbf{s}_j = [\sigma(a_{j1}), \dots, \sigma(a_{jd})]\), and entry \((p, q)\) is \(\partial s_{jp}/\partial a_{jq}\). Since \(s_{jp}\) depends only on \(a_{jp}\), every off-diagonal entry is 0 (for example \(\partial s_{j2}/\partial a_{j1} = 0\)), and the diagonal holds \(\sigma'(a_{jp})\):</p>
+      <div class="eq">\[ \frac{\partial \mathbf{s}_j}{\partial \mathbf{a}_j} = \begin{bmatrix} \sigma'(a_{j1}) &amp; 0 &amp; \cdots &amp; 0 \\ 0 &amp; \sigma'(a_{j2}) &amp; \cdots &amp; 0 \\ \vdots &amp; \vdots &amp; \ddots &amp; \vdots \\ 0 &amp; 0 &amp; \cdots &amp; \sigma'(a_{jd}) \end{bmatrix} = \operatorname{diag}(\sigma'(\mathbf{a}_j)) \]</div>
+      <p>In the second factor, \(U\mathbf{x}_j + \mathbf{b}\) does not depend on \(\mathbf{s}_{j-1}\), so \(\partial\mathbf{a}_j/\partial\mathbf{s}_{j-1} = W\).</p>
+      <div class="result">
+        <span class="lbl">One step back in time</span>
+        \[ \frac{\partial \mathbf{s}_j}{\partial \mathbf{s}_{j-1}} = \operatorname{diag}(\sigma'(\mathbf{a}_j))\,W \]
+        <p>What matters is the size of this matrix. If it is small, the product \(\partial\mathbf{s}_t/\partial\mathbf{s}_k\), and with it \(\partial L_t/\partial W\), vanishes. If it is large, they explode.</p>
+      </div>
+    </section>
+
+    <section id="bound">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=EB1SoyivHFU&amp;t=279s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 4:39</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=EB1SoyivHFU&amp;t=311s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 5:11 bounding σ′</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=EB1SoyivHFU&amp;t=413s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 6:53 vanish or explode</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=EB1SoyivHFU&amp;t=447s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 7:27 what goes wrong</a>
+        </div>
+        <h2>Why the gradient vanishes or explodes</h2>
+      </div>
+      <p>Take norms. The norm of a product of matrices is at most the product of their norms:</p>
+      <div class="eq">\[ \Big\lVert \frac{\partial \mathbf{s}_j}{\partial \mathbf{s}_{j-1}} \Big\rVert = \big\lVert \operatorname{diag}(\sigma'(\mathbf{a}_j))\,W \big\rVert \le \big\lVert \operatorname{diag}(\sigma'(\mathbf{a}_j)) \big\rVert\,\lVert W \rVert \]</div>
+      <p>Now bound each factor.</p>
+      <ul>
+        <li>The activation is a bounded function (logistic or tanh), and so is its derivative; call that bound \(\gamma\). For the logistic, \(\sigma'(a) = \sigma(a)(1 - \sigma(a))\) is largest at \(a = 0\), where it equals \(0.5 \times 0.5 = \tfrac14\). For tanh, \(\sigma'(a) = 1 - \tanh^2(a)\) is at most 1.</li>
+        <li>The weights are finite real numbers, so \(\lVert W\rVert\) has some upper bound; call it \(\lambda\).</li>
+      </ul>
+      <div class="eq">\[ \sigma'(a) \le \tfrac14 = \gamma \ \ \text{(logistic)}, \qquad \sigma'(a) \le 1 = \gamma \ \ \text{(tanh)}, \qquad \Big\lVert \frac{\partial \mathbf{s}_j}{\partial \mathbf{s}_{j-1}} \Big\rVert \le \gamma\,\lVert W \rVert \le \gamma\lambda \]</div>
+      <p>The product of \(t - k\) such factors is then bounded by the product of their bounds:</p>
+      <div class="result">
+        <span class="lbl">The bound</span>
+        \[ \Big\lVert \frac{\partial \mathbf{s}_t}{\partial \mathbf{s}_k} \Big\rVert = \Big\lVert \prod_{j=k+1}^{t} \frac{\partial \mathbf{s}_j}{\partial \mathbf{s}_{j-1}} \Big\rVert \le \prod_{j=k+1}^{t} \gamma\lambda = (\gamma\lambda)^{t-k} \]
+        <p>If \(\gamma\lambda &lt; 1\) the gradient will vanish. If \(\gamma\lambda &gt; 1\) the gradient could explode. This is the problem of <dfn>vanishing and exploding gradients</dfn>.</p>
+      </div>
+      <p>The trouble is worst when \(t\) is close to \(T\) and \(k\) is close to 1. The product then has nearly \(T\) factors, and even a number slightly below 1 shrinks fast when raised to that power. With \(\gamma\lambda = 0.9\) the bound is \(0.9^{20} \approx 0.12\) after 20 steps and \(0.9^{50} \approx 0.005\) after 50; with \(\gamma\lambda = 1.1\) it is \(1.1^{50} \approx 117\) after 50 (worked numbers, not from the slide).</p>
+      <p>Either way training breaks. A vanished gradient means no update, so the weights stay stuck where they are. An exploded gradient makes the step \(W \leftarrow W - \eta\,\nabla_W\mathcal{L}\) enormous, and the weights jump to a point far away from where they were, losing the progress made so far. This is the same saturation problem that deep feedforward networks with sigmoid units have (<a href="lecture-07.html">Lecture 7</a>), now repeated once per time step with the same \(W\).</p>
+      <p class="note"><b>Beyond the slide.</b> With the spectral norm, \(\lVert W\rVert\) is the largest singular value of \(W\), which is what the figure below lets you set. The \(\gamma\lambda &gt; 1\) case is only an upper bound, which is why the lecture says the gradient <i>could</i> explode: saturated units have \(\sigma'\) far below \(\gamma\). Also, the \(k = t\) term in the BPTT sum has no Jacobian factors at all. What vanishes is the contribution of distant steps, so the network struggles to learn long-range dependencies.</p>
+
+      <figure id="grad-fig">
+        <div class="controls">
+          <label for="grad-lam">Largest singular value λ = ‖W‖</label>
+          <input type="range" id="grad-lam" min="0.2" max="6" step="0.05" value="0.9">
+          <output id="grad-lam-out" for="grad-lam">0.90</output>
+          <span class="check"><label for="grad-act">Activation</label>
+          <select id="grad-act">
+            <option value="tanh" selected>tanh (γ = 1)</option>
+            <option value="logistic">logistic (γ = 1/4)</option>
+            <option value="linear">none, σ′ = 1 (reference)</option>
+          </select></span>
+          <button class="btn" id="grad-edge" type="button">Set γλ = 1</button>
+          <button class="btn" id="grad-new" type="button">New random W and inputs</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">γ = max σ′</span><span class="v" id="grad-g">–</span></div>
+          <div><span class="k">γλ</span><span class="v mine" id="grad-gl">–</span></div>
+          <div><span class="k">Actual ‖∂s₂₀/∂s₀‖</span><span class="v mine" id="grad-actual">–</span></div>
+          <div><span class="k">Bound (γλ)²⁰</span><span class="v" id="grad-bound">–</span></div>
+        </div>
+        <div class="status" id="grad-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="grad-svg" viewBox="0 0 640 340" role="img" aria-label="Log-scale line chart. Horizontal axis: the number of Jacobian factors, t minus k, from 0 to 20. Vertical axis: the norm of the derivative of state 20 with respect to state k, from 10 to the minus 20 up to 10 to the 20. A solid line shows the actual norm; a dashed line shows the bound gamma lambda to the power t minus k."></svg></div>
+        <figcaption><b>The gradient through 20 time steps</b> (synthetic). An RNN with \(d = 8\) units runs for 20 steps from \(\mathbf{s}_0 = \mathbf{0}\), with inputs \(U\mathbf{x}_j\) drawn from a seeded normal distribution and \(W = \lambda Q\) for a random orthogonal \(Q\), so every singular value of \(W\) equals \(\lambda\). The solid line is the exact spectral norm of \(\partial\mathbf{s}_{20}/\partial\mathbf{s}_k = \prod_j \operatorname{diag}(\sigma'(\mathbf{a}_j))\,W\) against the number of factors \(20 - k\); the dashed line is the lecture's bound \((\gamma\lambda)^{20-k}\). With no activation the two coincide. With tanh and \(\lambda &gt; 1\) the bound shoots up while the real product grows far less, because saturated units have small \(\sigma'\). Hollow markers on the bottom edge are below \(10^{-20}\).</figcaption>
+      </figure>
+    </section>
+
+    <section id="truncated">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=EB1SoyivHFU&amp;t=484s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 8:04</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=EB1SoyivHFU&amp;t=553s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 9:13 clipping</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=EB1SoyivHFU&amp;t=621s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 10:21 what comes next</a>
+        </div>
+        <h2>Truncated BPTT and gradient clipping</h2>
+      </div>
+      <p>The problem comes from long products. One simple way around it is <dfn>truncated backpropagation through time</dfn>: don't backpropagate through all the time steps. At step \(t\), look back only \(\tau\) steps, which restricts each product to at most \(\tau\) factors, with \(\tau\) smaller than the \(t - k\) of the distant steps:</p>
+      <div class="eq">\[ \frac{\partial L_t(\theta)}{\partial W} \approx \frac{\partial L_t(\theta)}{\partial \mathbf{s}_t} \sum_{k=\max(1,\,t-\tau)}^{t} \frac{\partial \mathbf{s}_t}{\partial \mathbf{s}_k}\,\frac{\partial^+ \mathbf{s}_k}{\partial W} \]</div>
+      <p>Every product that remains has at most \(\tau\) factors, so its bound is at most \((\gamma\lambda)^\tau\) even when \(\gamma\lambda &gt; 1\).</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 680 260" role="img" aria-label="Eight states from s t minus 7 to s t. Bars above them show the bound on the gradient reaching each state with gamma lambda equal to 0.6: 1, 0.6, 0.36 and so on, shrinking to the left. A dashed cut after four steps back marks truncation; the three oldest states are greyed out as not backpropagated.">
+            <defs>
+              <marker id="l11-f5-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <text class="d-s" x="140" y="28" text-anchor="middle" style="fill: var(--muted)">dropped</text>
+            <text class="d-s" x="272" y="28" style="fill: var(--accent)">kept: products of at most τ = 4 Jacobians</text>
+            <text class="d-s" x="20" y="50">bound on ‖∂s<tspan class="sb" dy="3">t</tspan><tspan dy="-3">/∂s</tspan><tspan class="sb" dy="3">k</tspan><tspan dy="-3">‖, γλ = 0.6</tspan></text>
+            <line class="d-ln d-dash" x1="260" y1="36" x2="260" y2="246"/>
+
+            <rect class="b-unk" x="46" y="161.2" width="28" height="2.8"/>
+            <rect class="b-unk" x="126" y="159.3" width="28" height="4.7"/>
+            <rect class="b-unk" x="206" y="156.2" width="28" height="7.8"/>
+            <rect x="286" y="151" width="28" height="13" style="fill: var(--accent)"/>
+            <rect x="366" y="142.4" width="28" height="21.6" style="fill: var(--accent)"/>
+            <rect x="446" y="128" width="28" height="36" style="fill: var(--accent)"/>
+            <rect x="526" y="104" width="28" height="60" style="fill: var(--accent)"/>
+            <rect x="606" y="64" width="28" height="100" style="fill: var(--accent)"/>
+            <text class="d-al" x="60" y="155" text-anchor="middle">0.028</text>
+            <text class="d-al" x="140" y="153" text-anchor="middle">0.047</text>
+            <text class="d-al" x="220" y="150" text-anchor="middle">0.078</text>
+            <text class="d-al" x="300" y="145" text-anchor="middle">0.13</text>
+            <text class="d-al" x="380" y="136" text-anchor="middle">0.22</text>
+            <text class="d-al" x="460" y="122" text-anchor="middle">0.36</text>
+            <text class="d-al" x="540" y="98" text-anchor="middle">0.6</text>
+            <text class="d-al" x="620" y="58" text-anchor="middle">1</text>
+
+            <rect class="d-off" x="36" y="176" width="48" height="28" rx="6"/><text class="d-s t-off" x="60" y="194" text-anchor="middle">s<tspan class="sb" dy="3">t−7</tspan></text>
+            <rect class="d-off" x="116" y="176" width="48" height="28" rx="6"/><text class="d-s t-off" x="140" y="194" text-anchor="middle">s<tspan class="sb" dy="3">t−6</tspan></text>
+            <rect class="d-off" x="196" y="176" width="48" height="28" rx="6"/><text class="d-s t-off" x="220" y="194" text-anchor="middle">s<tspan class="sb" dy="3">t−5</tspan></text>
+            <rect class="d-box" x="276" y="176" width="48" height="28" rx="6"/><text class="d-t" x="300" y="194" text-anchor="middle">s<tspan class="sb" dy="3">t−4</tspan></text>
+            <rect class="d-box" x="356" y="176" width="48" height="28" rx="6"/><text class="d-t" x="380" y="194" text-anchor="middle">s<tspan class="sb" dy="3">t−3</tspan></text>
+            <rect class="d-box" x="436" y="176" width="48" height="28" rx="6"/><text class="d-t" x="460" y="194" text-anchor="middle">s<tspan class="sb" dy="3">t−2</tspan></text>
+            <rect class="d-box" x="516" y="176" width="48" height="28" rx="6"/><text class="d-t" x="540" y="194" text-anchor="middle">s<tspan class="sb" dy="3">t−1</tspan></text>
+            <rect class="d-box-acc" x="596" y="176" width="48" height="28" rx="6"/><text class="d-t" x="620" y="194" text-anchor="middle">s<tspan class="sb" dy="3">t</tspan></text>
+
+            <line class="d-ln-mut" x1="114" y1="190" x2="86" y2="190"/>
+            <line class="d-ln-mut" x1="194" y1="190" x2="166" y2="190"/>
+            <line class="d-ln-mut" x1="274" y1="190" x2="246" y2="190"/>
+            <line class="d-ln-acc" x1="354" y1="190" x2="328" y2="190" marker-end="url(#l11-f5-aha)"/>
+            <line class="d-ln-acc" x1="434" y1="190" x2="408" y2="190" marker-end="url(#l11-f5-aha)"/>
+            <line class="d-ln-acc" x1="514" y1="190" x2="488" y2="190" marker-end="url(#l11-f5-aha)"/>
+            <line class="d-ln-acc" x1="594" y1="190" x2="568" y2="190" marker-end="url(#l11-f5-aha)"/>
+            <text class="d-al" x="340" y="222" text-anchor="middle">≤ γλ</text>
+            <text class="d-al" x="420" y="222" text-anchor="middle">≤ γλ</text>
+            <text class="d-al" x="500" y="222" text-anchor="middle">≤ γλ</text>
+            <text class="d-al" x="580" y="222" text-anchor="middle">≤ γλ</text>
+
+            <text class="d-s" x="20" y="250">each backward step multiplies by diag(σ′(a))W, whose norm is at most γλ</text>
+          </svg>
+        </div>
+        <figcaption><b>Truncation cuts the long products</b> (bars drawn to scale for \(\gamma\lambda = 0.6\)). The gradient from \(L_t\) reaches \(\mathbf{s}_k\) only after \(t - k\) backward steps, so the bound on what arrives shrinks geometrically to the left. Truncated BPTT with \(\tau = 4\) never computes the three oldest terms, which would have been tiny here and, with \(\gamma\lambda &gt; 1\), could have been huge.</figcaption>
+      </figure>
+
+      <p>The lecture adds a second trick aimed at exploding gradients. Gradient descent mostly cares about the direction of the gradient, so when its magnitude is too large, rescale it. <dfn>Gradient clipping</dfn> limits the norm of the gradient to a threshold \(\kappa\):</p>
+      <div class="eq">\[ \text{if } \lVert \mathbf{g} \rVert &gt; \kappa: \qquad \mathbf{g} \leftarrow \kappa\,\frac{\mathbf{g}}{\lVert \mathbf{g} \rVert} \]</div>
+      <p>Here \(\mathbf{g}\) is the gradient with all parameters stacked into one vector. The direction is unchanged and the magnitude becomes \(\kappa\). Frameworks such as TensorFlow offer this as an option to clip gradients to a given norm, and other measures of magnitude are also used.</p>
+      <p class="callout">Truncation has a price that is easy to miss: dependencies longer than \(\tau\) steps contribute nothing to the gradient, so they cannot be learned this way. The lecture presents both tricks as partial fixes. Other solutions, Long Short-Term Memory cells and Gated Recurrent Units, are the subject of <a href="lecture-12.html">Lecture 12</a>.</p>
+    </section>
+
+    <!-- ============ MODULE 14.5 ============ -->
+    <section id="gory-shapes">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=gZ65vyTNipM&amp;t=12s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 0:12</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=gZ65vyTNipM&amp;t=42s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 0:42 dimensions</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=gZ65vyTNipM&amp;t=105s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 1:45 what we know</a>
+        </div>
+        <h2>Gory details: the shape of every factor</h2>
+      </div>
+      <p>The last module checks that the BPTT formula can really be implemented. First a warning the lecture repeats: the formulas use partial-derivative notation for objects that are gradients, Jacobians and tensors (\(\nabla_W L_t\) would be the honest notation for the left side). Here is each object with its shape:</p>
+      <div class="eq">\[ \underbrace{\frac{\partial L_t(\theta)}{\partial W}}_{\in\,\mathbb{R}^{d\times d}} = \underbrace{\frac{\partial L_t(\theta)}{\partial \mathbf{s}_t}}_{\in\,\mathbb{R}^{1\times d}} \sum_{k=1}^{t} \underbrace{\frac{\partial \mathbf{s}_t}{\partial \mathbf{s}_k}}_{\in\,\mathbb{R}^{d\times d}}\ \underbrace{\frac{\partial^+ \mathbf{s}_k}{\partial W}}_{\in\,\mathbb{R}^{d\times d\times d}} \]</div>
+      <ul>
+        <li>\(\partial L_t/\partial\mathbf{s}_t\) is a scalar differentiated with respect to a vector: the gradient with respect to the last hidden layer, which backpropagation already computes.</li>
+        <li>\(\partial\mathbf{s}_t/\partial\mathbf{s}_k\) is a vector with respect to a vector. Module 14.4 gave it as \(\prod_{j=k+1}^{t}\operatorname{diag}(\sigma'(\mathbf{a}_j))\,W\).</li>
+        <li>\(\partial^+\mathbf{s}_k/\partial W\) is a vector in \(\mathbb{R}^d\) differentiated with respect to a matrix in \(\mathbb{R}^{d\times d}\), so it is a third-order tensor in \(\mathbb{R}^{d\times d\times d}\). It is the only piece we don't yet know how to compute.</li>
+      </ul>
+    </section>
+
+    <section id="tensor">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=gZ65vyTNipM&amp;t=183s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 3:03</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=gZ65vyTNipM&amp;t=284s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 4:44 chain rule</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=gZ65vyTNipM&amp;t=351s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 5:51 a sparse tensor</a>
+        </div>
+        <h2>One element of the tensor \(\partial^+\mathbf{s}_k/\partial W\)</h2>
+      </div>
+      <p>The standard recipe for a frightening derivative is to compute one element and then generalize. The \((p, q, r)\)-th element of the tensor is \(\partial^+ s_{kp}/\partial W_{qr}\): how the \(p\)-th entry of \(\mathbf{s}_k\) changes with one entry \(W_{qr}\) of the weight matrix, holding \(\mathbf{s}_{k-1}\) fixed. Recall</p>
+      <div class="eq">\[ \mathbf{a}_k = W\mathbf{s}_{k-1} + \mathbf{b}, \qquad \mathbf{s}_k = \sigma(\mathbf{a}_k) \]</div>
+      <p>(\(U\mathbf{x}_k\) is left out again, since it does not involve \(W\).) Entry \(p\) of \(\mathbf{a}_k\) is row \(p\) of \(W\) times the column \(\mathbf{s}_{k-1}\):</p>
+      <div class="eq">\[ a_{kp} = \sum_{i=1}^{d} W_{pi}\,s_{k-1,i}, \qquad s_{kp} = \sigma(a_{kp}), \qquad \frac{\partial s_{kp}}{\partial W_{qr}} = \frac{\partial s_{kp}}{\partial a_{kp}}\,\frac{\partial a_{kp}}{\partial W_{qr}} = \sigma'(a_{kp})\,\frac{\partial a_{kp}}{\partial W_{qr}} \]</div>
+      <p>In the sum for \(a_{kp}\), the only term that can contain \(W_{qr}\) is the one with \(i = r\), and it does so only when the row matches, \(p = q\). So \(\partial a_{kp}/\partial W_{qr} = s_{k-1,r}\) if \(p = q\), and 0 otherwise.</p>
+      <div class="result">
+        <span class="lbl">One element of the tensor</span>
+        \[ \frac{\partial^+ s_{kp}}{\partial W_{qr}} = \begin{cases} \sigma'(a_{kp})\,s_{k-1,r} &amp; \text{if } p = q \\ 0 &amp; \text{otherwise} \end{cases} \]
+        <p>Every element has this form, so the whole tensor can be filled in. Most of it is zero: at most \(d^2\) of its \(d^3\) entries are non-zero.</p>
+      </div>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 28 680 220" role="img" aria-label="Four 4 by 4 grids, one for each p from 1 to 4, showing the slice of the tensor for that entry of s k. In slice p only row q equals p is shaded; every other cell is zero.">
+            <text class="d-t" x="108" y="50" text-anchor="middle">slice p = 1</text>
+            <text class="d-t" x="268" y="50" text-anchor="middle">slice p = 2</text>
+            <text class="d-t" x="428" y="50" text-anchor="middle">slice p = 3</text>
+            <text class="d-t" x="588" y="50" text-anchor="middle">slice p = 4</text>
+            <text class="d-al" x="50" y="80" text-anchor="end">q=1</text>
+            <text class="d-al" x="50" y="104" text-anchor="end">2</text>
+            <text class="d-al" x="50" y="128" text-anchor="end">3</text>
+            <text class="d-al" x="50" y="152" text-anchor="end">4</text>
+
+            <rect class="d-box-acc" x="60" y="64" width="24" height="24"/><rect class="d-box-acc" x="84" y="64" width="24" height="24"/><rect class="d-box-acc" x="108" y="64" width="24" height="24"/><rect class="d-box-acc" x="132" y="64" width="24" height="24"/>
+            <rect class="d-box" x="60" y="88" width="24" height="24"/><rect class="d-box" x="84" y="88" width="24" height="24"/><rect class="d-box" x="108" y="88" width="24" height="24"/><rect class="d-box" x="132" y="88" width="24" height="24"/>
+            <rect class="d-box" x="60" y="112" width="24" height="24"/><rect class="d-box" x="84" y="112" width="24" height="24"/><rect class="d-box" x="108" y="112" width="24" height="24"/><rect class="d-box" x="132" y="112" width="24" height="24"/>
+            <rect class="d-box" x="60" y="136" width="24" height="24"/><rect class="d-box" x="84" y="136" width="24" height="24"/><rect class="d-box" x="108" y="136" width="24" height="24"/><rect class="d-box" x="132" y="136" width="24" height="24"/>
+
+            <rect class="d-box" x="220" y="64" width="24" height="24"/><rect class="d-box" x="244" y="64" width="24" height="24"/><rect class="d-box" x="268" y="64" width="24" height="24"/><rect class="d-box" x="292" y="64" width="24" height="24"/>
+            <rect class="d-box-acc" x="220" y="88" width="24" height="24"/><rect class="d-box-acc" x="244" y="88" width="24" height="24"/><rect class="d-box-acc" x="268" y="88" width="24" height="24"/><rect class="d-box-acc" x="292" y="88" width="24" height="24"/>
+            <rect class="d-box" x="220" y="112" width="24" height="24"/><rect class="d-box" x="244" y="112" width="24" height="24"/><rect class="d-box" x="268" y="112" width="24" height="24"/><rect class="d-box" x="292" y="112" width="24" height="24"/>
+            <rect class="d-box" x="220" y="136" width="24" height="24"/><rect class="d-box" x="244" y="136" width="24" height="24"/><rect class="d-box" x="268" y="136" width="24" height="24"/><rect class="d-box" x="292" y="136" width="24" height="24"/>
+
+            <rect class="d-box" x="380" y="64" width="24" height="24"/><rect class="d-box" x="404" y="64" width="24" height="24"/><rect class="d-box" x="428" y="64" width="24" height="24"/><rect class="d-box" x="452" y="64" width="24" height="24"/>
+            <rect class="d-box" x="380" y="88" width="24" height="24"/><rect class="d-box" x="404" y="88" width="24" height="24"/><rect class="d-box" x="428" y="88" width="24" height="24"/><rect class="d-box" x="452" y="88" width="24" height="24"/>
+            <rect class="d-box-acc" x="380" y="112" width="24" height="24"/><rect class="d-box-acc" x="404" y="112" width="24" height="24"/><rect class="d-box-acc" x="428" y="112" width="24" height="24"/><rect class="d-box-acc" x="452" y="112" width="24" height="24"/>
+            <rect class="d-box" x="380" y="136" width="24" height="24"/><rect class="d-box" x="404" y="136" width="24" height="24"/><rect class="d-box" x="428" y="136" width="24" height="24"/><rect class="d-box" x="452" y="136" width="24" height="24"/>
+
+            <rect class="d-box" x="540" y="64" width="24" height="24"/><rect class="d-box" x="564" y="64" width="24" height="24"/><rect class="d-box" x="588" y="64" width="24" height="24"/><rect class="d-box" x="612" y="64" width="24" height="24"/>
+            <rect class="d-box" x="540" y="88" width="24" height="24"/><rect class="d-box" x="564" y="88" width="24" height="24"/><rect class="d-box" x="588" y="88" width="24" height="24"/><rect class="d-box" x="612" y="88" width="24" height="24"/>
+            <rect class="d-box" x="540" y="112" width="24" height="24"/><rect class="d-box" x="564" y="112" width="24" height="24"/><rect class="d-box" x="588" y="112" width="24" height="24"/><rect class="d-box" x="612" y="112" width="24" height="24"/>
+            <rect class="d-box-acc" x="540" y="136" width="24" height="24"/><rect class="d-box-acc" x="564" y="136" width="24" height="24"/><rect class="d-box-acc" x="588" y="136" width="24" height="24"/><rect class="d-box-acc" x="612" y="136" width="24" height="24"/>
+
+            <text class="d-al" x="72" y="178" text-anchor="middle">r=1</text>
+            <text class="d-al" x="96" y="178" text-anchor="middle">2</text>
+            <text class="d-al" x="120" y="178" text-anchor="middle">3</text>
+            <text class="d-al" x="144" y="178" text-anchor="middle">4</text>
+            <text class="d-s" x="268" y="180" text-anchor="middle">only row q = 2</text>
+            <text class="d-s" x="428" y="180" text-anchor="middle">only row q = 3</text>
+            <text class="d-s" x="588" y="180" text-anchor="middle">only row q = 4</text>
+
+            <text class="d-s" x="20" y="214">shaded entry (q = p, r) = σ′(a<tspan class="sb" dy="3">kp</tspan><tspan dy="-3">) · s</tspan><tspan class="sb" dy="3">k−1, r</tspan><tspan dy="-3"> ; every blank entry is 0</tspan></text>
+            <text class="d-s" x="20" y="236">16 of the 64 entries can be non-zero here (d² of d³, with d = 4)</text>
+          </svg>
+        </div>
+        <figcaption><b>The tensor \(\partial^+\mathbf{s}_k/\partial W\) for \(d = 4\), one slice per entry \(s_{kp}\).</b> Rows index \(q\) and columns \(r\) of \(W\). Entry \(s_{kp}\) is computed from row \(p\) of \(W\) alone, so in slice \(p\) only row \(q = p\) is non-zero, and that row is \(\sigma'(a_{kp})\,\mathbf{s}_{k-1}^\top\).</figcaption>
+      </figure>
+
+      <p>So the tensor looks nasty, but split into single elements it is easy, and one element is enough to rebuild all of it. The lecture doesn't ask you to implement it; the point is that you could.</p>
+      <p class="callout"><b>What the sparsity buys (not on the slide).</b> In the formula, the tensor is multiplied by the row vector \(\boldsymbol{\delta}^\top = \frac{\partial L_t}{\partial\mathbf{s}_t}\frac{\partial\mathbf{s}_t}{\partial\mathbf{s}_k}\). Entry \((q, r)\) of the product is \(\sum_p \delta_p\,\partial^+ s_{kp}/\partial W_{qr} = \delta_q\,\sigma'(a_{kq})\,s_{k-1,r}\), so the \(d\times d\) contribution of step \(k\) is an outer product, \(\big(\boldsymbol{\delta}\odot\sigma'(\mathbf{a}_k)\big)\,\mathbf{s}_{k-1}^\top\), the same form as the weight gradients of <a href="lecture-04.html">Lecture 4</a>. No \(d^3\) tensor is ever stored. Implementations also sum over \(t\) first, using \(\frac{\partial\mathcal{L}}{\partial\mathbf{s}_k} = \frac{\partial L_k}{\partial\mathbf{s}_k} + \frac{\partial\mathcal{L}}{\partial\mathbf{s}_{k+1}}\operatorname{diag}(\sigma'(\mathbf{a}_{k+1}))\,W\) in a single backward sweep from \(k = T\) down to 1.</p>
+    </section>
+
+    <!-- ============ REVISION ============ -->
+    <section id="terms">
+      <div class="sec-head"><h2>Key terms</h2></div>
+      <dl class="terms">
+        <div><dt>Sequence learning problem</dt><dd>A task whose inputs form a sequence of dependent items of varying length, with the same task at each step and outputs at every step or only some.</dd></div>
+        <div><dt>Time step</dt><dd>One position in the sequence; input \(\mathbf{x}_i\) arrives at step \(i\).</dd></div>
+        <div><dt>Parameter sharing</dt><dd>Using the same \(U, V, W, \mathbf{b}, \mathbf{c}\) at every step, so one function runs at each step and any length works.</dd></div>
+        <div><dt>Recurrent connection</dt><dd>The weight \(W\) that feeds the previous state into the current step: \(\mathbf{s}_i = \sigma(U\mathbf{x}_i + W\mathbf{s}_{i-1} + \mathbf{b})\).</dd></div>
+        <div><dt>State \(\mathbf{s}_i\)</dt><dd>The hidden vector at step \(i\); it encodes all inputs seen up to step \(i\). \(\mathbf{s}_0\) is a fixed start.</dd></div>
+        <div><dt>Ordered network</dt><dd>A network whose state variables are computed one at a time in a fixed order, each depending on earlier ones and on the same parameters.</dd></div>
+        <div><dt>Explicit derivative \(\partial^+\mathbf{s}_k/\partial W\)</dt><dd>The derivative of \(\mathbf{s}_k\) with its other inputs, such as \(\mathbf{s}_{k-1}\), held constant.</dd></div>
+        <div><dt>Implicit derivative</dt><dd>The sum over indirect paths from \(\mathbf{s}_k\) back to \(W\) through earlier states.</dd></div>
+        <div><dt>Backpropagation through time</dt><dd>\(\frac{\partial L_t}{\partial W} = \frac{\partial L_t}{\partial \mathbf{s}_t}\sum_{k=1}^{t}\frac{\partial \mathbf{s}_t}{\partial \mathbf{s}_k}\frac{\partial^+ \mathbf{s}_k}{\partial W}\): backpropagation over all previous time steps.</dd></div>
+        <div><dt>Step Jacobian</dt><dd>\(\partial\mathbf{s}_j/\partial\mathbf{s}_{j-1} = \operatorname{diag}(\sigma'(\mathbf{a}_j))\,W\), with norm at most \(\gamma\lambda\).</dd></div>
+        <div><dt>Vanishing gradient</dt><dd>\(\lVert\partial\mathbf{s}_t/\partial\mathbf{s}_k\rVert \le (\gamma\lambda)^{t-k} \to 0\) when \(\gamma\lambda &lt; 1\): distant steps stop contributing and weights stop changing.</dd></div>
+        <div><dt>Exploding gradient</dt><dd>When \(\gamma\lambda &gt; 1\) the bound grows geometrically, so the gradient can become huge and throw the weights far away.</dd></div>
+        <div><dt>Truncated BPTT</dt><dd>Backpropagating only \(\tau\) steps back from each \(t\), so no product has more than \(\tau\) factors.</dd></div>
+        <div><dt>Gradient clipping</dt><dd>Rescaling the gradient to norm \(\kappa\) whenever its norm exceeds \(\kappa\), keeping its direction.</dd></div>
+      </dl>
+    </section>
+
+    <section id="test">
+      <div class="sec-head"><h2>Test yourself</h2></div>
+      <div class="quiz">
+        <details><summary><span class="q">Q1</span><span>An RNN has inputs in \(\mathbb{R}^{10}\), a 20-dimensional state and 5 output classes. How many parameters does it have, and how does that change for sequences of length 1000 instead of 10?</span><span class="tog"></span></summary>
+          <p>\(U\): \(10 \times 20 = 200\); \(W\): \(20 \times 20 = 400\); \(V\): \(20 \times 5 = 100\); \(\mathbf{b}\): 20; \(\mathbf{c}\): 5. Total 725. It does not change with the sequence length, because the same parameters are shared across all time steps.</p></details>
+        <details><summary><span class="q">Q2</span><span>Why does feeding all previous inputs \(\mathbf{x}_1, \dots, \mathbf{x}_t\) to the network at step \(t\) fail the wishlist?</span><span class="tog"></span></summary>
+          <p>Each step computes a different function (\(f_2\) has two inputs and weights \(u_1, u_2\), \(f_3\) has three), so the same function is not executed at each step. The number of functions and weights grows with the sequence length, and a test sequence longer than any training sequence has steps with no trained parameters.</p></details>
+        <details><summary><span class="q">Q3</span><span>In the “deep” example, which time step contributes most to the loss, and why?</span><span class="tog"></span></summary>
+          <p>Step 4. The true next character is ⟨stop⟩ but the network gives it probability 0.1, so \(L_4 = -\ln 0.1 \approx 2.30\), against \(-\ln 0.7 \approx 0.36\) at each of the other steps, where the true character got 0.7.</p></details>
+        <details><summary><span class="q">Q4</span><span>Why can't \(\partial\mathbf{s}_4/\partial W\) be computed by treating \(\mathbf{s}_3\) as a constant? Write out \(\partial\mathbf{s}_3/\partial W\) in the short-circuited form.</span><span class="tog"></span></summary>
+          <p>\(\mathbf{s}_3\) itself depends on \(W\), so holding it constant gives only the explicit part and misses every path through earlier states. In full: \(\frac{\partial \mathbf{s}_3}{\partial W} = \frac{\partial \mathbf{s}_3}{\partial \mathbf{s}_3}\frac{\partial^+ \mathbf{s}_3}{\partial W} + \frac{\partial \mathbf{s}_3}{\partial \mathbf{s}_2}\frac{\partial^+ \mathbf{s}_2}{\partial W} + \frac{\partial \mathbf{s}_3}{\partial \mathbf{s}_1}\frac{\partial^+ \mathbf{s}_1}{\partial W} = \sum_{k=1}^{3}\frac{\partial \mathbf{s}_3}{\partial \mathbf{s}_k}\frac{\partial^+ \mathbf{s}_k}{\partial W}\).</p></details>
+        <details><summary><span class="q">Q5</span><span>An RNN has \(\lVert W\rVert = 0.8\). Bound \(\lVert\partial\mathbf{s}_{30}/\partial\mathbf{s}_{10}\rVert\) for tanh and for logistic units.</span><span class="tog"></span></summary>
+          <p>There are \(t - k = 20\) factors. Tanh: \(\gamma\lambda = 0.8\), bound \(0.8^{20} \approx 0.0115\). Logistic: \(\gamma\lambda = 0.25 \times 0.8 = 0.2\), bound \(0.2^{20} \approx 1.0 \times 10^{-14}\). The logistic version vanishes far faster because its derivative is never above \(\tfrac14\).</p></details>
+        <details><summary><span class="q">Q6</span><span>For logistic units, how large must \(\lVert W\rVert\) be before the bound even allows an exploding gradient? Does exceeding it guarantee an explosion?</span><span class="tog"></span></summary>
+          <p>The bound grows only if \(\gamma\lambda &gt; 1\), i.e. \(\lambda &gt; 4\). Exceeding it does not guarantee an explosion: \((\gamma\lambda)^{t-k}\) is an upper bound, and when units saturate their \(\sigma'\) is far below \(\tfrac14\). That is why the lecture says the gradient <i>could</i> explode.</p></details>
+        <details><summary><span class="q">Q7</span><span>With a 50-dimensional state, how many entries does \(\partial^+\mathbf{s}_k/\partial W\) have, and how many can be non-zero?</span><span class="tog"></span></summary>
+          <p>It is \(d \times d \times d = 125{,}000\) entries. Only those with \(p = q\) can be non-zero, \(d^2 = 2{,}500\) of them, each equal to \(\sigma'(a_{kp})\,s_{k-1,r}\).</p></details>
+        <details><summary><span class="q">Q8</span><span>A gradient is \(\mathbf{g} = (6, 8)\) and the clipping threshold is \(\kappa = 5\). What is the clipped gradient? And with truncated BPTT, \(\tau = 3\), which \(k\) contribute to \(\partial L_{10}/\partial W\)?</span><span class="tog"></span></summary>
+          <p>\(\lVert\mathbf{g}\rVert = 10 &gt; 5\), so \(\mathbf{g} \leftarrow 5 \cdot (6, 8)/10 = (3, 4)\): same direction, norm 5. With \(\tau = 3\), only \(k = 7, 8, 9, 10\) contribute, so each product \(\partial\mathbf{s}_{10}/\partial\mathbf{s}_k\) has at most 3 factors.</p></details>
+      </div>
+    </section>
+
+    <!-- PAGER:START --><nav class="pager" aria-label="Previous and next lecture"><a href="lecture-09.html"><span class="dir">← Lecture 9</span><span class="nm">Visualizing and fooling CNNs</span></a><a class="next" href="index.html"><span class="dir">Lecture 12 · coming</span><span class="nm">GRUs and LSTMs</span></a></nav><!-- PAGER:END -->
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the official lecture slides and the module videos' NPTEL captions. Timestamp links open the video at that moment. Charts marked synthetic use data generated for these notes. Not an official IIT Madras resource.</div>
+</footer>
+
+<script src="notes.js"></script>
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const tween = (from, to, set) => { const t0 = performance.now(), dur = reduce ? 0 : 420; const step = now => { const k = dur ? Math.min(1, (now - t0) / dur) : 1; set(from + (to - from) * (1 - Math.pow(1 - k, 3))); if (k < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); };
+
+  /* ---------- Gradient norm through 20 time steps ---------- */
+  (() => {
+    const svg = document.getElementById('grad-svg'); if (!svg) return;
+    const D = 8, T = 20;
+    let seed = 1411;
+    const rand = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    const normal = () => { let u = 0; while (u === 0) u = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rand()); };
+
+    /* W = lambda * Q with Q orthogonal (Gram-Schmidt on Gaussian rows); X[j] = U x_j + b for j = 1..T */
+    let Q = [], X = [];
+    const fresh = () => {
+      const A = Array.from({ length: D }, () => Array.from({ length: D }, normal));
+      for (let i = 0; i < D; i++) {
+        for (let j = 0; j < i; j++) { let dt = 0; for (let c = 0; c < D; c++) dt += A[i][c] * A[j][c]; for (let c = 0; c < D; c++) A[i][c] -= dt * A[j][c]; }
+        let nr = 0; for (let c = 0; c < D; c++) nr += A[i][c] * A[i][c]; nr = Math.sqrt(nr); for (let c = 0; c < D; c++) A[i][c] /= nr;
+      }
+      Q = A;
+      X = Array.from({ length: T + 1 }, () => Array.from({ length: D }, normal));
+    };
+    const sig = a => 1 / (1 + Math.exp(-a));
+    const ACT = {
+      tanh: { f: Math.tanh, d: a => { const y = Math.tanh(a); return 1 - y * y; }, g: 1 },
+      logistic: { f: sig, d: a => { const y = sig(a); return y * (1 - y); }, g: 0.25 },
+      linear: { f: a => a, d: () => 1, g: 1 }
+    };
+    const v0 = Array.from({ length: D }, (_, i) => 1 + 0.37 * i);
+    const matVec = (P, v) => P.map(row => row.reduce((s, x, c) => s + x * v[c], 0));
+    const specNorm = P => {
+      let v = v0.slice();
+      for (let it = 0; it < 80; it++) {
+        const u = matVec(P, v), w = new Array(D).fill(0);
+        for (let r = 0; r < D; r++) for (let c = 0; c < D; c++) w[c] += P[r][c] * u[r];
+        const n = Math.hypot(...w); if (!n) return 0;
+        v = w.map(x => x / n);
+      }
+      return Math.hypot(...matVec(P, v));
+    };
+    /* log10 of the spectral norm of ds_T/ds_{T-m} for m = 0..T, rescaling as we go to avoid under/overflow */
+    const compute = (lam, act) => {
+      let s = new Array(D).fill(0);
+      const ds = [];
+      for (let j = 1; j <= T; j++) {
+        const a = new Array(D);
+        for (let p = 0; p < D; p++) { let v = X[j][p]; for (let q = 0; q < D; q++) v += lam * Q[p][q] * s[q]; a[p] = v; }
+        ds[j] = a.map(act.d); s = a.map(act.f);
+      }
+      const out = [0];
+      let P = Array.from({ length: D }, (_, i) => Array.from({ length: D }, (_, j) => (i === j ? 1 : 0)));
+      let logScale = 0;
+      for (let m = 1; m <= T; m++) {
+        const j = T - m + 1;
+        const N = Array.from({ length: D }, () => new Array(D).fill(0));
+        for (let r = 0; r < D; r++) for (let k = 0; k < D; k++) { const pk = P[r][k] * ds[j][k] * lam; if (!pk) continue; for (let c = 0; c < D; c++) N[r][c] += pk * Q[k][c]; }
+        let mx = 0; for (const row of N) for (const x of row) mx = Math.max(mx, Math.abs(x));
+        if (!mx) { for (let rest = m; rest <= T; rest++) out.push(-Infinity); break; }
+        for (const row of N) for (let c = 0; c < D; c++) row[c] /= mx;
+        logScale += Math.log10(mx); P = N;
+        out.push(logScale + Math.log10(specNorm(P)));
+      }
+      return out;
+    };
+
+    /* chart frame */
+    const Wd = 640, Ht = 340, PL = 66, PR = 16, PT = 14, PB = 48, LO = -20, HI = 20;
+    const sx = m => PL + m * (Wd - PL - PR) / T;
+    const sy = v => PT + (HI - v) * (Ht - PT - PB) / (HI - LO);
+    const SUP = { '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
+    const sup = s => String(s).split('').map(c => SUP[c] || c).join('');
+    const grid = mk('g', { class: 'c-grid' }, svg);
+    for (let v = LO; v <= HI; v += 5) {
+      mk('line', { x1: PL, x2: Wd - PR, y1: sy(v), y2: sy(v) }, grid);
+      mk('text', { x: PL - 8, y: sy(v) + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = v === 0 ? '1' : '10' + sup(v);
+    }
+    for (let m = 0; m <= T; m += 5) {
+      mk('line', { x1: sx(m), x2: sx(m), y1: PT, y2: Ht - PB }, grid);
+      mk('text', { x: sx(m), y: Ht - PB + 16, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = m;
+    }
+    mk('line', { x1: PL, x2: PL, y1: PT, y2: Ht - PB, class: 'c-axis' }, svg);
+    mk('line', { x1: PL, x2: Wd - PR, y1: Ht - PB, y2: Ht - PB, class: 'c-axis' }, svg);
+    mk('line', { x1: PL, x2: Wd - PR, y1: sy(0), y2: sy(0), class: 'c-one' }, svg);
+    mk('text', { x: (PL + Wd - PR) / 2, y: Ht - 10, 'text-anchor': 'middle', class: 'c-title' }, svg).textContent = 't − k: Jacobian factors in the product (t = 20, k from 20 down to 0)';
+    const yMid = (PT + Ht - PB) / 2;
+    const yTitle = mk('text', { x: 14, y: yMid, 'text-anchor': 'middle', class: 'c-title', transform: `rotate(-90 14 ${yMid})` }, svg);
+    yTitle.textContent = 'norm of ∂s₂₀/∂s';
+    mk('tspan', { dy: 3, style: 'font-size: 9.5px' }, yTitle).textContent = 'k';
+    mk('tspan', { dy: -3 }, yTitle).textContent = ', log scale';
+    mk('line', { x1: PL + 14, x2: PL + 40, y1: PT + 16, y2: PT + 16, class: 'c-act' }, svg);
+    mk('text', { x: PL + 46, y: PT + 20, class: 'c-note' }, svg).textContent = 'actual norm of the product of Jacobians';
+    mk('line', { x1: PL + 14, x2: PL + 40, y1: PT + 34, y2: PT + 34, class: 'c-bound' }, svg);
+    const bl = mk('text', { x: PL + 46, y: PT + 38, class: 'c-note' }, svg);
+    bl.textContent = "lecture's bound (γλ)";
+    mk('tspan', { dy: -5, style: 'font-size: 9px' }, bl).textContent = 't−k';
+
+    const pBound = mk('path', { class: 'c-bound' }, svg);
+    const pAct = mk('path', { class: 'c-act' }, svg);
+    const dotsG = mk('g', {}, svg);
+    const dots = Array.from({ length: T + 1 }, () => mk('circle', { r: 3.4 }, dotsG));
+
+    const lamIn = document.getElementById('grad-lam'), lamOut = document.getElementById('grad-lam-out'), actSel = document.getElementById('grad-act');
+    const oG = document.getElementById('grad-g'), oGL = document.getElementById('grad-gl'), oA = document.getElementById('grad-actual'), oB = document.getElementById('grad-bound'), status = document.getElementById('grad-status');
+    const fmt = lg => {
+      if (lg === -Infinity) return '0';
+      if (lg >= -2 && lg < 4) { const x = Math.pow(10, lg); return x >= 100 ? x.toFixed(0) : x.toPrecision(3); }
+      let e = Math.floor(lg), mnt = Math.pow(10, lg - e);
+      if (mnt >= 9.95) { mnt = 1; e += 1; }
+      return mnt.toFixed(1) + ' × 10' + sup(e);
+    };
+    const clampV = v => Math.max(LO, Math.min(HI, v));
+    let lam = parseFloat(lamIn.value);
+    const draw = () => {
+      const act = ACT[actSel.value] || ACT.tanh;
+      const gl = act.g * lam, lgl = Math.log10(gl);
+      const vals = compute(lam, act);
+      let dB = '', dA = '';
+      for (let m = 0; m <= T; m++) {
+        const b = m * lgl, a = vals[m];
+        dB += (m ? ' L' : 'M') + sx(m).toFixed(1) + ' ' + sy(clampV(b)).toFixed(1);
+        dA += (m ? ' L' : 'M') + sx(m).toFixed(1) + ' ' + sy(clampV(a)).toFixed(1);
+        dots[m].setAttribute('cx', sx(m).toFixed(1)); dots[m].setAttribute('cy', sy(clampV(a)).toFixed(1));
+        dots[m].setAttribute('class', a < LO ? 'c-act-clip' : 'c-act-pt');
+      }
+      pBound.setAttribute('d', dB); pAct.setAttribute('d', dA);
+      lamOut.textContent = lam.toFixed(2);
+      oG.textContent = act.g === 1 ? '1' : '1/4';
+      oGL.textContent = gl.toFixed(2);
+      const a20 = vals[T], b20 = T * lgl;
+      oA.textContent = fmt(a20); oB.textContent = fmt(b20);
+      let msg;
+      if (gl < 0.97) msg = `γλ = ${gl.toFixed(2)} < 1: every factor can only shrink the gradient, so from 20 steps back it is at most (γλ)²⁰ = ${fmt(b20)}. It must vanish.`;
+      else if (gl <= 1.03) msg = actSel.value === 'linear' ? 'γλ ≈ 1 with no activation: W is orthogonal, so every product of Jacobians keeps norm 1.' : 'γλ ≈ 1: the bound stays flat at 1, yet the actual norm still falls, because σ′(a) is usually below its maximum γ.';
+      else if (a20 >= 1) msg = `γλ = ${gl.toFixed(2)} > 1 and the actual norm grows to ${fmt(a20)} over 20 steps: the gradient explodes.`;
+      else msg = `γλ = ${gl.toFixed(2)} > 1, so the bound allows growth to ${fmt(b20)}, but the actual norm is ${fmt(a20)}: saturated units have small σ′. The bound says the gradient could explode, not that it will.`;
+      status.textContent = msg;
+    };
+    fresh();
+    draw();
+    lamIn.addEventListener('input', () => { lam = parseFloat(lamIn.value); draw(); });
+    actSel.addEventListener('change', draw);
+    document.getElementById('grad-edge').addEventListener('click', () => {
+      const act = ACT[actSel.value] || ACT.tanh;
+      const target = Math.max(0.2, Math.min(6, 1 / act.g));
+      tween(lam, target, v => { lam = v; lamIn.value = v.toFixed(2); draw(); });
+    });
+    document.getElementById('grad-new').addEventListener('click', () => { fresh(); draw(); });
+  })();
+})();
+</script>
+</body>
+</html>
