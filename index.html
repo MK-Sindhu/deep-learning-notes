@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DL Notes · CS6910 Deep Learning</title>
+<meta name="description" content="Lecture notes for CS6910/CS7015 Deep Learning (IIT Madras, Prof. Mitesh M. Khapra), lectures 2 to 14, with diagrams, maths and self-tests.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<style>
+.course td .sub { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.45; }
+.course td:nth-child(3) a { color: var(--accent); font-family: var(--font-head); font-weight: 500; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <div class="eyebrow">CS6910 / CS7015 · Deep Learning · IIT Madras</div>
+    <h1>Lecture notes for Deep Learning, lectures 2–14</h1>
+    <p class="lede">Notes for Prof. Mitesh M. Khapra's course, one page per lecture, built from the official slides and the lecture videos. Each page has diagrams of the key ideas, the maths written out, timestamp links into the module videos, and questions to test yourself.</p>
+    <div class="watch">
+      <a class="btn solid" href="lecture-02.html">Start with Lecture 2</a>
+      <a class="btn" href="https://www.cse.iitm.ac.in/~miteshk/CS6910.html" target="_blank" rel="noopener">Course page</a>
+    </div>
+  </div>
+</header>
+
+<div class="hub gutter">
+  <main class="hub-main">
+    <section id="course-map">
+      <div class="sec-head"><h2>Lectures</h2></div>
+      <p>The lectures and topics follow the Schedule on the course page. Each lecture is a set of module videos (M1, M2, …); the notes link into the right module at the right moment.</p>
+      <div class="tbl-wrap">
+        <table class="course">
+          <thead><tr><th>Lecture</th><th>Topics</th><th>Slides</th><th>Notes</th></tr></thead>
+          <tbody><!-- COURSE-MAP:START -->
+<tr class="group"><td colspan="4">Foundations</td></tr>
+<tr><td>02</td><td>McCulloch–Pitts neurons, perceptrons and MLPs<span class="sub">McCulloch Pitts Neuron, Thresholding Logic, Perceptrons, Perceptron Learning Algorithm and Convergence, Multilayer Perceptrons (MLPs), Representation Power of MLPs</span></td><td><a href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-2/fullscreen" target="_blank" rel="noopener">Slides</a></td><td><span class="chip planned">Coming</span></td></tr>
+<tr><td>03</td><td>Sigmoid neurons, gradient descent, feedforward networks<span class="sub">Sigmoid Neurons, Gradient Descent, Feedforward Neural Networks, Representation Power of Feedforward Neural Networks</span></td><td><a href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-3-44073c/fullscreen" target="_blank" rel="noopener">Slides</a></td><td><span class="chip planned">Coming</span></td></tr>
+<tr><td>04</td><td>Feedforward networks and backpropagation<span class="sub">Feedforward Neural Networks, Backpropagation</span></td><td><a href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-4/fullscreen" target="_blank" rel="noopener">Slides</a></td><td><span class="chip planned">Coming</span></td></tr>
+<tr class="group"><td colspan="4">Training deep networks</td></tr>
+<tr><td>05</td><td>Optimization: from gradient descent to Adam<span class="sub">Gradient Descent (GD), Momentum Based GD, Nesterov Accelerated GD, Stochastic GD, AdaGrad, RMSProp, Adam</span></td><td><a href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-5/fullscreen" target="_blank" rel="noopener">Slides 1</a> · <a href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-52/fullscreen" target="_blank" rel="noopener">Slides 2</a></td><td><span class="chip planned">Coming</span></td></tr>
+<tr><td>06</td><td>Regularization<span class="sub">Bias Variance Tradeoff, L2 regularization, Early stopping, Dataset augmentation, Parameter sharing and tying, Injecting noise at input, Ensemble methods, Dropout</span></td><td><a href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-8/fullscreen" target="_blank" rel="noopener">Slides</a></td><td><span class="chip planned">Coming</span></td></tr>
+<tr><td>07</td><td>Pre-training, activations, initialization, batch norm<span class="sub">Greedy Layerwise Pre-training, Better activation functions, Better weight initialization methods, Batch Normalization</span></td><td><a href="https://iitm-pod.slides.com/arunprakash_ai/cs6910-lecture-6/fullscreen" target="_blank" rel="noopener">Slides</a></td><td><span class="chip planned">Coming</span></td></tr>
+<tr class="group"><td colspan="4">Convolutional networks</td></tr>
+<tr><td>08</td><td>Convolutional neural networks<span class="sub">Convolutional Neural Networks, LeNet, AlexNet, ZF-Net, VGGNet, GoogLeNet, ResNet</span></td><td><a href="https://www.cse.iitm.ac.in/~miteshk/CS7015/Slides/Teaching/pdf/Lecture11.pdf" target="_blank" rel="noopener">Slides</a></td><td><span class="chip planned">Coming</span></td></tr>
+<tr><td>09</td><td>Visualizing and fooling CNNs<span class="sub">Visualizing Convolutional Neural Networks, Guided Backpropagation, Deep Dream, Deep Art, Fooling Convolutional Neural Networks</span></td><td><a href="https://www.cse.iitm.ac.in/~miteshk/CS7015/Slides/Teaching/pdf/Lecture13.pdf" target="_blank" rel="noopener">Slides</a></td><td><span class="chip planned">Coming</span></td></tr>
+<tr class="group"><td colspan="4">Sequences and language</td></tr>
+<tr><td>10</td><td>Word representations<span class="sub">Learning Vectorial Representations Of Words</span></td><td><a href="https://www.cse.iitm.ac.in/~miteshk/CS7015/Slides/Teaching/pdf/Lecture10.pdf" target="_blank" rel="noopener">Slides</a></td><td><span class="chip planned">Coming</span></td></tr>
+<tr><td>11</td><td>Recurrent neural networks and BPTT<span class="sub">Recurrent Neural Networks, Backpropagation Through Time (BPTT), Vanishing and Exploding Gradients, Truncated BPTT</span></td><td><a href="https://www.cse.iitm.ac.in/~miteshk/CS7015/Slides/Teaching/pdf/Lecture14.pdf" target="_blank" rel="noopener">Slides</a></td><td><span class="chip planned">Coming</span></td></tr>
+<tr><td>12</td><td>GRUs and LSTMs<span class="sub">Gated Recurrent Units (GRUs), Long Short Term Memory (LSTM) Cells, Solving the vanishing gradient problem with LSTMs</span></td><td><a href="https://www.cse.iitm.ac.in/~miteshk/CS7015/Slides/Teaching/pdf/Lecture15.pdf" target="_blank" rel="noopener">Slides</a></td><td><span class="chip planned">Coming</span></td></tr>
+<tr><td>13</td><td>Encoder–decoder models and attention<span class="sub">Encoder Decoder Models, Attention Mechanism, Attention over images, Hierarchical Attention</span></td><td><a href="https://www.cse.iitm.ac.in/~miteshk/CS7015/Slides/Teaching/pdf/Lecture16.pdf" target="_blank" rel="noopener">Slides</a></td><td><span class="chip planned">Coming</span></td></tr>
+<tr><td>14</td><td>Transformers<span class="sub">Transformers: Multi-headed Self Attention, Cross Attention</span></td><td><a href="https://iitm-pod.slides.com/arunprakash_ai/lecture-17-transformers-ce11cb/fullscreen" target="_blank" rel="noopener">Slides</a></td><td><span class="chip planned">Coming</span></td></tr>
+<!-- COURSE-MAP:END --></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="how">
+      <div class="sec-head"><h2>Using these notes</h2></div>
+      <ul>
+        <li>Every section starts with a timestamp chip, such as <span class="ts" style="pointer-events:none"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 12:40</span>, that opens that module's video at that moment.</li>
+        <li>The slides are the backbone of each page; the videos fill in the explanations. Each page links to its official slides.</li>
+        <li>Lectures 8–13 have NPTEL's human-made captions. Lectures 2–7 and 14 only have YouTube's auto-generated captions, so those notes rely more on the slides for exact wording and formulas. Each page's footer says which it used.</li>
+        <li>Charts built on synthetic data say so in their caption. They illustrate the idea, not a dataset from the course.</li>
+        <li>Lecture 1 (history of deep learning) is not covered.</li>
+      </ul>
+    </section>
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the official CS6910 slides and the lecture videos' captions. Not an official IIT Madras resource.</div>
+</footer>
+</body>
+</html>
