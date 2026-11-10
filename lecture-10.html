@@ -1,0 +1,1185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lecture 10 · Word representations · DL Notes</title>
+<meta name="description" content="CS6910 Deep Learning (IIT Madras) notes, Lecture 10: one-hot and co-occurrence word vectors, PPMI and SVD, CBOW and skip-gram with negative sampling, contrastive estimation, hierarchical softmax, GloVe, evaluation, and how SVD relates to word2vec.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<style>
+.dg .sb { font-size: 10px; }
+.dg .acc { fill: var(--accent); }
+.controls select { font: 500 14px/1.2 var(--font-head); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 8px; }
+.controls .seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.controls .seg .btn { padding: 8px 12px; font-size: 13px; }
+.btn[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.controls input[type="range"]:disabled { opacity: .45; }
+.hm-lbl { fill: var(--ink-2); font: 500 11px var(--font-head); }
+.hm-val { fill: var(--ink); font: 500 9.5px var(--font-mono); }
+.hm-zero { fill: var(--muted); }
+.hm-new { font-weight: 700; }
+.hm-row { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+.hm-cell { fill: none; stroke: var(--ink); stroke-width: 2; }
+.mini td.hl { font-weight: 700; color: var(--accent); }
+</style>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <!-- PARTNAV:START --><nav class="partnav" aria-label="Lectures"><a href="index.html">DL Notes</a><span class="sep">/</span><span>Lecture 10</span><span class="sep">·</span><a href="lecture-09.html">← Lecture 9</a><span class="sep">·</span><a href="lecture-11.html">Lecture 11 →</a></nav><!-- PARTNAV:END -->
+    <div class="eyebrow">CS6910 · Deep Learning · IIT Madras</div>
+    <h1>Word representations: from co-occurrence counts to word2vec</h1>
+    <p class="lede">A model can only read words once each word is a vector, and a useful vector puts similar words close together. This lecture builds such vectors two ways, by compressing a co-occurrence matrix with SVD and by training small prediction networks (CBOW, skip-gram, GloVe), and ends by showing that the two are closely related.</p>
+    <div class="meta">
+      <span><b>Lecture 10</b></span>
+      <span>Instructor <b>Prof. Mitesh M. Khapra</b></span>
+      <span>About <b>136 min</b> of video</span>
+      <span><b>12</b> modules</span>
+    </div>
+    <div class="watch">
+      <a class="btn solid" href="https://www.cse.iitm.ac.in/~miteshk/CS7015/Slides/Teaching/pdf/Lecture10.pdf" target="_blank" rel="noopener">Slides</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=M2T36PlRv1U" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 9:26</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=74clhgHhR2M" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 12:05</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=SSpSk1Io52w" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 14:41</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=05L1tSvzWHs" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 1:41</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=yBmtXtVya9A" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 36:35</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=XO2GHDm-ZoI" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 10:59</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=3F6KInYCJxI" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 8:34</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=XZUGn36eAgA" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 7:04</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=ioe1eeEWU0I" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 13:30</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=zA0U8C_q04M" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 7:58</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=b0M0AzjpPqc" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 8:51</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=MBcnPueElDU" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 4:15</a>
+    </div>
+  </div>
+</header>
+
+<div class="page gutter">
+  <nav class="toc" aria-label="Contents">
+    <div>
+      <h4>Module 10.1 · One-hot</h4>
+      <ul>
+        <li><a href="#motivation">Why words need vectors</a></li>
+        <li><a href="#one-hot">One-hot vectors</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 10.2 · Distributed</h4>
+      <ul>
+        <li><a href="#cooccurrence">Co-occurrence matrix</a></li>
+        <li><a href="#pmi">PMI and PPMI</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 10.3 · SVD</h4>
+      <ul>
+        <li><a href="#svd">Best rank-k approximation</a></li>
+        <li><a href="#svd-latent">Hidden co-occurrence</a></li>
+        <li><a href="#svd-vectors">Word vectors W = UΣ</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 10.4 · CBOW</h4>
+      <ul>
+        <li><a href="#predict">Counting to predicting</a></li>
+        <li><a href="#cbow">The CBOW network</a></li>
+        <li><a href="#cbow-loss">Softmax and loss</a></li>
+        <li><a href="#cbow-update">The update rule</a></li>
+        <li><a href="#cbow-window">More context words</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Module 10.5 · Skip-gram</h4>
+      <ul>
+        <li><a href="#skip-gram">Skip-gram</a></li>
+        <li><a href="#negative-sampling">Negative sampling</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Modules 10.6–10.7 · Cheaper softmax</h4>
+      <ul>
+        <li><a href="#contrastive">Contrastive estimation</a></li>
+        <li><a href="#hierarchical">Hierarchical softmax</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Modules 10.8–10.10 · GloVe and after</h4>
+      <ul>
+        <li><a href="#glove">GloVe</a></li>
+        <li><a href="#evaluation">Evaluation</a></li>
+        <li><a href="#svd-word2vec">SVD and word2vec</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Revision</h4>
+      <ul>
+        <li><a href="#terms">Key terms</a></li>
+        <li><a href="#test">Test yourself</a></li>
+        <li><a href="index.html">All lectures</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="glance" id="glance">
+      <h2>At a glance</h2>
+      <ul>
+        <li><b>One-hot vectors</b> have \(|V|\) entries (50K to 13M) and make every pair of words equally unrelated: distance \(\sqrt2\), cosine 0.</li>
+        <li><b>Count-based:</b> represent a word by its row of a <dfn>co-occurrence matrix</dfn>, reweight with <b>PPMI</b>, and compress with <b>SVD</b>. \(W_{\text{word}} = U\Sigma\) gives \(k\)-dimensional vectors with the same dot products as the rank-\(k\) reconstruction.</li>
+        <li><b>Prediction-based:</b> <b>CBOW</b> predicts a word from its context with a softmax; the columns of \(W_{\text{context}}\) and \(W_{\text{word}}\) are the word vectors. The update \(\mathbf{v}_w \leftarrow \mathbf{v}_w + \eta\,\mathbf{u}_c(1-\hat y_w)\) pulls a word toward its contexts. <b>Skip-gram</b> predicts the context from the word.</li>
+        <li>The \(|V|\)-way softmax is the bottleneck. <b>Negative sampling</b> scores true and random pairs with \(\sigma(\mathbf{u}_c^\top\mathbf{v}_w)\), <b>contrastive estimation</b> asks a true window to outscore a corrupted one by a margin, and <b>hierarchical softmax</b> needs about \(\log_2|V|\) sigmoids along a tree path.</li>
+        <li><b>GloVe</b> fits \(\mathbf{v}_i^\top\mathbf{v}_j + b_i + b_j\) to \(\log X_{ij}\), weighted by \(f(X_{ij})\). Vectors are judged by similarity, synonym and analogy tasks. Tuned SVD matches word2vec on similarity, and word2vec implicitly factorizes the matrix \(\operatorname{PMI} - \log k\).</li>
+      </ul>
+    </div>
+
+    <!-- ============ MODULE 10.1 ============ -->
+    <section id="motivation">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=M2T36PlRv1U&amp;t=49s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 0:49</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=M2T36PlRv1U&amp;t=224s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 3:44 a toy corpus</a>
+        </div>
+        <h2>Why words need vectors</h2>
+      </div>
+      <p>Many useful functions take text as input. Given a movie review, we may want its sentiment, \(\hat y = \text{sentiment}(\text{words})\), as a label or a score. A machine learning model learns \(\hat y = f(\mathbf{x})\), and every model in the course so far has assumed \(\mathbf{x}\) is a vector of numbers. So before any learning, each word (or the whole input stream) has to be turned into a vector. The slide shows a short review mapped to a vector such as \([5.7, 1.2, 2.3, -10.2, 4.5, \dots]\).</p>
+      <p>The running example is a toy <dfn>corpus</dfn> of four sentences:</p>
+      <ol>
+        <li>Human machine interface for computer applications</li>
+        <li>User opinion of computer system response time</li>
+        <li>User interface management system</li>
+        <li>System engineering for improved response time</li>
+      </ol>
+      <p>The <dfn>vocabulary</dfn> \(V\) is the set of unique words across all the input streams (sentences or documents). Here it has 15 words: human, machine, interface, for, computer, applications, user, opinion, of, system, response, time, management, engineering, improved. The goal of the lecture is a vector for every word in \(V\).</p>
+      <p class="note">The slides acknowledge three sources that are good further reading: Xin Rong, <i>word2vec Parameter Learning Explained</i>; Yoav Goldberg and Omer Levy, <i>word2vec Explained: deriving Mikolov et al.'s negative-sampling word-embedding method</i>; and Sebastian Ruder's blog posts on word embeddings.</p>
+    </section>
+
+    <section id="one-hot">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=M2T36PlRv1U&amp;t=322s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 5:22</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=M2T36PlRv1U&amp;t=389s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M1 · 6:29 problems</a>
+        </div>
+        <h2>One-hot vectors</h2>
+      </div>
+      <p>The simplest recipe numbers the words (human = 0, machine = 1, interface = 2, …) and gives word \(i\) a vector of size \(|V|\) with a 1 in position \(i\) and 0 in the other \(|V| - 1\) positions. Only one entry is ever "hot". For example machine \(= [0, 1, 0, \dots, 0]\).</p>
+      <p>Two problems make these vectors useless as representations:</p>
+      <ul>
+        <li><b>Size.</b> \(|V|\) is very large: about 50K for the Penn Treebank (PTB) corpus and 13M for Google's 1T corpus. Each vector stores \(|V|\) numbers, all but one of them 0.</li>
+        <li><b>No notion of similarity.</b> We would like cat and dog (both domestic animals) to be closer to each other than cat and truck. But the one-hot vectors of any two different words are orthogonal:</li>
+      </ul>
+      <div class="eq">\[ \lVert \mathbf{e}_i - \mathbf{e}_j \rVert = \sqrt{1^2 + 1^2} = \sqrt2, \qquad \cos(\mathbf{e}_i, \mathbf{e}_j) = \frac{\mathbf{e}_i^\top\mathbf{e}_j}{\lVert\mathbf{e}_i\rVert\,\lVert\mathbf{e}_j\rVert} = 0 \qquad (i \ne j) \]</div>
+      <p>So euclid dist(cat, dog) = euclid dist(dog, truck) = \(\sqrt2\), and both cosine similarities are 0. The vectors carry nothing about what the words mean, while the course has always looked for representations that capture something essential about the entity (as with PCA and the autoencoders of <a href="lecture-07.html">Lecture 7</a>).</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 252" role="img" aria-label="Left: one-hot vectors for cat, dog and truck along three perpendicular axes; the dashed triangle joining their tips has every side equal to root 2. Right: illustrative two-dimensional vectors in which cat and dog point in nearly the same direction and truck points elsewhere.">
+            <defs>
+              <marker id="l10-f1-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="l10-f1-ahacc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <text class="d-h" x="20" y="22">One-hot: every pair equally far</text>
+            <line class="d-ln" x1="120" y1="180" x2="240" y2="180" marker-end="url(#l10-f1-ah)"/>
+            <line class="d-ln" x1="120" y1="180" x2="120" y2="64" marker-end="url(#l10-f1-ah)"/>
+            <line class="d-ln" x1="120" y1="180" x2="72" y2="218" marker-end="url(#l10-f1-ah)"/>
+            <path class="d-ln-acc d-dash" d="M240 180 L120 64 L72 218 Z"/>
+            <text class="d-t" x="186" y="114">√2</text>
+            <text class="d-t" x="84" y="140" text-anchor="end">√2</text>
+            <text class="d-t" x="160" y="222" text-anchor="middle">√2</text>
+            <text class="d-t" x="248" y="178">cat</text><text class="d-al" x="248" y="194">[1, 0, 0]</text>
+            <text class="d-t" x="120" y="52" text-anchor="middle">dog <tspan class="d-al">[0, 1, 0]</tspan></text>
+            <text class="d-t" x="30" y="244">truck <tspan class="d-al">[0, 0, 1]</tspan></text>
+
+            <line class="d-rule" x1="335" y1="10" x2="335" y2="244"/>
+
+            <text class="d-h" x="355" y="22">What we want</text>
+            <line class="d-rule" x1="390" y1="200" x2="640" y2="200"/>
+            <line class="d-rule" x1="400" y1="40" x2="400" y2="210"/>
+            <line class="d-ln-acc" x1="400" y1="200" x2="554" y2="128" marker-end="url(#l10-f1-ahacc)"/>
+            <line class="d-ln-acc" x1="400" y1="200" x2="526" y2="102" marker-end="url(#l10-f1-ahacc)"/>
+            <line class="d-ln" x1="400" y1="200" x2="388" y2="64" marker-end="url(#l10-f1-ah)"/>
+            <text class="d-t" x="562" y="132">cat</text>
+            <text class="d-t" x="532" y="98">dog</text>
+            <text class="d-t" x="396" y="58">truck</text>
+            <text class="d-s" x="430" y="226">cat, dog: small angle, high cosine</text>
+            <text class="d-s" x="430" y="242">cat, truck: large angle, low cosine</text>
+          </svg>
+        </div>
+        <figcaption><b>One-hot vectors know nothing about meaning.</b> Left: the one-hot vectors of cat, dog and truck are mutually perpendicular unit vectors, so every pair is \(\sqrt2\) apart with cosine 0, whatever the words are. Right: what we want instead (illustrative 2-D vectors): related words point in similar directions.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ============ MODULE 10.2 ============ -->
+    <section id="cooccurrence">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=74clhgHhR2M&amp;t=12s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 0:12</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=74clhgHhR2M&amp;t=79s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 1:19 the matrix</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=74clhgHhR2M&amp;t=212s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 3:32 words vs contexts</a>
+        </div>
+        <h2>Distributed representations: the co-occurrence matrix</h2>
+      </div>
+      <p>One-hot vectors are sparse: one bit on. A <dfn>distributed representation</dfn> spreads a word's meaning over many entries. The starting point is J. R. Firth's remark from 1957, "You shall know a word by the company it keeps." To learn what <i>bank</i> means, look at the words that appear around it. In a sentence describing a bank as a financial institution that accepts deposits from the public and creates credit, the neighbours <i>financial</i>, <i>deposits</i> and <i>credit</i> describe it well. Representations built this way are called <dfn>distributional similarity</dfn> based representations.</p>
+      <p>A <dfn>co-occurrence matrix</dfn> is a terms × terms matrix. Entry \((i, j)\) counts how often term \(j\) appears in the <i>context</i> of term \(i\), where the context is a window of \(k\) words on either side. Rows are called <b>words</b> and columns <b>contexts</b>, so it is also called a <dfn>word × context matrix</dfn>. For the toy corpus with \(k = 2\) the slide shows:</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th></th><th class="num">human</th><th class="num">machine</th><th class="num">system</th><th class="num">for</th><th class="num">…</th><th class="num">user</th></tr></thead>
+          <tbody>
+            <tr><td><b>human</b></td><td class="num">0</td><td class="num">1</td><td class="num">0</td><td class="num">1</td><td class="num">…</td><td class="num">0</td></tr>
+            <tr><td><b>machine</b></td><td class="num">1</td><td class="num">0</td><td class="num">0</td><td class="num">1</td><td class="num">…</td><td class="num">0</td></tr>
+            <tr><td><b>system</b></td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">1</td><td class="num">…</td><td class="num">2</td></tr>
+            <tr><td><b>for</b></td><td class="num">1</td><td class="num">1</td><td class="num">1</td><td class="num">0</td><td class="num">…</td><td class="num">0</td></tr>
+            <tr><td>⋮</td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td></tr>
+            <tr><td><b>user</b></td><td class="num">0</td><td class="num">0</td><td class="num">2</td><td class="num">0</td><td class="num">…</td><td class="num">0</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">The slide's table is a partial, illustrative one (for example user and system are more than two words apart in both sentences that contain them). The interactive figure in the SVD section counts the windows exactly, so some of its entries differ.</p>
+      <p>Each row of the matrix is a vector for its word, and each column a vector for its context. The sets of words and contexts can be the same or different. For instance, stop words such as <i>for</i>, <i>the</i>, <i>and</i>, <i>a</i> say little about a word, so we may keep fewer columns and leave them out. The lecture switches between both choices.</p>
+      <p>These rows are distributed, but they are still sparse <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=74clhgHhR2M&amp;t=277s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 4:37</a>: a word appears with only a few of the \(|V|\) other words, so most entries of a row are 0.</p>
+    </section>
+
+    <section id="pmi">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=74clhgHhR2M&amp;t=311s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 5:11</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=74clhgHhR2M&amp;t=409s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 6:49 PMI</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=74clhgHhR2M&amp;t=477s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 7:57 PMI₀ and PPMI</a>
+        </div>
+        <h2>Fixing the counts: thresholds, PMI and PPMI</h2>
+      </div>
+      <p>First, some fixable problems. Stop words are very frequent, so their counts are very high. Over all of Wikipedia, <i>the</i>, <i>and</i> or <i>for</i> may appear thousands of times in the window of <i>machine</i>, far more often than <i>system</i> or <i>user</i>. The counts are then skewed toward stop words. The lecture lists three fixes:</p>
+      <ol>
+        <li><b>Ignore very frequent words</b>: drop their columns.</li>
+        <li><b>Use a threshold</b> \(t\) (say \(t = 100\)): \(X_{ij} = \min(\text{count}(w_i, c_j),\, t)\), where \(w\) is a word and \(c\) a context. "More than 100" is all we need to know about such a pair.</li>
+        <li><b>Use PMI instead of the count.</b> The <dfn>pointwise mutual information</dfn> of a word and a context is</li>
+      </ol>
+      <div class="eq">\[ \operatorname{PMI}(w, c) = \log\frac{p(c \mid w)}{p(c)} = \log\frac{\text{count}(w, c)\cdot N}{\text{count}(c)\cdot\text{count}(w)}, \qquad N = \text{total number of words} \]</div>
+      <p>PMI is low when both words are frequent on their own but rarely appear together. It is high when they appear together nearly every time they appear at all, as when each occurs 100 times and they co-occur all 100 times. Frequent stop words get no credit just for being frequent.</p>
+      <p>One problem remains: if \(\text{count}(w, c) = 0\), then \(\operatorname{PMI}(w, c) = \log 0 = -\infty\). Two fixes:</p>
+      <div class="eq">\[ \operatorname{PMI}_0(w,c) = \begin{cases} \operatorname{PMI}(w,c) & \text{if } \text{count}(w,c) > 0 \\ 0 & \text{otherwise} \end{cases} \qquad\quad \operatorname{PPMI}(w,c) = \begin{cases} \operatorname{PMI}(w,c) & \text{if } \operatorname{PMI}(w,c) > 0 \\ 0 & \text{otherwise} \end{cases} \]</div>
+      <p><dfn>Positive PMI</dfn> (PPMI) also sets negative values to 0, so every cell is non-negative. The lecture offers only a rough intuition for this <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=74clhgHhR2M&amp;t=547s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 9:07</a>: a negative PMI says two words co-occur less often than chance, and it is unclear what a "negative relation" between words would mean. Even antonyms such as <i>good</i> and <i>bad</i> often appear in the same sentence. Replacing the counts by PMI gives the slide's matrix:</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th></th><th class="num">human</th><th class="num">machine</th><th class="num">system</th><th class="num">for</th><th class="num">…</th><th class="num">user</th></tr></thead>
+          <tbody>
+            <tr><td><b>human</b></td><td class="num">0</td><td class="num">2.944</td><td class="num">0</td><td class="num">2.25</td><td class="num">…</td><td class="num">0</td></tr>
+            <tr><td><b>machine</b></td><td class="num">2.944</td><td class="num">0</td><td class="num">0</td><td class="num">2.25</td><td class="num">…</td><td class="num">0</td></tr>
+            <tr><td><b>system</b></td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">1.15</td><td class="num">…</td><td class="num">1.84</td></tr>
+            <tr><td><b>for</b></td><td class="num">2.25</td><td class="num">2.25</td><td class="num">1.15</td><td class="num">0</td><td class="num">…</td><td class="num">0</td></tr>
+            <tr><td>⋮</td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td></tr>
+            <tr><td><b>user</b></td><td class="num">0</td><td class="num">0</td><td class="num">1.84</td><td class="num">0</td><td class="num">…</td><td class="num">0</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The severe problem: size <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=74clhgHhR2M&amp;t=611s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M2 · 10:11</a></h3>
+      <p>All of these are minor fixes. The real problem is unchanged from one-hot vectors: the rows are still very high dimensional (\(|V|\) entries), still very sparse (less so than one-hot), and they grow with the vocabulary, from 50K for PTB to 13M for Google 1T. The remedy is dimensionality reduction with the <dfn>singular value decomposition</dfn> (SVD). The lecture picks SVD over PCA because the matrix need not be square (for example after dropping stop-word columns), and SVD is the generalization of PCA to rectangular matrices.</p>
+    </section>
+
+    <!-- ============ MODULE 10.3 ============ -->
+    <section id="svd">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=SSpSk1Io52w&amp;t=46s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 0:46</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=SSpSk1Io52w&amp;t=113s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 1:53 sum of rank-1 terms</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=SSpSk1Io52w&amp;t=186s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 3:06 approximation as compression</a>
+        </div>
+        <h2>SVD gives the best rank-k approximation</h2>
+      </div>
+      <p>From here on, \(X\) means the co-occurrence matrix with PPMI values, \(X_{\text{PPMI}}\), of size \(m \times n\) (\(m\) words, \(n\) contexts). Many variants of the co-occurrence matrix have been tried; PPMI is the most popular and most stable. SVD writes \(X\) as a product of three matrices, and the product can be expanded as a sum of rank-1 matrices:</p>
+      <div class="eq">\[ \underbrace{X}_{m\times n} = \underbrace{U}_{m\times k}\;\underbrace{\Sigma}_{k\times k}\;\underbrace{V^\top}_{k\times n} = \sigma_1\mathbf{u}_1\mathbf{v}_1^\top + \sigma_2\mathbf{u}_2\mathbf{v}_2^\top + \cdots + \sigma_k\mathbf{u}_k\mathbf{v}_k^\top \]</div>
+      <p>The columns \(\mathbf{u}_i\) of \(U\) and \(\mathbf{v}_i\) of \(V\) are unit vectors, and \(\Sigma\) is diagonal with \(\sigma_1 \ge \sigma_2 \ge \dots\). Each term \(\sigma_i\mathbf{u}_i\mathbf{v}_i^\top \in \mathbb{R}^{m\times n}\) is the outer product of an \(m \times 1\) vector and a \(1 \times n\) vector, a matrix of rank 1. With all the terms the product equals \(X\). By the SVD theorem, stopping after the first term gives the <b>best rank-1 approximation</b> of \(X\), stopping after two terms the best rank-2 approximation, and so on. We write \(\hat X\) for the truncated sum.</p>
+      <p>"Approximation" should be read as compression. \(X\) has \(m \times n\) entries. The rank-1 approximation is rebuilt from only \(m + n + 1\) numbers: \(\mathbf{u} \in \mathbb{R}^m\), \(\mathbf{v} \in \mathbb{R}^n\) and \(\sigma \in \mathbb{R}\). The theorem guarantees that \(\mathbf{u}_1, \mathbf{v}_1, \sigma_1\) hold the most information in \(X\) (like the first principal component), and each later term \(\sigma_2\mathbf{u}_2\mathbf{v}_2^\top, \sigma_3\mathbf{u}_3\mathbf{v}_3^\top, \dots\) holds less and less important information.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 680 340" role="img" aria-label="Top: the PPMI matrix X of size m by n equals U (m by k) times Sigma (k by k) times V transpose (k by n), which equals a sum of rank-one outer products sigma i u i v i transpose. Bottom: the word-vector matrix W word equals U Sigma, with one k-dimensional row per word, and W context equals V.">
+            <text class="d-row" x="85" y="30" text-anchor="middle">PPMI matrix</text>
+            <rect class="d-box" x="20" y="40" width="130" height="140" rx="3"/>
+            <text class="d-t" x="85" y="106" text-anchor="middle">X</text>
+            <text class="d-al" x="85" y="124" text-anchor="middle">m × n</text>
+            <text class="d-t" x="165" y="116" text-anchor="middle">=</text>
+            <rect class="d-box-acc" x="180" y="40" width="44" height="140" rx="3"/>
+            <text class="d-t" x="202" y="114" text-anchor="middle">U</text>
+            <text class="d-al" x="202" y="198" text-anchor="middle">m × k</text>
+            <rect class="d-box" x="234" y="40" width="44" height="44" rx="3"/>
+            <text class="d-t" x="256" y="67" text-anchor="middle">Σ</text>
+            <text class="d-al" x="256" y="100" text-anchor="middle">k × k</text>
+            <rect class="d-box" x="288" y="40" width="130" height="44" rx="3"/>
+            <text class="d-t" x="353" y="67" text-anchor="middle">Vᵀ</text>
+            <text class="d-al" x="353" y="100" text-anchor="middle">k × n</text>
+            <text class="d-t" x="434" y="116" text-anchor="middle">=</text>
+            <rect class="d-box-acc" x="450" y="40" width="12" height="140" rx="2"/>
+            <rect class="d-box-acc" x="468" y="40" width="96" height="12" rx="2"/>
+            <text class="d-al" x="516" y="72" text-anchor="middle">(m × 1)(1 × n)</text>
+            <text class="d-s" x="507" y="198" text-anchor="middle">σ₁ u₁ v₁ᵀ, rank 1</text>
+            <text class="d-t" x="568" y="112">+ σ₂ u₂ v₂ᵀ</text>
+            <text class="d-t" x="568" y="134">+ … + σₖ uₖ vₖᵀ</text>
+            <text class="d-s" x="300" y="220" text-anchor="middle">keep only the top k terms: the best rank-k approximation X̂ of X</text>
+
+            <line class="d-rule" x1="20" y1="234" x2="660" y2="234"/>
+            <rect class="d-box-acc" x="110" y="246" width="48" height="84" rx="3"/>
+            <line class="d-rule" x1="110" y1="260" x2="158" y2="260"/><line class="d-rule" x1="110" y1="274" x2="158" y2="274"/><line class="d-rule" x1="110" y1="288" x2="158" y2="288"/><line class="d-rule" x1="110" y1="302" x2="158" y2="302"/><line class="d-rule" x1="110" y1="316" x2="158" y2="316"/>
+            <text class="d-s" x="102" y="257" text-anchor="end">human</text>
+            <text class="d-s" x="102" y="271" text-anchor="end">machine</text>
+            <text class="d-s" x="102" y="285" text-anchor="end">system</text>
+            <text class="d-s" x="102" y="299" text-anchor="end">for</text>
+            <text class="d-s" x="102" y="313" text-anchor="end">⋮</text>
+            <text class="d-s" x="102" y="327" text-anchor="end">user</text>
+            <text class="d-t" x="176" y="262">W<tspan class="sb" dy="3">word</tspan><tspan dy="-3"> = UΣ   (m × k)</tspan></text>
+            <text class="d-s" x="176" y="282">row i is the k-dimensional vector of word i, with k ≪ |V|</text>
+            <text class="d-s" x="176" y="302">W<tspan class="sb" dy="3">word</tspan><tspan dy="-3"> W</tspan><tspan class="sb" dy="3">word</tspan><tspan dy="-3">ᵀ = X̂ X̂ᵀ: the same dot products as the rows of X̂</tspan></text>
+            <text class="d-s" x="176" y="322">W<tspan class="sb" dy="3">context</tspan><tspan dy="-3"> = V   (n × k): one row per context word</tspan></text>
+          </svg>
+        </div>
+        <figcaption><b>SVD of the PPMI matrix.</b> Top: the factorization and its expansion into rank-1 outer products, most important first. Bottom: how the factors are used. The rows of \(U\Sigma\) are short word vectors whose dot products equal those of the long rows of \(\hat X\); the rows of \(V\) are the context vectors.</figcaption>
+      </figure>
+
+      <h3>An analogy: compressing colours <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=SSpSk1Io52w&amp;t=255s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 4:15</a></h3>
+      <p>Suppose 8 bits encode shades of green. The last four bits say "green" and the first four say how light or dark:</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Shade</th><th class="num">Shade bits</th><th class="num">Colour bits</th></tr></thead>
+          <tbody>
+            <tr><td>Very light green</td><td class="num">0 0 0 1</td><td class="num">1 0 1 1</td></tr>
+            <tr><td>Light green</td><td class="num">0 0 1 0</td><td class="num">1 0 1 1</td></tr>
+            <tr><td>Dark green</td><td class="num">0 1 0 0</td><td class="num">1 0 1 1</td></tr>
+            <tr><td>Very dark green</td><td class="num">1 0 0 0</td><td class="num">1 0 1 1</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>In 8 bits the four codes look different. Asked to compress to 4 bits (as SVD compresses \(m \times n\) numbers into \(m + n + 1\)), we keep the most important bits, the ones that say "green", because telling green from red matters more than very light from very dark. After compression the similarity that was only slightly latent becomes obvious: all four become 1 0 1 1. SVD gives a similar guarantee: it keeps the most important information, and in doing so it exposes latent similarities between words.</p>
+    </section>
+
+    <section id="svd-latent">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=SSpSk1Io52w&amp;t=322s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 5:22</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=SSpSk1Io52w&amp;t=456s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 7:36 dot products</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=SSpSk1Io52w&amp;t=585s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 9:45 cosine 0.21 → 0.33</a>
+        </div>
+        <h2>Low rank exposes hidden co-occurrence</h2>
+      </div>
+      <p>The slide reconstructs the PPMI matrix from a low-rank SVD (the rank is not stated; it is more than 1 or 2). Two things change. The matrix is now dense. And cells that were 0 become nonzero:</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>\(\hat X\)</th><th class="num">human</th><th class="num">machine</th><th class="num">system</th><th class="num">for</th><th class="num">…</th><th class="num">user</th></tr></thead>
+          <tbody>
+            <tr><td><b>human</b></td><td class="num">2.01</td><td class="num">2.01</td><td class="num">0.23</td><td class="num">2.14</td><td class="num">…</td><td class="num hl">0.43</td></tr>
+            <tr><td><b>machine</b></td><td class="num">2.01</td><td class="num">2.01</td><td class="num">0.23</td><td class="num">2.14</td><td class="num">…</td><td class="num">0.43</td></tr>
+            <tr><td><b>system</b></td><td class="num">0.23</td><td class="num hl">0.23</td><td class="num">1.17</td><td class="num">0.96</td><td class="num">…</td><td class="num">1.29</td></tr>
+            <tr><td><b>for</b></td><td class="num">2.14</td><td class="num">2.14</td><td class="num">0.96</td><td class="num">1.87</td><td class="num">…</td><td class="num">−0.13</td></tr>
+            <tr><td>⋮</td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td></tr>
+            <tr><td><b>user</b></td><td class="num">0.43</td><td class="num">0.43</td><td class="num">1.29</td><td class="num">−0.13</td><td class="num">…</td><td class="num">1.71</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Human–user and system–machine were 0 in \(X\): those words never appear together in the corpus. But system and machine both appear with the same kind of words (in the lecture's words, interface, install, run), and so do human and user. That shared company is information the matrix already contains. Forced to compress, SVD keeps the most important structure, and under that structure these pairs come out related. The latent co-occurrence between {system, machine} and {human, user} has become visible. Note that \(\hat X\) can contain negative entries, such as −0.13 for (for, user), although \(X\) has none.</p>
+
+      <h3>Rows as vectors, \(XX^\top\) as similarities <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=SSpSk1Io52w&amp;t=456s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 7:36</a></h3>
+      <p>Each row of \(X\) is a word's representation, so the \((i, j)\) entry of \(XX^\top\) is the dot product of row \(i\) and row \(j\). In the slide's small example, rows \([1, 2, 3]\) and \([1, 3, 5]\) give \(1 + 6 + 15 = 22\). A dot product is a cosine similarity before dividing by the two norms, so \(XX^\top\) roughly holds the similarities between all pairs of words.</p>
+      <p>With the original \(X\), the slide reports \(\cos(\text{human}, \text{user}) = 0.21\). With the reconstruction, \(\hat X\hat X^\top\) has entries 25.4 (human, human), 17.11 (user, user) and 6.84 (human, user), so</p>
+      <div class="eq">\[ \cos(\text{human}, \text{user}) = \frac{6.84}{\sqrt{25.4 \times 17.11}} = \frac{6.84}{20.85} \approx 0.33 \]</div>
+      <p>The compressed representation has learnt that human and user are more similar than the raw counts suggested.</p>
+
+      <figure id="cooc-fig">
+        <div class="controls">
+          <label for="l10-cooc-win">Window k</label>
+          <input type="range" id="l10-cooc-win" min="1" max="4" step="1" value="2">
+          <output id="l10-cooc-win-out" for="l10-cooc-win">2</output>
+          <span class="seg" role="group" aria-label="Cell values">
+            <button class="btn" type="button" data-mode="count" aria-pressed="false">Counts</button>
+            <button class="btn" type="button" data-mode="pmi" aria-pressed="false">PMI</button>
+            <button class="btn" type="button" data-mode="pmi0" aria-pressed="false">PMI₀</button>
+            <button class="btn" type="button" data-mode="ppmi" aria-pressed="true">PPMI</button>
+          </span>
+          <label class="check"><input type="checkbox" id="l10-cooc-stop"> Drop stop words (for, of) from the contexts</label>
+        </div>
+        <div class="controls">
+          <label for="l10-cooc-rank">SVD rank kept</label>
+          <input type="range" id="l10-cooc-rank" min="1" max="15" step="1" value="4">
+          <output id="l10-cooc-rank-out" for="l10-cooc-rank">k = 4</output>
+        </div>
+        <div class="controls">
+          <label for="l10-cooc-a">Compare the rows of</label>
+          <select id="l10-cooc-a"></select>
+          <label for="l10-cooc-b">and</label>
+          <select id="l10-cooc-b"></select>
+        </div>
+        <div class="readouts">
+          <div><span class="k" id="l10-cooc-kx">X[a, b]</span><span class="v" id="l10-cooc-x">–</span></div>
+          <div><span class="k" id="l10-cooc-kxh">X̂[a, b]</span><span class="v" id="l10-cooc-xh">–</span></div>
+          <div><span class="k" id="l10-cooc-kc0">cos(a, b) in X</span><span class="v" id="l10-cooc-c0">–</span></div>
+          <div><span class="k" id="l10-cooc-kc1">cos(a, b) in X̂</span><span class="v mine" id="l10-cooc-c1">–</span></div>
+          <div><span class="k">Share of Σσᵢ² kept</span><span class="v" id="l10-cooc-en">–</span></div>
+        </div>
+        <div class="status" id="l10-cooc-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="l10-cooc-svg" viewBox="0 0 652 458" role="img" aria-label="The fifteen-by-fifteen word-by-context matrix of the four-sentence toy corpus, shaded by value, with the rows of the two compared words outlined. The matrix shows raw counts, PMI, PMI-zero or PPMI, optionally after a rank-k SVD reconstruction."></svg></div>
+        <figcaption><b>Build the matrix yourself.</b> The four sentences of the toy corpus, counted exactly: a cell counts how often the column word falls within \(k\) words of the row word in the same sentence. PMI uses natural logarithms and \(N = 23\), the number of words in the corpus, so the values differ from the slide's illustrative tables. Violet cells are positive, yellow cells negative, dots are 0, and bold numbers are cells that were 0 before the SVD. The rank slider replaces \(X\) by \(\hat X = U_kU_k^\top X\), its best rank-\(k\) approximation (at "full", \(\hat X = X\)); cosines compare whole rows. With only 15 words, very low ranks make almost every pair look similar.</figcaption>
+      </figure>
+    </section>
+
+    <section id="svd-vectors">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=SSpSk1Io52w&amp;t=618s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 10:18</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=SSpSk1Io52w&amp;t=682s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 11:22 the derivation</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=05L1tSvzWHs&amp;t=11s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M4 · 0:11 recap</a>
+        </div>
+        <h2>Low-dimensional word vectors: \(W_{\text{word}} = U\Sigma\)</h2>
+      </div>
+      <p>After the SVD we still have to choose a vector for word \(i\). The \(i\)-th row of \(\hat X\) is better than the row of \(X\), since it has picked up the latent similarities. But \(\hat X\) is still \(m \times n\): each row still has \(n \approx |V|\) entries, even though it was built from far fewer numbers. What we want are vectors with far fewer dimensions whose dot products (similarities) equal those of the rows of \(\hat X\).</p>
+      <p>Define \(W_{\text{word}} = U\Sigma\), using the truncated factors. Since \(\Sigma\) is diagonal, \(\Sigma^\top = \Sigma\), and \(V^\top V = I\) because the columns of \(V\) are orthonormal:</p>
+      <div class="eq">\[ \begin{aligned} \hat X\hat X^\top &= (U\Sigma V^\top)(U\Sigma V^\top)^\top = (U\Sigma V^\top)(V\Sigma U^\top) \\ &= U\Sigma\Sigma^\top U^\top \qquad (\because V^\top V = I) \\ &= U\Sigma\,(U\Sigma)^\top = W_{\text{word}}W_{\text{word}}^\top \end{aligned} \]</div>
+      <div class="result">
+        <span class="lbl">Result: word and context vectors from SVD</span>
+        \[ W_{\text{word}} = U\Sigma \in \mathbb{R}^{m\times k}, \qquad W_{\text{context}} = V \in \mathbb{R}^{n\times k} \]
+        <p>Row \(i\) of \(W_{\text{word}}\) is the representation of word \(i\): it has \(k\) entries, and its dot product with row \(j\) equals \((\hat X\hat X^\top)_{ij}\), so no similarity is lost. The rows of \(W_{\text{context}}\) represent the context words. In practice \(k\) is about 100 to 300, while \(|V|\) is 50K to millions.</p>
+      </div>
+      <p class="note">The lecture uses \(m\), \(n\) and \(|V|\) interchangeably; when words and contexts are the same set, \(m = n = |V|\).</p>
+      <p>This was the standard way to get word vectors in NLP before deep learning <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=SSpSk1Io52w&amp;t=784s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M3 · 13:04</a>: build a co-occurrence matrix, apply the PMI/PPMI heuristics, run SVD, and keep the top 100 to 300 dimensions. The result is a large compression that still gives related words a higher similarity, and the vectors can be fed to downstream tasks. The lecture says they will be put to use a few lectures later; the sequence models from <a href="lecture-11.html">Lecture 11</a> on read text one word vector at a time.</p>
+    </section>
+
+    <!-- ============ MODULE 10.4 ============ -->
+    <section id="predict">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=yBmtXtVya9A&amp;t=13s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 0:13</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yBmtXtVya9A&amp;t=83s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 1:23 the story ahead</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yBmtXtVya9A&amp;t=119s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 1:59 the task</a>
+        </div>
+        <h2>From counting to predicting</h2>
+      </div>
+      <p>The methods so far are <dfn>count-based models</dfn>: they use co-occurrence counts. Nothing was learnt in the neural-network sense (apart from computing singular vectors). The rest of the lecture covers <dfn>prediction-based models</dfn>, which learn word representations directly as the parameters of a network trained on a prediction task. The plan:</p>
+      <ol>
+        <li>The continuous bag of words (CBOW) model.</li>
+        <li>The skip-gram model with negative sampling (the famous word2vec).</li>
+        <li>GloVe word embeddings, a hybrid of count and prediction.</li>
+        <li>How to evaluate word embeddings.</li>
+        <li>Finally, the observation that good old SVD does just fine.</li>
+      </ol>
+      <h3>The task: predict the next word</h3>
+      <p>Consider the task of predicting the \(n\)-th word given the previous \(n - 1\) words. Type "he sat on a" on a phone and the keyboard suggests "chair". This is multi-class classification: the input \(\mathbf{x}\) is the previous words and the output \(\mathbf{y}\) is a one-hot vector over the \(|V|\) words of the vocabulary. At test time the predicted distribution can supply the top few words as suggestions.</p>
+      <p>The training data comes for free. Take every \(n\)-word window in a corpus (the slides show 4-word windows over a film plot summary), use the first \(n - 1\) words as \(\mathbf{x}\) and the last as \(\mathbf{y}\), and slide the window along. For popular languages, all of Wikipedia is available, with no labelling effort. Choosing \(n\) is old ground in language modelling: the lecture notes that the last three words are usually enough to predict the next one, and that the default tool uses 7. For illustration we take \(n = 2\): predict the second word from the first.</p>
+      <p>Two questions follow: how to model this task, and what it has to do with learning word representations.</p>
+    </section>
+
+    <section id="cbow">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=yBmtXtVya9A&amp;t=395s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 6:35</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yBmtXtVya9A&amp;t=555s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 9:15 one-hot selects a column</a>
+        </div>
+        <h2>The CBOW network: one-hot in, softmax out</h2>
+      </div>
+      <p>Use a feedforward network. The input is the one-hot vector \(\mathbf{x} \in \mathbb{R}^{|V|}\) of the context word, say <i>sat</i>. The output is a probability distribution over all \(|V|\) words, \(P(\text{he} \mid \text{sat}), P(\text{chair} \mid \text{sat}), \dots, P(\text{on} \mid \text{sat})\), and for this training window we want \(P(\text{on} \mid \text{sat})\) to be high. In between is one hidden layer \(\mathbf{h} \in \mathbb{R}^k\). The parameters are two matrices,</p>
+      <div class="eq">\[ W_{\text{context}} \in \mathbb{R}^{k\times|V|}, \qquad W_{\text{word}} \in \mathbb{R}^{k\times|V|}, \]</div>
+      <p>assuming that words and context words come from the same vocabulary. Structurally this is the MNIST classifier again (784 inputs, a hidden layer, 10 classes), with \(|V|\) inputs and \(|V|\) classes.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 600 296" role="img" aria-label="The CBOW network for one context word. At the bottom, the one-hot vector for sat with a 1 in the second position. W context maps it to the k-dimensional hidden vector h, which is the column u sat of W context. W word maps h to |V| scores, and a softmax turns them into probabilities such as P(on given sat).">
+            <rect class="d-box" x="40" y="44" width="26" height="24"/><rect class="d-box" x="66" y="44" width="26" height="24"/><rect class="d-box" x="92" y="44" width="26" height="24"/><rect class="d-box" x="118" y="44" width="26" height="24"/><rect class="d-box" x="144" y="44" width="26" height="24"/><rect class="d-box" x="170" y="44" width="26" height="24"/><rect class="d-box" x="196" y="44" width="26" height="24"/><rect class="d-box" x="222" y="44" width="26" height="24"/><rect class="d-box-acc" x="248" y="44" width="26" height="24"/><rect class="d-box" x="274" y="44" width="26" height="24"/><rect class="d-box" x="300" y="44" width="26" height="24"/>
+            <text class="d-s" x="53" y="36" text-anchor="middle">he</text>
+            <text class="d-s" x="105" y="36" text-anchor="middle">chair</text>
+            <text class="d-s" x="157" y="36" text-anchor="middle">man</text>
+            <text class="d-s" x="209" y="36" text-anchor="middle">…</text>
+            <text class="d-t acc" x="261" y="36" text-anchor="middle">on</text>
+            <text class="d-s" x="342" y="54">softmax over all |V| words</text>
+            <text class="d-t" x="342" y="72">ŷ<tspan class="sb" dy="3">on</tspan><tspan dy="-3"> = P(on | sat)</tspan></text>
+
+            <line class="d-ln" x1="40" y1="68" x2="118" y2="150"/>
+            <line class="d-ln" x1="326" y1="68" x2="248" y2="150"/>
+            <text class="d-t" x="183" y="112" text-anchor="middle">W<tspan class="sb" dy="3">word</tspan><tspan dy="-3"> ∈ ℝ</tspan><tspan class="sb" dy="-6">k×|V|</tspan></text>
+            <text class="d-al" x="183" y="130" text-anchor="middle">column w = v<tspan class="sb" dy="3">w</tspan></text>
+
+            <rect class="d-box-acc" x="118" y="150" width="26" height="24"/><rect class="d-box-acc" x="144" y="150" width="26" height="24"/><rect class="d-box-acc" x="170" y="150" width="26" height="24"/><rect class="d-box-acc" x="196" y="150" width="26" height="24"/><rect class="d-box-acc" x="222" y="150" width="26" height="24"/>
+            <text class="d-t" x="262" y="167">h = W<tspan class="sb" dy="3">context</tspan><tspan dy="-3"> x = u</tspan><tspan class="sb" dy="3">sat</tspan><tspan dy="-3"> ∈ ℝ</tspan><tspan class="sb" dy="-6">k</tspan></text>
+
+            <line class="d-ln" x1="118" y1="174" x2="40" y2="240"/>
+            <line class="d-ln" x1="248" y1="174" x2="326" y2="240"/>
+            <text class="d-t" x="183" y="206" text-anchor="middle">W<tspan class="sb" dy="3">context</tspan><tspan dy="-3"> ∈ ℝ</tspan><tspan class="sb" dy="-6">k×|V|</tspan></text>
+            <text class="d-al" x="183" y="226" text-anchor="middle">column c = u<tspan class="sb" dy="3">c</tspan></text>
+
+            <rect class="d-box" x="40" y="240" width="26" height="24"/><rect class="d-box-acc" x="66" y="240" width="26" height="24"/><rect class="d-box" x="92" y="240" width="26" height="24"/><rect class="d-box" x="118" y="240" width="26" height="24"/><rect class="d-box" x="144" y="240" width="26" height="24"/><rect class="d-box" x="170" y="240" width="26" height="24"/><rect class="d-box" x="196" y="240" width="26" height="24"/><rect class="d-box" x="222" y="240" width="26" height="24"/><rect class="d-box" x="248" y="240" width="26" height="24"/><rect class="d-box" x="274" y="240" width="26" height="24"/><rect class="d-box" x="300" y="240" width="26" height="24"/>
+            <text class="d-s" x="53" y="256" text-anchor="middle">0</text><text class="d-t" x="79" y="257" text-anchor="middle">1</text><text class="d-s" x="105" y="256" text-anchor="middle">0</text><text class="d-s" x="131" y="256" text-anchor="middle">0</text><text class="d-s" x="157" y="256" text-anchor="middle">0</text><text class="d-s" x="183" y="256" text-anchor="middle">…</text><text class="d-s" x="209" y="256" text-anchor="middle">0</text><text class="d-s" x="235" y="256" text-anchor="middle">0</text><text class="d-s" x="261" y="256" text-anchor="middle">0</text><text class="d-s" x="287" y="256" text-anchor="middle">0</text><text class="d-s" x="313" y="256" text-anchor="middle">0</text>
+            <text class="d-t" x="79" y="284" text-anchor="middle">sat</text>
+            <text class="d-s" x="342" y="256">x ∈ ℝ<tspan class="sb" dy="-6">|V|</tspan><tspan dy="6">: one-hot input</tspan></text>
+          </svg>
+        </div>
+        <figcaption><b>CBOW with one context word.</b> The one-hot input picks out one column of \(W_{\text{context}}\), so \(\mathbf{h}\) is the context word's vector \(\mathbf{u}_{\text{sat}}\). Each output score is a column of \(W_{\text{word}}\) dotted with \(\mathbf{h}\), and the softmax turns the \(|V|\) scores into probabilities. Both matrices hold one vector per word.</figcaption>
+      </figure>
+
+      <p>When \(\mathbf{x}\) is one-hot, \(W_{\text{context}}\mathbf{x}\) is simply the column of \(W_{\text{context}}\) where \(\mathbf{x}\) has its 1. The slide's example, with the second word on:</p>
+      <div class="eq">\[ \begin{bmatrix} -1 & 0.5 & 2 \\ 3 & -1 & -2 \\ -2 & 1.7 & 3 \end{bmatrix}\begin{bmatrix} 0 \\ 1 \\ 0 \end{bmatrix} = \begin{bmatrix} 0.5 \\ -1 \\ 1.7 \end{bmatrix} \]</div>
+      <p>So there is a one-to-one correspondence between the words and the columns of \(W_{\text{context}}\): the \(i\)-th column is selected exactly when the \(i\)-th word is the input. We treat the \(i\)-th column as the representation of context \(i\). These columns are not known in advance. They are parameters, learnt by training.</p>
+    </section>
+
+    <section id="cbow-loss">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=yBmtXtVya9A&amp;t=723s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 12:03</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yBmtXtVya9A&amp;t=861s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 14:21 two vectors per word</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yBmtXtVya9A&amp;t=1069s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 17:49 the loss</a>
+        </div>
+        <h2>Softmax output, cross-entropy loss</h2>
+      </div>
+      <p>The output function for multi-class classification is the softmax. If <i>on</i> is the \(i\)-th word of the vocabulary,</p>
+      <div class="eq">\[ P(\text{on} \mid \text{sat}) = \frac{e^{(W_{\text{word}}^\top\mathbf{h})[i]}}{\sum_j e^{(W_{\text{word}}^\top\mathbf{h})[j]}} \]</div>
+      <p class="note">\(W_{\text{word}}^\top\mathbf{h}\) is the vector of \(|V|\) unnormalized scores; the slide writes it as \(W_{\text{word}}\mathbf{h}\). Its \(i\)-th entry is the \(i\)-th column of \(W_{\text{word}}\) dotted with \(\mathbf{h}\).</p>
+      <p>Since \(\mathbf{h}\) is the column of \(W_{\text{context}}\) for <i>sat</i> (say word \(j\)), \(P(\text{on} \mid \text{sat})\) is proportional to the exponential of the dot product between the \(j\)-th column of \(W_{\text{context}}\) and the \(i\)-th column of \(W_{\text{word}}\). The probability of word \(i\) depends on the \(i\)-th column of \(W_{\text{word}}\), so that column is also a representation of word \(i\).</p>
+      <p>Every word therefore gets two vectors: one for when it appears as a context (a column of \(W_{\text{context}}\)) and one for when it is the target (a column of \(W_{\text{word}}\)). SVD did the same: \(U\Sigma\) represented the words and \(V\) the contexts. The two methods learn the matrices differently, but the roles match.</p>
+      <p>From here on, \(c\) is the index of the context word (sat) and \(w\) the index of the correct output word (on). \(\mathbf{u}_c\) is column \(c\) of \(W_{\text{context}}\) and \(\mathbf{v}_w\) is column \(w\) of \(W_{\text{word}}\). The loss is the cross-entropy, which for a one-hot target keeps only the term of the correct word (softmax and cross-entropy were derived in <a href="lecture-04.html">Lecture 4</a>):</p>
+      <div class="result">
+        <span class="lbl">CBOW with one context word</span>
+        \[ \mathbf{h} = W_{\text{context}}\,\mathbf{x}_c = \mathbf{u}_c, \qquad \hat y_w = \frac{\exp(\mathbf{u}_c^\top\mathbf{v}_w)}{\sum_{w'\in V}\exp(\mathbf{u}_c^\top\mathbf{v}_{w'})}, \qquad \mathcal{L}(\theta) = -\log\hat y_w = -\log P(w \mid c) \]
+      </div>
+      <p>Training is ordinary backpropagation with gradient descent. As the lecture points out, code written for MNIST would do, with only the input and output sizes changed.</p>
+    </section>
+
+    <section id="cbow-update">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=yBmtXtVya9A&amp;t=1169s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 19:29</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yBmtXtVya9A&amp;t=1239s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 20:39 interpretation</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yBmtXtVya9A&amp;t=1373s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 22:53 why similar words get close</a>
+        </div>
+        <h2>The update rule pulls a word toward its context</h2>
+      </div>
+      <p>Take one training pair \((c, w)\) and find the update for \(\mathbf{v}_w\). Expand the log of the fraction, then differentiate. Only the \(w' = w\) term of the sum involves \(\mathbf{v}_w\), and the derivative of the log-sum is that term's share of the sum times \(\mathbf{u}_c\):</p>
+      <div class="eq">\[ \begin{aligned} \mathcal{L}(\theta) &= -\log\frac{\exp(\mathbf{u}_c^\top\mathbf{v}_w)}{\sum_{w'\in V}\exp(\mathbf{u}_c^\top\mathbf{v}_{w'})} = -\Big(\mathbf{u}_c^\top\mathbf{v}_w - \log\sum_{w'\in V}\exp(\mathbf{u}_c^\top\mathbf{v}_{w'})\Big) \\ \nabla_{\mathbf{v}_w} = \frac{\partial\mathcal{L}(\theta)}{\partial\mathbf{v}_w} &= -\Big(\mathbf{u}_c - \frac{\exp(\mathbf{u}_c^\top\mathbf{v}_w)}{\sum_{w'\in V}\exp(\mathbf{u}_c^\top\mathbf{v}_{w'})}\,\mathbf{u}_c\Big) = -\mathbf{u}_c\,(1 - \hat y_w) \end{aligned} \]</div>
+      <div class="result">
+        <span class="lbl">Update rule for the target word's vector</span>
+        \[ \mathbf{v}_w \leftarrow \mathbf{v}_w - \eta\,\nabla_{\mathbf{v}_w} = \mathbf{v}_w + \eta\,\mathbf{u}_c\,(1 - \hat y_w) \]
+      </div>
+      <p>The rule has a clean reading:</p>
+      <ul>
+        <li>If \(\hat y_w \to 1\), we already predict the right word, and \(\mathbf{v}_w\) is (almost) not updated.</li>
+        <li>If \(\hat y_w \to 0\), \(\mathbf{v}_w\) gets a fraction of \(\mathbf{u}_c\) added to it. Adding one vector to another increases the cosine similarity between them, the same effect as the perceptron update in <a href="lecture-02.html">Lecture 2</a>.</li>
+      </ul>
+      <p>So training maximizes the cosine similarity between a word's vector \(\mathbf{v}_w\) and the vectors \(\mathbf{u}_c\) of the context words it appears with.</p>
+      <p class="note">Not in the lecture: the same steps give \(\nabla_{\mathbf{v}_{w'}} = \hat y_{w'}\,\mathbf{u}_c\) for every other word \(w' \ne w\), so the wrong words' vectors are pushed away from \(\mathbf{u}_c\), each in proportion to the probability it was wrongly given.</p>
+
+      <h3>Why similar words end up close <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=yBmtXtVya9A&amp;t=1373s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 22:53</a></h3>
+      <p>Take two words \(w\) and \(w'\) that tend to appear in similar contexts \(c\), such as <i>dog</i> and <i>cat</i>, which both appear with <i>eats</i>, <i>sleeps</i> and <i>pet</i>. Training gives both \(\mathbf{v}_{\text{dog}}\) and \(\mathbf{v}_{\text{cat}}\) a high cosine similarity with those context vectors, and so, transitively, a high cosine similarity with each other.</p>
+      <p>One gap remains <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=yBmtXtVya9A&amp;t=1447s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 24:07</a>. We never wanted <i>dog</i> close to <i>eats</i>, since they are not similar words. The resolution is that \(\mathbf{v}_{\text{dog}}\) moves toward \(\mathbf{u}_{\text{eats}}\), a column of the other matrix. Within \(W_{\text{word}}\), the matrix whose columns we use as the representations, <i>dog</i> and <i>cat</i> end up close, and <i>dog</i> and <i>eats</i> need not.</p>
+      <p>The lecture is explicit that this is only a reasonable intuition. There is no formal proof that it is what happens, and that is one criticism of word2vec: it works very well without a clear reason, while SVD rests on a principle. The neat picture also gets harder to see once there are more context words.</p>
+
+      <figure id="upd-fig">
+        <div class="controls">
+          <label for="l10-upd-eta">Learning rate η</label>
+          <input type="range" id="l10-upd-eta" min="0.1" max="1.5" step="0.1" value="0.5">
+          <output id="l10-upd-eta-out" for="l10-upd-eta">0.5</output>
+          <button class="btn" id="l10-upd-step" type="button">One step</button>
+          <button class="btn" id="l10-upd-run" type="button">Run 10 steps</button>
+          <button class="btn" id="l10-upd-reset" type="button">Reset</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">ŷ_on = P(on | sat)</span><span class="v mine" id="l10-upd-y">–</span></div>
+          <div><span class="k">cos(u_sat, v_on)</span><span class="v" id="l10-upd-cos">–</span></div>
+          <div><span class="k">Next step length η(1 − ŷ_on)‖u_sat‖</span><span class="v" id="l10-upd-len">–</span></div>
+          <div><span class="k">Steps</span><span class="v" id="l10-upd-n">0</span></div>
+        </div>
+        <div class="status" id="l10-upd-status" aria-live="polite"></div>
+        <div class="chart-wrap sq"><svg id="l10-upd-svg" viewBox="0 0 400 400" role="img" aria-label="A two-dimensional plane with the fixed context vector u sat, four faint output vectors for other words, and the output vector v on. Each step adds a multiple of u sat to v on, so v on turns toward u sat and grows; dots mark its earlier positions."></svg></div>
+        <figcaption><b>The update rule in two dimensions.</b> Synthetic vectors generated for this page (\(k = 2\), seeded): a fixed context vector \(\mathbf{u}_{\text{sat}}\) and output vectors for a five-word vocabulary {on, he, chair, man, a}. Each step applies the lecture's rule \(\mathbf{v}_{\text{on}} \leftarrow \mathbf{v}_{\text{on}} + \eta\,\mathbf{u}_{\text{sat}}(1 - \hat y_{\text{on}})\) to the target column only; full training would also move the other columns and \(\mathbf{u}_{\text{sat}}\). Dots mark earlier positions of \(\mathbf{v}_{\text{on}}\). The steps are long while \(\hat y_{\text{on}}\) is small and shrink as it approaches 1.</figcaption>
+      </figure>
+    </section>
+
+    <section id="cbow-window">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=yBmtXtVya9A&amp;t=1702s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 28:22</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yBmtXtVya9A&amp;t=1932s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 32:12 bag of words</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yBmtXtVya9A&amp;t=1963s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 32:43 what gets updated</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=yBmtXtVya9A&amp;t=2108s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 35:08 the cost of softmax</a>
+        </div>
+        <h2>More context words, and the cost of the softmax</h2>
+      </div>
+      <p>In practice the window has \(d\) words, not 2: \(d - 1\) context words predict one word (the lecture mentions 4 or 7, and has seen 11). With two context words, predict <i>on</i> from <i>he</i> and <i>sat</i>. Concatenate their one-hot vectors into \(\mathbf{x} \in \mathbb{R}^{2|V|}\) (in general \(\mathbb{R}^{(d-1)|V|}\)) and multiply by \([W_{\text{context}}, W_{\text{context}}] \in \mathbb{R}^{k\times 2|V|}\), two copies of \(W_{\text{context}}\) side by side. The product is the sum of the two selected columns:</p>
+      <div class="eq">\[ \mathbf{h} = \sum_{i=1}^{d-1}\mathbf{u}_{c_i}, \qquad \begin{bmatrix} -1 & 0.5 & 2 & -1 & 0.5 & 2 \\ 3 & -1 & -2 & 3 & -1 & -2 \\ -2 & 1.7 & 3 & -2 & 1.7 & 3 \end{bmatrix}\begin{bmatrix} 0 & 1 & 0 & 0 & 0 & 1 \end{bmatrix}^\top = \begin{bmatrix} 0.5 \\ -1 \\ 1.7 \end{bmatrix} + \begin{bmatrix} 2 \\ -2 \\ 3 \end{bmatrix} = \begin{bmatrix} 2.5 \\ -3 \\ 4.7 \end{bmatrix} \]</div>
+      <p>In the slide's 3-word vocabulary the first block switches on <i>sat</i> (word 2) and the second <i>he</i> (word 3). Nobody actually performs this expensive multiplication: if <i>he</i> is word \(i\) and <i>sat</i> word \(j\), just look up those two columns and add them. The order of the context words does not matter, which is why the model is a <dfn>bag of words</dfn>: once the words are in a bag, their order is lost.</p>
+      <p>The output is unchanged: with \(k\) now the index of <i>on</i>,</p>
+      <div class="eq">\[ P(\text{on} \mid \text{sat}, \text{he}) = \frac{e^{(W_{\text{word}}^\top\mathbf{h})[k]}}{\sum_j e^{(W_{\text{word}}^\top\mathbf{h})[j]}} \]</div>
+      <p>The loss depends on \(W_{\text{word}}\) and on \(\mathbf{u}_{c_1}, \dots, \mathbf{u}_{c_{d-1}}\), and these are the parameters backpropagation updates: <b>all</b> columns of \(W_{\text{word}}\), because every column appears in the softmax denominator, but <b>only the \(d - 1\) columns</b> of \(W_{\text{context}}\) that were looked up. No gradient reaches the other columns of \(W_{\text{context}}\), so real implementations never touch them.</p>
+      <p class="note">The slide leaves the update for \(\mathbf{v}_w\) as an exercise. Not in the lecture: the derivation is the same with \(\mathbf{u}_c\) replaced by \(\mathbf{h}\), so \(\nabla_{\mathbf{v}_w} = -\mathbf{h}(1 - \hat y_w)\) and \(\mathbf{v}_w \leftarrow \mathbf{v}_w + \eta\,\mathbf{h}(1 - \hat y_w)\): the target moves toward the sum of its context vectors. Each looked-up context column receives the same gradient \(\partial\mathcal{L}/\partial\mathbf{h} = -\big(\mathbf{v}_w - \sum_{w'}\hat y_{w'}\mathbf{v}_{w'}\big)\).</p>
+
+      <h3>The problem: the softmax is expensive <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=yBmtXtVya9A&amp;t=2108s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M5 · 35:08</a></h3>
+      <p>The input side reduces to a lookup, but the output side does not. The softmax denominator sums over every word in the vocabulary, so each training step multiplies a \(|V| \times k\) matrix by a \(k\)-vector and exponentiates \(|V|\) scores. With \(|V|\) at 50K, 100K or 13M, that is not feasible at scale. The next modules give three ways around it.</p>
+    </section>
+
+    <!-- ============ MODULE 10.5 ============ -->
+    <section id="skip-gram">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=XO2GHDm-ZoI&amp;t=11s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 0:11</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=XO2GHDm-ZoI&amp;t=77s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 1:17 sum of cross-entropies</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=XO2GHDm-ZoI&amp;t=152s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 2:32 three fixes</a>
+        </div>
+        <h2>Skip-gram: predict the context from the word</h2>
+      </div>
+      <p>CBOW predicts an output word from a bag of context words. The <dfn>skip-gram</dfn> model does the reverse: given the input word <i>on</i>, predict the context words on both sides of it, <i>he</i>, <i>sat</i>, <i>a</i>, <i>chair</i>. The roles of the matrices swap: the input word goes through \(W_{\text{word}}\), and the outputs are scored with \(W_{\text{context}}\).</p>
+      <p>With only one context word, this is the same network as before, and we get the same update rule, now for \(\mathbf{u}_c\) instead of \(\mathbf{v}_w\). With several context words there are several predictions, and the loss is a sum of cross-entropies:</p>
+      <div class="eq">\[ \mathcal{L}(\theta) = -\sum_{i=1}^{d-1}\log\hat y_{w_i} \]</div>
+      <p>The gradient of a sum is the sum of the gradients, so each term is handled exactly as in the one-word case. Skip-gram inherits CBOW's problem, only worse: a full softmax for each of the \(d - 1\) predictions. Three solutions follow: <a href="#negative-sampling">negative sampling</a>, <a href="#contrastive">contrastive estimation</a> and <a href="#hierarchical">hierarchical softmax</a>.</p>
+    </section>
+
+    <section id="negative-sampling">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=XO2GHDm-ZoI&amp;t=183s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 3:03</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=XO2GHDm-ZoI&amp;t=283s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 4:43 the model</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=XO2GHDm-ZoI&amp;t=487s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M6 · 8:07 the objective</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=3F6KInYCJxI&amp;t=115s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 1:55 k and the 3/4 power</a>
+        </div>
+        <h2>Negative sampling</h2>
+      </div>
+      <p>Build two sets of (word, context) pairs, both free to construct:</p>
+      <ul>
+        <li>\(D\): all <b>correct</b> pairs \((w, c)\) in the corpus. From "sat on a chair": (sat, on), (sat, a), (sat, chair), (on, a), (on, chair), (a, chair), and the same pairs reversed.</li>
+        <li>\(D'\): <b>incorrect</b> pairs \((w, r)\), made by pairing \(w\) with a random context word \(r\) that has never appeared with it: (sat, oxygen), (sat, magic), (chair, sad), (chair, walking).</li>
+      </ul>
+      <p>As before, \(\mathbf{v}_w\) is the vector of the word and \(\mathbf{u}_c\) of the context. Let the random variable \(z\) say whether a pair is correct (\(z = 1\)) or not, and model its probability with the sigmoid of a dot product:</p>
+      <div class="eq">\[ p(z = 1 \mid w, c) = \sigma(\mathbf{u}_c^\top\mathbf{v}_w) = \frac{1}{1 + e^{-\mathbf{u}_c^\top\mathbf{v}_w}}, \qquad p(z = 0 \mid w, r) = 1 - \sigma(\mathbf{u}_r^\top\mathbf{v}_w) = \frac{1}{1 + e^{\mathbf{u}_r^\top\mathbf{v}_w}} = \sigma(-\mathbf{u}_r^\top\mathbf{v}_w) \]</div>
+      <p>We want \(p(z = 1)\) high for every pair in \(D\) and \(p(z = 0)\) high for every pair in \(D'\). The parameters \(\theta\) are all the word vectors \(\mathbf{v}_w\) and context vectors \(\mathbf{u}_c\). Maximizing the probability of all the pairs at once means maximizing a product, and taking logs turns it into a sum:</p>
+      <div class="eq">\[ \begin{aligned} &\max_\theta \prod_{(w,c)\in D} p(z = 1 \mid w, c) \prod_{(w,r)\in D'} p(z = 0 \mid w, r) \\ =\; &\max_\theta \sum_{(w,c)\in D}\log p(z = 1 \mid w, c) + \sum_{(w,r)\in D'}\log\big(1 - p(z = 1 \mid w, r)\big) \\ =\; &\max_\theta \sum_{(w,c)\in D}\log\sigma(\mathbf{u}_c^\top\mathbf{v}_w) + \sum_{(w,r)\in D'}\log\sigma(-\mathbf{u}_r^\top\mathbf{v}_w), \qquad \sigma(x) = \frac{1}{1 + e^{-x}} \end{aligned} \]</div>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 640 268" role="img" aria-label="Two small computation graphs. Left, for a true pair: the context vector u c and the word vector v w meet in a dot product, then a sigmoid, giving P of z equals 1. Right, for a random pair: u r and v w meet in a dot product, which is negated and passed through a sigmoid, giving P of z equals 0.">
+            <defs><marker id="l10-f4-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <rect class="d-box" x="40" y="186" width="80" height="24" rx="3"/>
+            <text x="80" y="203" text-anchor="middle">u<tspan class="sb" dy="3">c</tspan></text>
+            <rect class="d-box-acc" x="190" y="186" width="80" height="24" rx="3"/>
+            <text x="230" y="203" text-anchor="middle">v<tspan class="sb" dy="3">w</tspan></text>
+            <line class="d-ln" x1="80" y1="186" x2="143" y2="157" marker-end="url(#l10-f4-ah)"/>
+            <line class="d-ln" x1="230" y1="186" x2="167" y2="157" marker-end="url(#l10-f4-ah)"/>
+            <circle class="node" cx="155" cy="150" r="13"/>
+            <text class="d-t" x="155" y="156" text-anchor="middle" style="font-size:20px">·</text>
+            <line class="d-ln" x1="155" y1="137" x2="155" y2="114" marker-end="url(#l10-f4-ah)"/>
+            <circle class="node-acc" cx="155" cy="97" r="15"/>
+            <text class="d-t" x="155" y="102" text-anchor="middle">σ</text>
+            <text class="d-s" x="178" y="101">σ(u<tspan class="sb" dy="3">c</tspan><tspan dy="-3">ᵀv</tspan><tspan class="sb" dy="3">w</tspan><tspan dy="-3">)</tspan></text>
+            <line class="d-ln" x1="155" y1="82" x2="155" y2="58" marker-end="url(#l10-f4-ah)"/>
+            <text class="d-t" x="155" y="46" text-anchor="middle">P(z = 1 | w, c)</text>
+            <text class="d-t" x="155" y="238" text-anchor="middle">true pair (w, c) ∈ D: (sat, on)</text>
+            <text class="d-s" x="155" y="256" text-anchor="middle">maximizing it raises u<tspan class="sb" dy="3">c</tspan><tspan dy="-3">ᵀv</tspan><tspan class="sb" dy="3">w</tspan></text>
+
+            <line class="d-rule" x1="320" y1="14" x2="320" y2="258"/>
+
+            <rect class="d-box" x="370" y="186" width="80" height="24" rx="3"/>
+            <text x="410" y="203" text-anchor="middle">u<tspan class="sb" dy="3">r</tspan></text>
+            <rect class="d-box-acc" x="520" y="186" width="80" height="24" rx="3"/>
+            <text x="560" y="203" text-anchor="middle">v<tspan class="sb" dy="3">w</tspan></text>
+            <line class="d-ln" x1="410" y1="186" x2="474" y2="166" marker-end="url(#l10-f4-ah)"/>
+            <line class="d-ln" x1="560" y1="186" x2="496" y2="166" marker-end="url(#l10-f4-ah)"/>
+            <circle class="node" cx="485" cy="160" r="13"/>
+            <text class="d-t" x="485" y="166" text-anchor="middle" style="font-size:20px">·</text>
+            <line class="d-ln" x1="485" y1="147" x2="485" y2="138" marker-end="url(#l10-f4-ah)"/>
+            <circle class="node" cx="485" cy="124" r="13"/>
+            <text class="d-t" x="485" y="129" text-anchor="middle">−</text>
+            <line class="d-ln" x1="485" y1="111" x2="485" y2="102" marker-end="url(#l10-f4-ah)"/>
+            <circle class="node-acc" cx="485" cy="86" r="15"/>
+            <text class="d-t" x="485" y="91" text-anchor="middle">σ</text>
+            <text class="d-s" x="508" y="90">σ(−u<tspan class="sb" dy="3">r</tspan><tspan dy="-3">ᵀv</tspan><tspan class="sb" dy="3">w</tspan><tspan dy="-3">)</tspan></text>
+            <line class="d-ln" x1="485" y1="71" x2="485" y2="58" marker-end="url(#l10-f4-ah)"/>
+            <text class="d-t" x="485" y="46" text-anchor="middle">P(z = 0 | w, r)</text>
+            <text class="d-t" x="485" y="238" text-anchor="middle">random pair (w, r) ∈ D′: (sat, oxygen)</text>
+            <text class="d-s" x="485" y="256" text-anchor="middle">maximizing it lowers u<tspan class="sb" dy="3">r</tspan><tspan dy="-3">ᵀv</tspan><tspan class="sb" dy="3">w</tspan></text>
+          </svg>
+        </div>
+        <figcaption><b>Negative sampling scores pairs, not the vocabulary.</b> A true pair should get a large dot product and a random pair a small (negative) one. Each term of the objective costs one dot product and one sigmoid, with no sum over \(|V|\).</figcaption>
+      </figure>
+
+      <p>The first sum is largest when the dot products of true pairs are large: context vectors are pulled toward the vectors of the words they appear with, and, transitively as before, words that share contexts end up close. The second sum adds what the lecture stresses as the new ingredient: words that never appear in the same context are pushed apart. There is no expensive softmax anywhere.</p>
+
+      <h3>How many negatives, and which ones <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=3F6KInYCJxI&amp;t=115s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 1:55</a></h3>
+      <ul>
+        <li><b>\(k\) negatives per positive.</b> In the original paper, Mikolov et al. sample \(k\) negative pairs for every positive pair, so \(|D'| = k\,|D|\). This reflects a natural imbalance: most pairs of words in a vocabulary never occur together, so incorrect pairs vastly outnumber correct ones. \(k\) is a hyperparameter, tuned on a validation set, for instance by checking that cat–dog or cat–feline come out closer than cat–truck.</li>
+        <li><b>Drawing \(r\).</b> The simplest choice is uniform over the words that never appear with \(w\). Better to account for frequency and draw frequent words more often, with the unigram distribution \(p(r) = \text{count}(r)/N\), where \(N\) is the total number of words in the corpus. word2vec uses a modified unigram distribution, raised to the power 3/4, a value found to give the best performance:</li>
+      </ul>
+      <div class="eq">\[ r \sim \frac{p(r)^{3/4}}{\sum_{r'} p(r')^{3/4}}, \qquad p(r) = \frac{\text{count}(r)}{N} \]</div>
+      <p class="note">Not in the lecture: the power flattens the distribution a little. Two words with unigram probabilities 0.9 and 0.1 are drawn with probabilities about 0.84 and 0.16, so rarer words are sampled somewhat more often than their frequency alone would give.</p>
+      <p>The lecture adds a remark that matters later <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=3F6KInYCJxI&amp;t=391s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M7 · 6:31</a>. word2vec had a huge effect on NLP: word vectors became the standard features for almost every application. Later, careful analysis showed that its heuristics (the 3/4 power, the value of \(k\), the learning rate) must be tuned well for it to beat SVD, and that adding similar knobs to SVD makes its vectors just as good. See <a href="#evaluation">evaluation</a>.</p>
+    </section>
+
+    <!-- ============ MODULES 10.6–10.7 ============ -->
+    <section id="contrastive">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=XZUGn36eAgA&amp;t=13s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 0:13</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=XZUGn36eAgA&amp;t=147s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 2:27 the loss</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=XZUGn36eAgA&amp;t=308s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M8 · 5:08 zero loss past the margin</a>
+        </div>
+        <h2>Contrastive estimation</h2>
+      </div>
+      <p>The second way around the softmax uses the same idea of true versus random. Take a <b>positive</b> window, "He sat on a chair", and make a <b>negative</b> one by replacing a word with a random word: "He sat abracadabra a chair". A feedforward network takes the vectors of the word pair, \(\mathbf{v}_c\) for <i>sat</i> and \(\mathbf{v}_w\) for <i>on</i> (\(2d\) numbers for \(d\)-dimensional vectors), passes them through a hidden layer \(W_h \in \mathbb{R}^{2d\times h}\), and outputs a single score \(s\) through \(W_{\text{out}} \in \mathbb{R}^{h\times 1}\). The same network on (sat, abracadabra) gives a score \(s_c\) for the corrupted window. The output layer has one unit instead of \(|V|\).</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 640 250" role="img" aria-label="Two copies of the same scoring network. Left: the vectors of sat and on are joined into a 2d-dimensional input, a hidden layer W h of size 2d by h follows, and W out of size h by 1 gives the score s. Right: the same network applied to sat and abracadabra gives the score s c.">
+            <defs><marker id="l10-f5-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-t" x="20" y="22">Positive: He sat <tspan class="acc">on</tspan> a chair</text>
+            <text class="d-t" x="150" y="54" text-anchor="middle">s</text>
+            <line class="d-ln" x1="150" y1="118" x2="150" y2="64" marker-end="url(#l10-f5-ah)"/>
+            <text class="d-s" x="160" y="96">W<tspan class="sb" dy="3">out</tspan><tspan dy="-3"> ∈ ℝ</tspan><tspan class="sb" dy="-6">h×1</tspan></text>
+            <rect class="d-box-acc" x="40" y="118" width="220" height="22" rx="3"/>
+            <line class="d-ln" x1="60" y1="196" x2="40" y2="140"/>
+            <line class="d-ln" x1="240" y1="196" x2="260" y2="140"/>
+            <text class="d-s" x="150" y="174" text-anchor="middle">W<tspan class="sb" dy="3">h</tspan><tspan dy="-3"> ∈ ℝ</tspan><tspan class="sb" dy="-6">2d×h</tspan></text>
+            <rect class="d-box" x="60" y="196" width="180" height="22" rx="3"/>
+            <line class="d-ln" x1="150" y1="196" x2="150" y2="218"/>
+            <text x="105" y="211" text-anchor="middle">v<tspan class="sb" dy="3">c</tspan></text>
+            <text x="195" y="211" text-anchor="middle">v<tspan class="sb" dy="3">w</tspan></text>
+            <text class="d-s" x="105" y="236" text-anchor="middle">sat</text>
+            <text class="d-s" x="195" y="236" text-anchor="middle">on</text>
+
+            <line class="d-rule" x1="320" y1="10" x2="320" y2="244"/>
+
+            <text class="d-t" x="340" y="22">Negative: He sat <tspan class="acc">abracadabra</tspan> a chair</text>
+            <text class="d-t" x="480" y="54" text-anchor="middle">s<tspan class="sb" dy="3">c</tspan></text>
+            <line class="d-ln" x1="480" y1="118" x2="480" y2="64" marker-end="url(#l10-f5-ah)"/>
+            <text class="d-s" x="490" y="96">W<tspan class="sb" dy="3">out</tspan><tspan dy="-3"> ∈ ℝ</tspan><tspan class="sb" dy="-6">h×1</tspan></text>
+            <rect class="d-box-acc" x="370" y="118" width="220" height="22" rx="3"/>
+            <line class="d-ln" x1="390" y1="196" x2="370" y2="140"/>
+            <line class="d-ln" x1="570" y1="196" x2="590" y2="140"/>
+            <text class="d-s" x="480" y="174" text-anchor="middle">W<tspan class="sb" dy="3">h</tspan><tspan dy="-3"> ∈ ℝ</tspan><tspan class="sb" dy="-6">2d×h</tspan></text>
+            <rect class="d-box" x="390" y="196" width="180" height="22" rx="3"/>
+            <line class="d-ln" x1="480" y1="196" x2="480" y2="218"/>
+            <text x="435" y="211" text-anchor="middle">v<tspan class="sb" dy="3">c</tspan></text>
+            <text x="525" y="211" text-anchor="middle">v<tspan class="sb" dy="3">w</tspan></text>
+            <text class="d-s" x="435" y="236" text-anchor="middle">sat</text>
+            <text class="d-s" x="525" y="236" text-anchor="middle">abracadabra</text>
+          </svg>
+        </div>
+        <figcaption><b>One scoring network, two windows.</b> The same weights score the true pair (sat, on) and the corrupted pair (sat, abracadabra). Training compares the two scores, so the output is one number, not a distribution over \(|V|\) words.</figcaption>
+      </figure>
+
+      <p>The loss is built up from a wishlist:</p>
+      <ul>
+        <li>We want \(s > s_c\), so try to maximize \(s - s_c\).</li>
+        <li>A tiny gap is not convincing: \(s = 0.99\) against \(s_c = 0.98\) barely separates the windows. Ask for a margin \(m\) (with scores in \([0, 1]\), perhaps 0.3 or 0.4), that is, maximize \(s - (s_c + m)\).</li>
+        <li>Once \(s > s_c + m\) the network is doing its job, so the loss should be 0 and nothing should be backpropagated.</li>
+      </ul>
+      <div class="result">
+        <span class="lbl">Contrastive estimation: hinge loss with margin m</span>
+        \[ \min_\theta\; \max\big(0,\; m - (s - s_c)\big) \]
+        <p>Zero once the true window beats the corrupted one by at least \(m\); otherwise the gradient raises \(s\) and lowers \(s_c\).</p>
+      </div>
+      <p class="note">The slide writes the objective as "maximize \(\max(0, s - (s_c + m))\)". Read literally, that would keep rewarding ever larger gaps. The behaviour the lecture describes (no loss and no update once \(s > s_c + m\)) is the hinge loss in the box. Standard name: a margin ranking loss.</p>
+    </section>
+
+    <section id="hierarchical">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=ioe1eeEWU0I&amp;t=46s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 0:46</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=ioe1eeEWU0I&amp;t=297s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 4:57 probability of a path</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=ioe1eeEWU0I&amp;t=478s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 7:58 a sigmoid per node</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=ioe1eeEWU0I&amp;t=692s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 11:32 the saving</a>
+        </div>
+        <h2>Hierarchical softmax</h2>
+      </div>
+      <p>The third solution is a clever trick, less obvious than the other two, used in NLP applications where speed matters. Keep the input side (one-hot <i>sat</i>, \(W_{\text{context}}\), \(\mathbf{h} = \mathbf{v}_c\); note that the context vector is now called \(\mathbf{v}_c\)), but replace the output layer by a binary tree:</p>
+      <ul>
+        <li>The tree has \(|V|\) leaves, one per word, and there is a unique path from the root to each leaf.</li>
+        <li>Let \(l(w_1), l(w_2), \dots, l(w_p)\) be the nodes on the path from the root to word \(w\), and let \(\pi(w)\) be a binary vector with \(\pi(w)_k = 1\) if the path branches left at node \(l(w_k)\) and 0 otherwise. In the figure, \(\pi(\text{on}) = (1, 0, 0)\): left, right, right. For a balanced tree the path has \(\log_2|V|\) nodes (3 for 8 words).</li>
+        <li>Each internal node \(i\) carries a vector \(\mathbf{u}_i\). The parameters are \(W_{\text{context}}\) and \(\mathbf{u}_1, \mathbf{u}_2, \dots\). A binary tree with \(|V|\) leaves has \(|V| - 1\) internal nodes, so this is in effect the same number of parameters as \(W_{\text{word}}\).</li>
+      </ul>
+      <p>The probability of predicting a word is the probability of taking its path from the root:</p>
+      <div class="eq">\[ p(w \mid \mathbf{v}_c) = \prod_{k=1}^{|\pi(w)|} P\big(\pi(w)_k \mid \mathbf{v}_c\big), \qquad P(\text{on} \mid \mathbf{v}_{\text{sat}}) = P(\pi(\text{on})_1 = 1 \mid \mathbf{v}_{\text{sat}})\cdot P(\pi(\text{on})_2 = 0 \mid \mathbf{v}_{\text{sat}})\cdot P(\pi(\text{on})_3 = 0 \mid \mathbf{v}_{\text{sat}}) \]</div>
+      <p>Each branching probability is a sigmoid of the dot product between the context vector and the vector of the node, \(\mathbf{u}_i\):</p>
+      <div class="eq">\[ P(\pi(w)_i = 1 \mid \mathbf{v}_c) = \frac{1}{1 + e^{-\mathbf{v}_c^\top\mathbf{u}_i}} = \sigma(\mathbf{v}_c^\top\mathbf{u}_i), \qquad P(\pi(w)_i = 0 \mid \mathbf{v}_c) = 1 - \sigma(\mathbf{v}_c^\top\mathbf{u}_i) = \frac{1}{1 + e^{\mathbf{v}_c^\top\mathbf{u}_i}} \]</div>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 640 312" role="img" aria-label="A binary tree with eight leaves. The path from the root to the fourth leaf, the word on, is highlighted: left at node u1, right at node u2, right at node u3, so pi of on is 1, 0, 0. On the right, the probability of on is the product of sigma of v c transpose u1, sigma of minus v c transpose u2 and sigma of minus v c transpose u3.">
+            <line class="d-ln-acc" x1="200" y1="46" x2="110" y2="104" style="stroke-width:2.6"/>
+            <line class="d-ln" x1="200" y1="46" x2="290" y2="104"/>
+            <line class="d-ln" x1="110" y1="104" x2="65" y2="162"/>
+            <line class="d-ln-acc" x1="110" y1="104" x2="155" y2="162" style="stroke-width:2.6"/>
+            <line class="d-ln" x1="290" y1="104" x2="245" y2="162"/>
+            <line class="d-ln" x1="290" y1="104" x2="335" y2="162"/>
+            <line class="d-ln" x1="65" y1="162" x2="42.5" y2="222"/><line class="d-ln" x1="65" y1="162" x2="87.5" y2="222"/>
+            <line class="d-ln" x1="155" y1="162" x2="132.5" y2="222"/>
+            <line class="d-ln-acc" x1="155" y1="162" x2="177.5" y2="222" style="stroke-width:2.6"/>
+            <line class="d-ln" x1="245" y1="162" x2="222.5" y2="222"/><line class="d-ln" x1="245" y1="162" x2="267.5" y2="222"/>
+            <line class="d-ln" x1="335" y1="162" x2="312.5" y2="222"/><line class="d-ln" x1="335" y1="162" x2="357.5" y2="222"/>
+            <circle class="node-acc" cx="200" cy="46" r="10"/>
+            <circle class="node-acc" cx="110" cy="104" r="10"/><circle class="node" cx="290" cy="104" r="10"/>
+            <circle class="node" cx="65" cy="162" r="10"/><circle class="node-acc" cx="155" cy="162" r="10"/><circle class="node" cx="245" cy="162" r="10"/><circle class="node" cx="335" cy="162" r="10"/>
+            <circle class="node" cx="42.5" cy="222" r="8"/><circle class="node" cx="87.5" cy="222" r="8"/><circle class="node" cx="132.5" cy="222" r="8"/><circle class="pt-new" cx="177.5" cy="222" r="8"/><circle class="node" cx="222.5" cy="222" r="8"/><circle class="node" cx="267.5" cy="222" r="8"/><circle class="node" cx="312.5" cy="222" r="8"/><circle class="node" cx="357.5" cy="222" r="8"/>
+            <text class="d-s" x="216" y="42">u₁</text>
+            <text class="d-s" x="94" y="101" text-anchor="end">u₂</text>
+            <text class="d-s" x="139" y="168" text-anchor="end">u₃</text>
+            <text class="d-s acc" x="146" y="66" text-anchor="end">π(on)₁ = 1 (left)</text>
+            <text class="d-s acc" x="140" y="128">π(on)₂ = 0 (right)</text>
+            <text class="d-s acc" x="166" y="183">π(on)₃ = 0</text>
+            <text class="d-t acc" x="177.5" y="246" text-anchor="middle">on</text>
+            <text class="d-s" x="290" y="246" text-anchor="middle">|V| leaves, one per word</text>
+            <rect class="d-box" x="70" y="266" width="260" height="26" rx="4"/>
+            <text class="d-s" x="200" y="283" text-anchor="middle">h = v<tspan class="sb" dy="3">c</tspan><tspan dy="-3">, the vector of the input word sat</tspan></text>
+
+            <line class="d-rule" x1="385" y1="20" x2="385" y2="300"/>
+            <text class="d-h" x="400" y="52">P(on | v<tspan class="sb" dy="3">c</tspan><tspan dy="-3">) along the path</tspan></text>
+            <text class="d-s" x="400" y="84">left at u₁</text><text class="d-t" x="500" y="84">σ(v<tspan class="sb" dy="3">c</tspan><tspan dy="-3">ᵀu₁)</tspan></text>
+            <text class="d-s" x="400" y="108">right at u₂</text><text class="d-t" x="500" y="108">σ(−v<tspan class="sb" dy="3">c</tspan><tspan dy="-3">ᵀu₂)</tspan></text>
+            <text class="d-s" x="400" y="132">right at u₃</text><text class="d-t" x="500" y="132">σ(−v<tspan class="sb" dy="3">c</tspan><tspan dy="-3">ᵀu₃)</tspan></text>
+            <line class="d-rule" x1="400" y1="146" x2="630" y2="146"/>
+            <text class="d-t" x="400" y="168">P(on | v<tspan class="sb" dy="3">c</tspan><tspan dy="-3">) = their product</tspan></text>
+            <text class="d-s" x="400" y="198">|π(on)| = 3 = log₂ 8 sigmoids,</text>
+            <text class="d-s" x="400" y="216">not a softmax over all |V| = 8</text>
+          </svg>
+        </div>
+        <figcaption><b>Predicting a word means predicting its path.</b> The word <i>on</i> sits at the fourth leaf, reached by going left, right, right. Each internal node on the path has its own vector \(\mathbf{u}_i\), and the probability of each turn is a sigmoid of \(\mathbf{v}_c^\top\mathbf{u}_i\) (positive for left, negated for right). Since \(1 - \sigma(x) = \sigma(-x)\), the two branches at a node always add up to 1.</figcaption>
+      </figure>
+
+      <p>Training to maximize these probabilities makes the context vector \(\mathbf{v}_c\) highly similar to \(\mathbf{u}_i\) at nodes where the path to the target branches left, and dissimilar where it branches right. Contexts that appear with the same words get pushed the same way at the same nodes. If <i>cat</i> and <i>dog</i> both appear with <i>sleep</i>, both move toward or away from the same node vectors, so their representations become similar: the same transitive argument as before.</p>
+      <p>With the tree, \(p(w \mid \mathbf{v}_c)\) takes \(|\pi(w)|\) dot products and sigmoids instead of the \(|V|\) the softmax requires. As for building the tree, even a random arrangement of the words on the leaves works well in practice <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=ioe1eeEWU0I&amp;t=725s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M9 · 12:05</a>. (The lecture leaves as a quiz question whether a random tree causes any problem.)</p>
+      <p class="note">Not in the lecture: because the two branches at every node sum to 1, the probabilities of all \(|V|\) leaves also sum to 1. The tree gives a proper distribution over words without ever computing a normalizing sum.</p>
+    </section>
+
+    <!-- ============ MODULES 10.8–10.10 ============ -->
+    <section id="glove">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=zA0U8C_q04M&amp;t=13s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 0:13</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=zA0U8C_q04M&amp;t=49s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 0:49 global counts</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=zA0U8C_q04M&amp;t=213s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 3:33 the derivation</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=zA0U8C_q04M&amp;t=360s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 6:00 the loss</a>
+        </div>
+        <h2>GloVe: fit word vectors to the global counts</h2>
+      </div>
+      <p>Count-based methods (SVD) compute word representations from global co-occurrence counts over the whole corpus. Predict-based methods learn representations through a prediction task, one (word, context) pair at a time. <dfn>GloVe</dfn> (global vectors) combines the two: learn vectors by gradient descent, but make them faithful to the global counts.</p>
+      <p>\(X_{ij}\) encodes important global information about how words \(i\) and \(j\) co-occur: global because it is computed from the entire corpus (whether as counts, PMI or PPMI). A dot product \(\mathbf{v}_i^\top\mathbf{v}_j\) measures how well two words go together, and so does \(P(j \mid i)\), the probability of seeing \(j\) in the context of \(i\). GloVe asks the two to agree:</p>
+      <div class="eq">\[ \mathbf{v}_i^\top\mathbf{v}_j = \log P(j \mid i) = \log X_{ij} - \log X_i, \qquad P(j \mid i) = \frac{X_{ij}}{\sum_j X_{ij}} = \frac{X_{ij}}{X_i} \]</div>
+      <p>Similarly \(\mathbf{v}_j^\top\mathbf{v}_i = \log X_{ij} - \log X_j\), using \(X_{ij} = X_{ji}\). The left sides are equal, so add the two equations:</p>
+      <div class="eq">\[ 2\,\mathbf{v}_i^\top\mathbf{v}_j = 2\log X_{ij} - \log X_i - \log X_j \quad\Longrightarrow\quad \mathbf{v}_i^\top\mathbf{v}_j = \log X_{ij} - \tfrac12\log X_i - \tfrac12\log X_j \]</div>
+      <p>\(\log X_i\) depends only on word \(i\) and \(\log X_j\) only on word \(j\). To give the model more freedom, replace them by word-specific biases \(b_i\) and \(b_j\) that are learnt too: \(\mathbf{v}_i^\top\mathbf{v}_j + b_i + b_j = \log X_{ij}\). The left side is the value predicted from the parameters, the right side the value computed from the corpus, so minimize the squared difference:</p>
+      <div class="eq">\[ \min_{\mathbf{v}_i, \mathbf{v}_j, b_i, b_j}\; \sum_{i,j}\big(\underbrace{\mathbf{v}_i^\top\mathbf{v}_j + b_i + b_j}_{\text{predicted}} - \underbrace{\log X_{ij}}_{\text{from the corpus}}\big)^2 \]</div>
+      <p>This objective weighs all co-occurrences equally, which is a drawback. The fix is a weighting function \(f(X_{ij})\), chosen so that neither rare nor frequent words are over-weighted:</p>
+      <div class="result">
+        <span class="lbl">GloVe objective</span>
+        \[ \min_{\mathbf{v}, b}\; \sum_{i,j} f(X_{ij})\,\big(\mathbf{v}_i^\top\mathbf{v}_j + b_i + b_j - \log X_{ij}\big)^2, \qquad f(x) = \begin{cases} (x/x_{\max})^{\alpha} & \text{if } x &lt; x_{\max} \\ 1 & \text{otherwise} \end{cases} \]
+        <p>\(\alpha\) is tuned for the data set. The parameters are the \(|V|\) word vectors (each of size \(k\)) and the biases, trained by gradient descent.</p>
+      </div>
+      <p>The lecturer corrects the notation in the video <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=zA0U8C_q04M&amp;t=396s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M10 · 6:36</a>: as in the other models there should be a word vector and a separate context vector, \(\mathbf{v}_i^\top\mathbf{u}_j\). Then <i>cat</i> and <i>feline</i> both move toward the context vectors of the words they co-occur with, and so toward each other.</p>
+      <p class="note">Not in the lecture: \(f(0) = 0\), so pairs that never co-occur, where \(\log X_{ij}\) would be \(-\infty\), drop out of the sum.</p>
+    </section>
+
+    <section id="evaluation">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=b0M0AzjpPqc&amp;t=12s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 0:12</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=b0M0AzjpPqc&amp;t=151s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 2:31 synonyms</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=b0M0AzjpPqc&amp;t=215s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 3:35 analogies</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=b0M0AzjpPqc&amp;t=344s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 5:44 which is best?</a>
+        </div>
+        <h2>Evaluating word representations</h2>
+      </div>
+      <p>Any of the models (CBOW, skip-gram, GloVe, each with its variants) produces word vectors. Three kinds of test compare them:</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Task</th><th>Given</th><th>Uses the vectors to</th><th>Score</th></tr></thead>
+          <tbody>
+            <tr><td><b>Semantic relatedness</b></td><td>Word pairs rated by humans, e.g. \(S_{\text{human}}(\text{cat}, \text{dog}) = 0.8\)</td><td>Compute the cosine, e.g. \(S_{\text{model}}(\text{cat}, \text{dog}) = 0.7\)</td><td>Correlation between \(S_{\text{model}}\) and \(S_{\text{human}}\)</td></tr>
+            <tr><td><b>Synonym detection</b></td><td>A term and four candidates: levied; {imposed, believed, requested, correlated}</td><td>Pick the candidate with the largest cosine</td><td>Accuracy</td></tr>
+            <tr><td><b>Analogy</b></td><td>brother : sister :: grandson : ?<br>work : works :: speak : ?</td><td>Nearest neighbour of a vector sum</td><td>Accuracy</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Semantic relatedness</h3>
+      <p>Ask humans to judge how related each of many word pairs is, say on a scale from 0 to 1. For the same pairs compute the model's cosine similarity,</p>
+      <div class="eq">\[ S_{\text{model}}(\text{cat}, \text{dog}) = \frac{\mathbf{v}_{\text{cat}}^\top\mathbf{v}_{\text{dog}}}{\lVert\mathbf{v}_{\text{cat}}\rVert\,\lVert\mathbf{v}_{\text{dog}}\rVert} \]</div>
+      <p>and compute the correlation between the two sets of scores. Model 1 is better than Model 2 if \(\operatorname{corr}(S_{\text{model1}}, S_{\text{human}}) > \operatorname{corr}(S_{\text{model2}}, S_{\text{human}})\). The same test can choose hyperparameters: keep the setting whose vectors give the higher correlation.</p>
+      <h3>Synonym detection <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=b0M0AzjpPqc&amp;t=151s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 2:31</a></h3>
+      <p>Resources such as WordNet supply synonyms. Each test item gives a term and a few candidates, one of them the correct synonym and the rest distractors. The model picks</p>
+      <div class="eq">\[ \text{synonym} = \operatorname*{argmax}_{c \in C}\; \cos(\mathbf{v}_{\text{term}}, \mathbf{v}_c) \]</div>
+      <p>and its accuracy over many items (60 right out of 100 is 60%) compares models.</p>
+      <h3>Analogy <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=b0M0AzjpPqc&amp;t=215s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 3:35</a></h3>
+      <p><b>Semantic analogy</b>: brother is to sister as grandson is to ?. Find the nearest neighbour of \(\mathbf{v}_{\text{sister}} - \mathbf{v}_{\text{brother}} + \mathbf{v}_{\text{grandson}}\); it should be <i>granddaughter</i>. <b>Syntactic analogy</b>: work is to works as speak is to ?. The nearest neighbour of \(\mathbf{v}_{\text{works}} - \mathbf{v}_{\text{work}} + \mathbf{v}_{\text{speak}}\) should be <i>speaks</i>. The first two tasks use dot products; analogies use arithmetic on the vectors.</p>
+      <h3>Count versus predict: which is best <a class="ts" style="vertical-align: 3px; margin-left: 6px;" href="https://www.youtube.com/watch?v=b0M0AzjpPqc&amp;t=344s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M11 · 5:44</a></h3>
+      <ul>
+        <li>Baroni et al. [2014] found that predict models consistently outperform count models on all tasks.</li>
+        <li>Levy et al. [2015] did a more thorough analysis (in the instructor's opinion, because it gave SVD a fair chance). word2vec has tuned knobs, such as the 3/4 power on the sampling distribution and the number \(k\) of negative samples, so they gave SVD analogous ones: raise the counts to a tunable power before computing PMI, and an adjustment that mirrors the \(k\) negative samples. With these, good old SVD does better than the prediction-based models on similarity tasks, though not on analogy tasks.</li>
+      </ul>
+      <p>Most NLP applications need similarity far more often than analogies, so in most cases SVD would be just fine. That is the twist promised at the start.</p>
+    </section>
+
+    <section id="svd-word2vec">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=MBcnPueElDU&amp;t=13s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 0:13</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=MBcnPueElDU&amp;t=54s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 0:54 the matrix M</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=MBcnPueElDU&amp;t=151s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>M12 · 2:31 why word2vec is still used</a>
+        </div>
+        <h2>SVD and word2vec factorize nearly the same matrix</h2>
+      </div>
+      <p>SVD is a matrix factorization of the co-occurrence matrix. Levy et al. also showed, under some assumptions (the lecture gives the intuition, not the proof), that word2vec implicitly does a matrix factorization. word2vec learns two matrices, \(W_{\text{context}}\) and \(W_{\text{word}}\), and their product is a matrix \(M\) closely tied to PMI:</p>
+      <div class="result">
+        <span class="lbl">word2vec as implicit factorization</span>
+        \[ M = W_{\text{word}}^\top W_{\text{context}} \in \mathbb{R}^{|V|\times|V|}, \qquad M_{ij} = \mathbf{v}_i^\top\mathbf{u}_j = \operatorname{PMI}(w_i, c_j) - \log k, \qquad k = \text{number of negative samples} \]
+      </div>
+      <p class="note">The slide writes \(M = W_{\text{context}} * W_{\text{word}}\); the lecturer points out that a transpose is needed. With both matrices of size \(k \times |V|\), the matrix of all word–context dot products is \(W_{\text{word}}^\top W_{\text{context}}\).</p>
+      <p>So word2vec factorizes a shifted PMI matrix, very much like what SVD does. Take the PMI matrix, subtract \(\log k\) from every entry, run SVD, and you essentially get back the word2vec representations. At an intuitive level this is expected: both methods rely on the same principle, that words appearing together (the distributional idea) should get related representations. SVD turns co-occurrence into counts and factorizes them; word2vec turns it into updates.</p>
+      <p>word2vec is still preferred in most applications, for computational reasons. SVD needs the eigenvectors of a huge matrix such as \(X^\top X\). Even with very good libraries this costs roughly \(O(n^{2.\text{something}})\), and the full high-dimensional PMI matrix must be held in memory. word2vec is iterative by design: each gradient step updates only a few parameters, never the whole model at once, and with negative sampling, contrastive estimation or hierarchical softmax each step is cheap.</p>
+    </section>
+
+    <!-- ============ REVISION ============ -->
+    <section id="terms">
+      <div class="sec-head"><h2>Key terms</h2></div>
+      <dl class="terms">
+        <div><dt>One-hot vector</dt><dd>A \(|V|\)-dimensional vector with a single 1 at the word's index; any two are \(\sqrt2\) apart with cosine 0.</dd></div>
+        <div><dt>Co-occurrence matrix</dt><dd>Word × context matrix whose \((i, j)\) entry counts how often context \(j\) falls within \(k\) words of word \(i\).</dd></div>
+        <div><dt>PMI</dt><dd>\(\log\frac{\text{count}(w,c)\,N}{\text{count}(w)\,\text{count}(c)}\): how much more often two words co-occur than chance would predict.</dd></div>
+        <div><dt>PPMI</dt><dd>PMI with negative values (and the \(-\infty\) of zero counts) replaced by 0; PMI₀ replaces only the zero-count cells.</dd></div>
+        <div><dt>Truncated SVD</dt><dd>\(\hat X = \sum_{i \le k}\sigma_i\mathbf{u}_i\mathbf{v}_i^\top\), the best rank-\(k\) approximation; it exposes latent co-occurrences.</dd></div>
+        <div><dt>\(W_{\text{word}} = U\Sigma\)</dt><dd>\(k\)-dimensional word vectors with \(W_{\text{word}}W_{\text{word}}^\top = \hat X\hat X^\top\); \(W_{\text{context}} = V\).</dd></div>
+        <div><dt>Prediction-based model</dt><dd>Learns word vectors as the parameters of a network trained on a prediction task whose data comes free from raw text.</dd></div>
+        <div><dt>CBOW</dt><dd>Predicts a word from the sum of its context vectors, \(\mathbf{h} = \sum\mathbf{u}_{c_i}\), with a softmax over \(|V|\).</dd></div>
+        <div><dt>Skip-gram</dt><dd>Predicts each context word from the input word; the loss is a sum of cross-entropies.</dd></div>
+        <div><dt>Negative sampling</dt><dd>Maximize \(\log\sigma(\mathbf{u}_c^\top\mathbf{v}_w)\) on true pairs and \(\log\sigma(-\mathbf{u}_r^\top\mathbf{v}_w)\) on \(k\) random pairs drawn from \(p(r)^{3/4}\).</dd></div>
+        <div><dt>Contrastive estimation</dt><dd>Score a true and a corrupted window and minimize \(\max(0, m - (s - s_c))\).</dd></div>
+        <div><dt>Hierarchical softmax</dt><dd>A word's probability is the product of sigmoids along its root-to-leaf path in a binary tree: about \(\log_2|V|\) terms.</dd></div>
+        <div><dt>GloVe</dt><dd>Fits \(\mathbf{v}_i^\top\mathbf{v}_j + b_i + b_j\) to \(\log X_{ij}\) by weighted least squares with weights \(f(X_{ij})\).</dd></div>
+        <div><dt>Word analogy</dt><dd>Evaluation by vector arithmetic: the nearest neighbour of \(\mathbf{v}_{\text{sister}} - \mathbf{v}_{\text{brother}} + \mathbf{v}_{\text{grandson}}\) should be granddaughter.</dd></div>
+      </dl>
+    </section>
+
+    <section id="test">
+      <div class="sec-head"><h2>Test yourself</h2></div>
+      <div class="quiz">
+        <details><summary><span class="q">Q1</span><span>What are the Euclidean distance and the cosine similarity between the one-hot vectors of two different words? Why is that a problem?</span><span class="tog"></span></summary>
+          <p>They differ in exactly two positions, so the distance is \(\sqrt{1^2 + 1^2} = \sqrt2\), and their dot product is 0, so the cosine is 0. This holds for every pair: cat–dog is exactly as far apart as cat–truck, so the vectors carry no similarity information.</p></details>
+        <details><summary><span class="q">Q2</span><span>In a corpus of \(N = 1000\) words, \(w\) occurs 10 times, \(c\) occurs 20 times, and they co-occur 4 times. Find PMI (natural log). What do PMI₀ and PPMI give for a pair whose words each occur 100 times and co-occur once?</span><span class="tog"></span></summary>
+          <p>\(\operatorname{PMI} = \ln\frac{4 \times 1000}{20 \times 10} = \ln 20 \approx 3.00\). For the second pair, \(\ln\frac{1 \times 1000}{100 \times 100} = \ln 0.1 \approx -2.30\). The count is positive, so PMI₀ keeps −2.30; PPMI sets it to 0 because it is negative. A pair that never co-occurs has PMI \(= -\infty\), and both fixes give 0.</p></details>
+        <details><summary><span class="q">Q3</span><span>How many numbers does the rank-1 SVD approximation of a 50,000 × 50,000 co-occurrence matrix use, compared with the matrix itself?</span><span class="tog"></span></summary>
+          <p>\(m + n + 1 = 50{,}000 + 50{,}000 + 1 = 100{,}001\) numbers (\(\mathbf{u}_1\), \(\mathbf{v}_1\), \(\sigma_1\)) instead of \(2.5 \times 10^9\). Rank \(k\) uses about \(k\) times as many.</p></details>
+        <details><summary><span class="q">Q4</span><span>Why take the rows of \(U\Sigma\) as word vectors rather than the rows of \(\hat X\)?</span><span class="tog"></span></summary>
+          <p>Rows of \(\hat X\) still have \(n \approx |V|\) entries. Rows of \(U\Sigma\) have only \(k\), yet \(\hat X\hat X^\top = U\Sigma V^\top V\Sigma U^\top = U\Sigma(U\Sigma)^\top\) because \(V^\top V = I\). So every dot product between two words is exactly the same as between the corresponding rows of \(\hat X\).</p></details>
+        <details><summary><span class="q">Q5</span><span>In CBOW, \(\mathbf{u}_c = [1, 0]\), \(\mathbf{v}_w = [0, 1]\), \(\hat y_w = 0.2\) and \(\eta = 0.5\). Apply one update to \(\mathbf{v}_w\). How does \(\cos(\mathbf{u}_c, \mathbf{v}_w)\) change? What if \(\hat y_w\) had been 0.99?</span><span class="tog"></span></summary>
+          <p>\(\mathbf{v}_w \leftarrow [0, 1] + 0.5 \times [1, 0] \times (1 - 0.2) = [0.4, 1]\). The cosine goes from 0 to \(0.4/\sqrt{0.16 + 1} \approx 0.37\): the word vector has turned toward its context. With \(\hat y_w = 0.99\) the step is only \(0.5 \times 0.01 = 0.005\) times \(\mathbf{u}_c\), almost no update, because the prediction is already right.</p></details>
+        <details><summary><span class="q">Q6</span><span>CBOW with three context words and \(|V| = 50{,}000\): which columns of \(W_{\text{context}}\) and \(W_{\text{word}}\) receive a gradient in one training step?</span><span class="tog"></span></summary>
+          <p>Only the 3 looked-up columns of \(W_{\text{context}}\), since \(\mathbf{h}\) is their sum and no other column takes part. All 50,000 columns of \(W_{\text{word}}\), since every one of them appears in the softmax denominator. That full softmax is the cost the later modules remove.</p></details>
+        <details><summary><span class="q">Q7</span><span>Write the negative-sampling objective for one true pair \((w, c)\) and \(k\) random contexts \(r_1, \dots, r_k\). Which dot products does maximizing it raise and which does it lower?</span><span class="tog"></span></summary>
+          <p>\(\log\sigma(\mathbf{u}_c^\top\mathbf{v}_w) + \sum_{j=1}^{k}\log\sigma(-\mathbf{u}_{r_j}^\top\mathbf{v}_w)\). The first term grows with \(\mathbf{u}_c^\top\mathbf{v}_w\), so the true pair is pulled together; each other term grows as \(\mathbf{u}_{r_j}^\top\mathbf{v}_w\) falls, so random pairs are pushed apart. Each term needs only one dot product, with no sum over \(|V|\).</p></details>
+        <details><summary><span class="q">Q8</span><span>With \(|V| = 2^{20}\) (about a million words) on a balanced tree, how many sigmoids does hierarchical softmax need for one \(p(w \mid \mathbf{v}_c)\)? How many scores does the full softmax need?</span><span class="tog"></span></summary>
+          <p>The path has \(\log_2 2^{20} = 20\) internal nodes, so 20 dot products and sigmoids. The full softmax needs a score and an exponential for all \(2^{20} \approx 10^6\) words to form its denominator.</p></details>
+      </div>
+    </section>
+
+    <!-- PAGER:START --><nav class="pager" aria-label="Previous and next lecture"><a href="lecture-09.html"><span class="dir">← Lecture 9</span><span class="nm">Visualizing and fooling CNNs</span></a><a class="next" href="lecture-11.html"><span class="dir">Lecture 11 →</span><span class="nm">Recurrent neural networks and BPTT</span></a></nav><!-- PAGER:END -->
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the official lecture slides and the module videos' NPTEL captions. Timestamp links open the video at that moment. Charts marked synthetic use data generated for these notes. Not an official IIT Madras resource.</div>
+</footer>
+
+<script src="notes.js"></script>
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const axes = (svg, sx, sy, lo, hi, step) => {
+    const g = mk('g', { class: 'c-grid' }, svg);
+    for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
+      mk('line', { x1: sx(lo), x2: sx(hi), y1: sy(v), y2: sy(v) }, g);
+      mk('line', { x1: sx(v), x2: sx(v), y1: sy(lo), y2: sy(hi) }, g);
+      if (v !== 0) {
+        mk('text', { x: sx(v), y: sy(0) + 14, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = v;
+        mk('text', { x: sx(0) - 6, y: sy(v) + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = v;
+      }
+    }
+    mk('line', { x1: sx(lo), x2: sx(hi), y1: sy(0), y2: sy(0), class: 'c-axis' }, svg);
+    mk('line', { x1: sx(0), x2: sx(0), y1: sy(lo), y2: sy(hi), class: 'c-axis' }, svg);
+  };
+  const dot = (a, b) => a.reduce((s, x, i) => s + x * b[i], 0);
+  const cosine = (a, b) => { const na = Math.sqrt(dot(a, a)), nb = Math.sqrt(dot(b, b)); return na > 1e-12 && nb > 1e-12 ? dot(a, b) / (na * nb) : NaN; };
+  const minus = s => s.replace('-', '−');
+
+  /* ---------- Co-occurrence matrix: counts, PMI, PPMI and truncated SVD ---------- */
+  (() => {
+    const svg = document.getElementById('l10-cooc-svg'); if (!svg) return;
+    const S = ['human machine interface for computer applications', 'user opinion of computer system response time', 'user interface management system', 'system engineering for improved response time'].map(s => s.split(' '));
+    const V = ['human', 'machine', 'interface', 'for', 'computer', 'applications', 'user', 'opinion', 'of', 'system', 'response', 'time', 'management', 'engineering', 'improved'];
+    const STOP = ['for', 'of'];
+    const id = Object.fromEntries(V.map((w, i) => [w, i]));
+    const N = S.reduce((a, s) => a + s.length, 0);
+    const uni = V.map(() => 0); S.forEach(s => s.forEach(w => { uni[id[w]]++; }));
+    const $ = x => document.getElementById(x);
+    const win = $('l10-cooc-win'), winOut = $('l10-cooc-win-out'), rank = $('l10-cooc-rank'), rankOut = $('l10-cooc-rank-out');
+    const stop = $('l10-cooc-stop'), selA = $('l10-cooc-a'), selB = $('l10-cooc-b'), status = $('l10-cooc-status');
+    const modeBtns = [...document.querySelectorAll('#cooc-fig [data-mode]')];
+    V.forEach(w => { selA.add(new Option(w, w)); selB.add(new Option(w, w)); });
+    selA.value = 'human'; selB.value = 'user';
+    let mode = 'ppmi';
+    const count = k => {
+      const C = V.map(() => V.map(() => 0));
+      S.forEach(s => s.forEach((w, p) => { for (let q = Math.max(0, p - k); q <= Math.min(s.length - 1, p + k); q++) if (q !== p) C[id[w]][id[s[q]]]++; }));
+      return C;
+    };
+    /* Eigenvectors of a symmetric matrix by cyclic Jacobi rotations, sorted by eigenvalue (largest first). */
+    const jacobi = A => {
+      const n = A.length, a = A.map(r => r.slice()), v = a.map((r, i) => r.map((_, j) => (i === j ? 1 : 0)));
+      for (let sweep = 0; sweep < 80; sweep++) {
+        let off = 0;
+        for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) off += a[p][q] * a[p][q];
+        if (off < 1e-20) break;
+        for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) {
+          if (Math.abs(a[p][q]) < 1e-14) continue;
+          const th = (a[q][q] - a[p][p]) / (2 * a[p][q]);
+          const t = (th >= 0 ? 1 : -1) / (Math.abs(th) + Math.sqrt(th * th + 1));
+          const c = 1 / Math.sqrt(t * t + 1), s = t * c;
+          for (let k = 0; k < n; k++) { const x = a[k][p], y = a[k][q]; a[k][p] = c * x - s * y; a[k][q] = s * x + c * y; }
+          for (let k = 0; k < n; k++) { const x = a[p][k], y = a[q][k]; a[p][k] = c * x - s * y; a[q][k] = s * x + c * y; }
+          for (let k = 0; k < n; k++) { const x = v[k][p], y = v[k][q]; v[k][p] = c * x - s * y; v[k][q] = s * x + c * y; }
+        }
+      }
+      const vals = a.map((r, i) => r[i]), order = vals.map((_, i) => i).sort((i, j) => vals[j] - vals[i]);
+      return { vals: order.map(i => vals[i]), vecs: order.map(i => v.map(r => r[i])) };
+    };
+    const fmt = v => (v === -Infinity ? '−∞' : Number.isInteger(v) ? String(v) : Math.abs(v) < 0.005 ? '0' : minus(v.toFixed(2)));
+    const L = 92, TP = 90, CW = 34, CH = 24;
+    const draw = () => {
+      const k = +win.value; winOut.textContent = k;
+      const cols = stop.checked ? V.filter(w => !STOP.includes(w)) : V.slice();
+      const C = count(k);
+      const X = V.map((w, i) => cols.map(cw => {
+        const j = id[cw], c = C[i][j];
+        if (mode === 'count') return c;
+        const p = c > 0 ? Math.log(c * N / (uni[i] * uni[j])) : -Infinity;
+        if (mode === 'pmi') return p;
+        if (mode === 'pmi0') return c > 0 ? p : 0;
+        return Math.max(0, p);
+      }));
+      const finite = mode !== 'pmi', full = Math.min(V.length, cols.length);
+      rank.max = full; if (+rank.value > full) rank.value = full;
+      rank.disabled = !finite;
+      const r = +rank.value;
+      let Xh = X, energy = 1;
+      if (finite && r < full) {
+        const { vals, vecs } = jacobi(X.map(a => X.map(b => dot(a, b))));
+        const U = vecs.slice(0, r), pos = vals.map(x => Math.max(0, x)), tot = pos.reduce((s, x) => s + x, 0);
+        energy = tot > 0 ? pos.slice(0, r).reduce((s, x) => s + x, 0) / tot : 1;
+        const P = V.map((_, i) => V.map((_, j) => U.reduce((s, u) => s + u[i] * u[j], 0)));
+        Xh = P.map(row => cols.map((_, j) => row.reduce((s, x, t) => s + x * X[t][j], 0)));
+      }
+      rankOut.textContent = !finite ? 'n/a' : r >= full ? 'full' : 'k = ' + r;
+      const a = selA.value, b = selB.value, ia = id[a], ib = id[b], jb = cols.indexOf(b);
+      $('l10-cooc-kx').textContent = `X[${a}, ${b}]`;
+      $('l10-cooc-kxh').textContent = `X̂[${a}, ${b}]`;
+      $('l10-cooc-kc0').textContent = `cos(${a}, ${b}) in X`;
+      $('l10-cooc-kc1').textContent = `cos(${a}, ${b}) in X̂`;
+      $('l10-cooc-x').textContent = jb < 0 ? 'dropped' : fmt(X[ia][jb]);
+      $('l10-cooc-xh').textContent = jb < 0 ? 'dropped' : !finite ? '–' : fmt(Xh[ia][jb]);
+      const c0 = finite ? cosine(X[ia], X[ib]) : NaN, c1 = finite ? cosine(Xh[ia], Xh[ib]) : NaN;
+      $('l10-cooc-c0').textContent = isNaN(c0) ? '–' : minus(c0.toFixed(2));
+      $('l10-cooc-c1').textContent = isNaN(c1) ? '–' : minus(c1.toFixed(2));
+      $('l10-cooc-en').textContent = finite ? Math.round(energy * 100) + '%' : '–';
+      let msg = '';
+      if (!finite) msg = 'Raw PMI is −∞ wherever a pair never co-occurs, so rows cannot be compared and SVD cannot run. PMI₀ and PPMI put 0 in those cells.';
+      else if (r < full && jb >= 0 && ia !== ib && Math.abs(X[ia][jb]) < 1e-9 && Math.abs(Xh[ia][jb]) >= 0.005) msg = `${a} and ${b} never co-occur within ${k} words, yet the rank-${r} reconstruction gives their cell ${fmt(Xh[ia][jb])}: a latent co-occurrence.`;
+      else if (mode === 'pmi0' || mode === 'ppmi') msg = 'No observed pair in this tiny corpus co-occurs less often than chance, so PMI₀ and PPMI give the same matrix here.';
+      status.textContent = msg;
+
+      svg.textContent = '';
+      const shown = finite ? Xh : X;
+      const max = Math.max(1e-9, ...shown.flat().filter(v => isFinite(v)).map(Math.abs));
+      mk('text', { x: 8, y: 24, class: 'hm-lbl' }, svg).textContent = 'rows: words';
+      mk('text', { x: 8, y: 40, class: 'hm-lbl' }, svg).textContent = 'columns: contexts';
+      cols.forEach((c, j) => { const x = L + j * CW + CW / 2, y = TP - 8; mk('text', { x, y, transform: `rotate(-55 ${x} ${y})`, class: 'hm-lbl' }, svg).textContent = c; });
+      V.forEach((w, i) => {
+        const y0 = TP + i * CH;
+        mk('text', { x: L - 8, y: y0 + CH / 2 + 4, 'text-anchor': 'end', class: 'hm-lbl' }, svg).textContent = w;
+        cols.forEach((c, j) => {
+          const v = shown[i][j], x0 = L + j * CW, fin = isFinite(v), zero = fin && Math.abs(v) < 0.005, s = fin ? Math.abs(v) / max : 0;
+          const fill = !fin ? 'fill: var(--paper)' : zero ? 'fill: var(--surface)' : v > 0 ? `fill: var(--accent); fill-opacity: ${(0.07 + 0.5 * s).toFixed(3)}` : `fill: var(--mark); fill-opacity: ${(0.35 + 0.6 * s).toFixed(3)}`;
+          mk('rect', { x: x0 + 1, y: y0 + 1, width: CW - 2, height: CH - 2, rx: 3, style: fill + '; stroke: var(--rule); stroke-width: 0.6' }, svg);
+          const isNew = finite && r < full && Math.abs(X[i][j]) < 1e-9 && !zero;
+          const t = mk('text', { x: x0 + CW / 2, y: y0 + CH / 2 + 3.5, 'text-anchor': 'middle', class: 'hm-val' + (zero || !fin ? ' hm-zero' : '') + (isNew ? ' hm-new' : '') }, svg);
+          t.textContent = zero ? '·' : fmt(v);
+        });
+      });
+      [ia, ib].forEach(i => mk('rect', { x: L, y: TP + i * CH, width: cols.length * CW, height: CH, rx: 4, class: 'hm-row' }, svg));
+      if (jb >= 0) mk('rect', { x: L + jb * CW, y: TP + ia * CH, width: CW, height: CH, rx: 4, class: 'hm-cell' }, svg);
+    };
+    modeBtns.forEach(btn => btn.addEventListener('click', () => { mode = btn.dataset.mode; modeBtns.forEach(o => o.setAttribute('aria-pressed', String(o === btn))); draw(); }));
+    [win, rank].forEach(el => el.addEventListener('input', draw));
+    [stop, selA, selB].forEach(el => el.addEventListener('change', draw));
+    draw();
+  })();
+
+  /* ---------- The CBOW update rule in two dimensions ---------- */
+  (() => {
+    const svg = document.getElementById('l10-upd-svg'); if (!svg) return;
+    let seed = 1010;
+    const rand = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    const normal = () => { let u = 0; while (u === 0) u = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rand()); };
+    const others = ['he', 'chair', 'man', 'a'].map(w => ({ w, v: [0.9 * normal(), 0.9 * normal()] }));
+    const u = [1.2, 0.5], v0 = [-0.8, 1.0];
+    let v = v0.slice(), n = 0, trail = [], timer = null;
+    const lo = -3, hi = 3, P = 24, Sc = (400 - 2 * P) / (hi - lo);
+    const sx = x => P + (x - lo) * Sc, sy = y => 400 - P - (y - lo) * Sc;
+    axes(svg, sx, sy, lo, hi, 1);
+    const defs = mk('defs', {}, svg);
+    const marker = (name, style) => { const m = mk('marker', { id: name, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse' }, defs); mk('path', { d: 'M0,0 L10,5 L0,10 z', style }, m); };
+    marker('l10-upd-ah', 'fill: var(--ink)'); marker('l10-upd-ahacc', 'fill: var(--accent)'); marker('l10-upd-ahmut', 'fill: var(--muted)');
+    const cp = mk('clipPath', { id: 'l10-upd-clip' }, defs); mk('rect', { x: P, y: P, width: 400 - 2 * P, height: 400 - 2 * P }, cp);
+    const label = (x, y, main, sub, style) => { const t = mk('text', { x, y, class: 'c-note', style: style || '' }, svg); t.appendChild(document.createTextNode(main)); mk('tspan', { dy: 3, style: 'font-size: 9.5px' }, t).textContent = sub; return t; };
+    /* Put a label just beyond the arrow tip, on the side the arrow points to, kept inside the plot. */
+    const place = (t, p) => {
+      const len = Math.hypot(p[0], p[1]) || 1, ex = p[0] + 0.3 * p[0] / len, ey = p[1] + 0.3 * p[1] / len;
+      const x = Math.max(lo + 0.2, Math.min(hi - 0.2, ex)), y = Math.max(lo + 0.3, Math.min(hi - 0.2, ey));
+      t.setAttribute('x', sx(x)); t.setAttribute('y', sy(y) + 4); t.setAttribute('text-anchor', p[0] >= 0 ? 'start' : 'end');
+    };
+    others.forEach(o => {
+      mk('line', { x1: sx(0), y1: sy(0), x2: sx(o.v[0]), y2: sy(o.v[1]), style: 'stroke: var(--muted); stroke-width: 1.4', 'marker-end': 'url(#l10-upd-ahmut)' }, svg);
+      place(label(0, 0, 'v', o.w, 'fill: var(--muted)'), o.v);
+    });
+    mk('line', { x1: sx(0), y1: sy(0), x2: sx(u[0]), y2: sy(u[1]), class: 'c-arrow', 'marker-end': 'url(#l10-upd-ah)' }, svg);
+    const uLab = label(0, 0, 'u', 'sat'); place(uLab, u);
+    const gTrail = mk('g', { class: 'c-proj', 'clip-path': 'url(#l10-upd-clip)' }, svg);
+    const vLine = mk('line', { x1: sx(0), y1: sy(0), class: 'c-user', 'clip-path': 'url(#l10-upd-clip)', 'marker-end': 'url(#l10-upd-ahacc)' }, svg);
+    const vLab = label(0, 0, 'v', 'on', 'fill: var(--accent); font-weight: 600');
+    const $ = x => document.getElementById(x);
+    const eta = $('l10-upd-eta'), etaOut = $('l10-upd-eta-out'), status = $('l10-upd-status');
+    const yhat = () => { const e = [v, ...others.map(o => o.v)].map(x => Math.exp(dot(x, u))); return e[0] / e.reduce((s, x) => s + x, 0); };
+    const draw = () => {
+      const y = yhat(), h = +eta.value;
+      etaOut.textContent = h.toFixed(1);
+      vLine.setAttribute('x2', sx(v[0])); vLine.setAttribute('y2', sy(v[1]));
+      place(vLab, v);
+      gTrail.textContent = '';
+      trail.forEach(p => mk('circle', { cx: sx(p[0]), cy: sy(p[1]), r: 2.6 }, gTrail));
+      $('l10-upd-y').textContent = y.toFixed(3);
+      $('l10-upd-cos').textContent = minus(cosine(u, v).toFixed(3));
+      $('l10-upd-len').textContent = (h * (1 - y) * Math.sqrt(dot(u, u))).toFixed(3);
+      $('l10-upd-n').textContent = n;
+      status.textContent = y >= 0.95 ? 'ŷ_on is close to 1, so the factor 1 − ŷ_on has almost switched the update off.' : '';
+    };
+    const step = () => { const y = yhat(), h = +eta.value; trail.push(v.slice()); v = [v[0] + h * u[0] * (1 - y), v[1] + h * u[1] * (1 - y)]; n++; draw(); };
+    const stopRun = () => { if (timer) { clearInterval(timer); timer = null; } };
+    $('l10-upd-step').addEventListener('click', () => { stopRun(); step(); });
+    $('l10-upd-run').addEventListener('click', () => {
+      stopRun();
+      if (reduce) { for (let i = 0; i < 10; i++) step(); return; }
+      let left = 10;
+      timer = setInterval(() => { step(); if (--left <= 0) stopRun(); }, 160);
+    });
+    $('l10-upd-reset').addEventListener('click', () => { stopRun(); v = v0.slice(); n = 0; trail = []; draw(); });
+    eta.addEventListener('input', draw);
+    draw();
+  })();
+})();
+</script>
+</body>
+</html>
