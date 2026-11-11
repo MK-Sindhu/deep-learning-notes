@@ -11,6 +11,7 @@ Not an official IIT Madras resource.
 | `index.html` | Hub page with the lecture list, slides links and status |
 | `lecture-02.html` … `lecture-14.html` | One page per lecture |
 | `notes.css`, `notes.js` | Styles and behaviour shared by every page |
+| `theme.js` | Light/dark theme switch (button in the top-right corner; remembers your choice) |
 | `scripts/sync_nav.py` | Regenerates the lecture list and prev/next links |
 | `scripts/check_page.py` | Sanity-checks a page (tags, scripts, ids, colours, MathJax, timestamps) |
 
