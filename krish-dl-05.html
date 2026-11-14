@@ -1,0 +1,1073 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DL in 5 hours · Part 5 · Optimizers · DL Notes</title>
+<meta name="description" content="Notes on Krish Naik's Deep Learning In-depth Tutorials in 5 Hours, Part 5: gradient descent, stochastic and mini-batch gradient descent, epochs and iterations, exponentially weighted averages and SGD with momentum, AdaGrad, AdaDelta and RMSProp, and Adam, with their update formulas, advantages and disadvantages.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<script src="theme.js"></script>
+<style>
+.controls select { font: 500 14px/1.3 var(--font-head); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 10px; }
+.cmp { min-width: 700px; }
+.cmp td { font-size: 14.5px; }
+.cmp td:first-child { font-family: var(--font-head); font-weight: 600; white-space: nowrap; }
+.epo { min-width: 600px; }
+.epo td.num, .epo th.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.pc { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; }
+.pc > div { border-top: 2px solid var(--ink); padding-top: 10px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.pc h4 { font-size: 13px; font-weight: 600; letter-spacing: .04em; color: var(--muted); }
+.pc .plus h4 { color: var(--ok); }
+.pc ul { font-size: 15.5px; color: var(--ink-2); }
+@media (max-width: 620px) { .pc { grid-template-columns: minmax(0, 1fr); gap: 16px; } }
+#race-svg .c-path-a { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+#race-svg .c-path-b { fill: none; stroke: var(--ink-2); stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; }
+</style>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <!-- PARTNAV:START --><nav class="partnav" aria-label="Parts"><a href="index.html#extra">All notes</a><span class="sep">/</span><span>DL in 5 hours · Part 5 of 7</span><span class="sep">·</span><a href="krish-dl-04.html">← Part 4</a><span class="sep">·</span><a href="krish-dl-06.html">Part 6 →</a></nav><!-- PARTNAV:END -->
+    <div class="eyebrow">Krish Naik · Deep Learning In-depth Tutorials in 5 Hours</div>
+    <h1>Optimizers: from gradient descent to Adam</h1>
+    <p class="lede">Krish tells the optimizers as a story in which each one fixes a flaw of the one before: gradient descent needs too much memory, SGD is slow and noisy, mini-batches cut the cost but keep some noise, momentum smooths that noise with an exponentially weighted average, AdaGrad and RMSProp make the learning rate adaptive, and Adam combines smoothing with an adaptive rate. Along the way he defines epochs, batch size and iterations.</p>
+    <div class="meta">
+      <span><b>Part 5</b> of 7</span>
+      <span>Teacher <b>Krish Naik</b></span>
+      <span>About <b>57 min</b> of video</span>
+      <span><b>1</b> chapter</span>
+    </div>
+    <div class="watch">
+      <a class="btn solid" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9279s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:34:39 · Optimizers</a>
+    </div>
+  </div>
+</header>
+
+<div class="page gutter">
+  <nav class="toc" aria-label="Contents">
+    <div>
+      <h4>2:34:39 · Optimizers</h4>
+      <ul>
+        <li><a href="#role">What an optimizer does</a></li>
+        <li><a href="#gd">Gradient descent</a></li>
+        <li><a href="#sgd">Stochastic GD</a></li>
+        <li><a href="#minibatch">Mini-batch SGD</a></li>
+        <li><a href="#epochs">Epochs and iterations</a></li>
+        <li><a href="#noise">Noise in the path</a></li>
+        <li><a href="#momentum">SGD with momentum</a></li>
+        <li><a href="#ewa">Weighted averages</a></li>
+        <li><a href="#momentum-rule">The momentum update</a></li>
+        <li><a href="#adagrad">AdaGrad</a></li>
+        <li><a href="#rmsprop">AdaDelta and RMSProp</a></li>
+        <li><a href="#adam">Adam</a></li>
+        <li><a href="#compare">All seven compared</a></li>
+        <li><a href="#next">Recap and next session</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Revision</h4>
+      <ul>
+        <li><a href="#terms">Key terms</a></li>
+        <li><a href="#test">Test yourself</a></li>
+        <li><a href="index.html#extra">All notes</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="glance" id="glance">
+      <h2>At a glance</h2>
+      <ul>
+        <li>An <dfn>optimizer</dfn> is the rule that updates the weights and biases during backpropagation so that the cost goes down. Every optimizer here starts from \(w_t = w_{t-1} - \eta\,\partial L/\partial w_{t-1}\) and changes either the gradient that goes into it or the learning rate \(\eta\).</li>
+        <li><b>Gradient descent</b> uses all \(n\) records for each update, so one iteration is one epoch, and it needs a lot of memory. <b>SGD</b> uses one record per update: little memory, but \(n\) iterations per epoch, slow convergence and a very noisy path. <b>Mini-batch SGD</b> uses a batch (say 1,000 records), so an epoch takes \(n/\text{batch size}\) iterations, with less noise.</li>
+        <li><b>SGD with momentum</b> steps along \(V_{dw}\), the <dfn>exponentially weighted average</dfn> of the gradients, \(V_{dw_t} = \beta V_{dw_{t-1}} + (1-\beta)\,\partial L/\partial w_{t-1}\), with \(\beta\) around 0.95. Most of the weight goes to the history, so the zigzag (noise) is smoothed out.</li>
+        <li><b>AdaGrad</b> makes the learning rate adaptive, \(\eta'_t = \eta/\sqrt{\alpha_t + \epsilon}\) with \(\alpha_t\) the sum of all past squared gradients. The rate shrinks as training goes on, but \(\alpha_t\) can grow so large that the weights stop changing. <b>AdaDelta</b> and <b>RMSProp</b> replace the sum by an exponentially weighted average \(S_{dw}\), which keeps the rate under control.</li>
+        <li><b>Adam</b> combines the two ideas, \(w_t = w_{t-1} - \eta\,V_{dw}/\sqrt{S_{dw} + \epsilon}\): smoothing from momentum, an adaptive rate from RMSProp. Krish calls it the best optimizer at present and the one most people use.</li>
+      </ul>
+    </div>
+
+    <!-- ============ ROLE ============ -->
+    <section id="role">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9279s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:34:39</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9387s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:36:27 the update rule</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9487s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:38:07 where it fits</a>
+        </div>
+        <h2>What an optimizer does</h2>
+      </div>
+      <p>The session covers seven optimizers in order: gradient descent, stochastic gradient descent (SGD), mini-batch SGD, SGD with momentum, AdaGrad (adaptive gradient), RMSProp and the Adam optimizer, which Krish calls the best optimizer currently in use. Along with them come three training terms: batch, epoch and iteration. An ANN practical was to follow if time allowed; otherwise the ANN and CNN parts move to the next session, which is what happens.</p>
+      <p>Everything starts from the weight-update formula of backpropagation, which the earlier parts used throughout:</p>
+      <div class="result">
+        <span class="lbl">Weight update (gradient descent)</span>
+        \[ w_{\text{new}} = w_{\text{old}} - \eta\,\frac{\partial L}{\partial w_{\text{old}}} \]
+        <p>\(\eta\) is the learning rate. The bias is updated the same way, \(b_{\text{new}} = b_{\text{old}} - \eta\,\partial L/\partial b_{\text{old}}\).</p>
+      </div>
+      <p>Plot the loss against a weight \(w\) and you get a bowl whose lowest point is the <dfn>global minimum</dfn>. Wherever the current weight is, the update moves it toward that point: if the slope is negative the weight increases, if it is positive the weight decreases. The learning rate sets how big each move is.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 290" role="img" aria-label="A bowl-shaped loss curve L of w with its minimum at w equal to 2. From w equal to minus 0.5 on the left, where the slope is minus 4, gradient-descent steps move right to 0.5, 1.1 and 1.46. From w equal to 4.5 on the right, where the slope is plus 4, steps move left to 3.5, 2.9 and 2.54. The steps get shorter as the slope flattens.">
+            <defs><marker id="kdl05-f1-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <line class="d-rule" x1="50" y1="262" x2="410" y2="262"/>
+            <line class="d-rule" x1="50" y1="262" x2="50" y2="40"/>
+            <text class="d-al" x="44" y="266" text-anchor="end">0</text>
+            <text class="d-al" x="44" y="214" text-anchor="end">2</text>
+            <text class="d-al" x="44" y="162" text-anchor="end">4</text>
+            <text class="d-al" x="44" y="110" text-anchor="end">6</text>
+            <text class="d-al" x="44" y="58" text-anchor="end">8</text>
+            <text class="d-al" x="50" y="280" text-anchor="middle">−1</text>
+            <text class="d-al" x="110" y="280" text-anchor="middle">0</text>
+            <text class="d-al" x="170" y="280" text-anchor="middle">1</text>
+            <text class="d-al" x="230" y="280" text-anchor="middle">2</text>
+            <text class="d-al" x="290" y="280" text-anchor="middle">3</text>
+            <text class="d-al" x="350" y="280" text-anchor="middle">4</text>
+            <text class="d-al" x="410" y="280" text-anchor="middle">5</text>
+            <text class="d-al" x="420" y="266">w</text>
+            <text class="d-al" x="58" y="36">L(w)</text>
+            <polyline class="d-ln" style="stroke-width:1.8" points="50.0,59.2 56.0,71.5 62.0,83.3 68.0,94.8 74.0,105.8 80.0,116.4 86.0,126.6 92.0,136.4 98.0,145.7 104.0,154.7 110.0,163.2 116.0,171.3 122.0,179.0 128.0,186.3 134.0,193.2 140.0,199.6 146.0,205.6 152.0,211.2 158.0,216.4 164.0,221.2 170.0,225.6 176.0,229.6 182.0,233.1 188.0,236.2 194.0,238.9 200.0,241.2 206.0,243.1 212.0,244.5 218.0,245.6 224.0,246.2 230.0,246.4 236.0,246.2 242.0,245.6 248.0,244.5 254.0,243.1 260.0,241.2 266.0,238.9 272.0,236.2 278.0,233.1 284.0,229.6 290.0,225.6 296.0,221.2 302.0,216.4 308.0,211.2 314.0,205.6 320.0,199.6 326.0,193.2 332.0,186.3 338.0,179.0 344.0,171.3 350.0,163.2 356.0,154.7 362.0,145.7 368.0,136.4 374.0,126.6 380.0,116.4 386.0,105.8 392.0,94.8 398.0,83.3 404.0,71.5 410.0,59.2"/>
+            <line class="d-ln d-dash" x1="50" y1="64.4" x2="122" y2="189.2"/>
+            <line class="d-ln d-dash" x1="338" y1="189.2" x2="410" y2="64.4"/>
+            <line class="d-ln-acc" x1="80" y1="116.4" x2="138.3" y2="197.2" marker-end="url(#kdl05-f1-ah)"/>
+            <line class="d-ln-acc" x1="140" y1="199.6" x2="173.6" y2="228.2" marker-end="url(#kdl05-f1-ah)"/>
+            <line class="d-ln-acc" x1="176" y1="229.6" x2="195.6" y2="239.3" marker-end="url(#kdl05-f1-ah)"/>
+            <line class="d-ln-acc" x1="380" y1="116.4" x2="321.7" y2="197.2" marker-end="url(#kdl05-f1-ah)"/>
+            <line class="d-ln-acc" x1="320" y1="199.6" x2="286.4" y2="228.2" marker-end="url(#kdl05-f1-ah)"/>
+            <line class="d-ln-acc" x1="284" y1="229.6" x2="264.4" y2="239.3" marker-end="url(#kdl05-f1-ah)"/>
+            <circle class="pt-tree" cx="80" cy="116.4" r="5"/>
+            <circle class="pt-tree" cx="380" cy="116.4" r="5"/>
+            <circle class="pt-new" cx="230" cy="246.4" r="5"/>
+            <text class="d-s" x="230" y="224" text-anchor="middle">global minimum</text>
+            <text class="d-s" x="96" y="84">slope −4 &lt; 0</text>
+            <text class="d-s" x="96" y="99">so w moves right (+1)</text>
+            <text class="d-s" x="364" y="84" text-anchor="end">slope +4 &gt; 0</text>
+            <text class="d-s" x="364" y="99" text-anchor="end">so w moves left (−1)</text>
+            <line class="d-rule" x1="440" y1="30" x2="440" y2="270"/>
+            <text class="d-t" x="458" y="54">new w = old w − η · slope</text>
+            <text class="d-s" x="458" y="72">η = 0.25 in this sketch</text>
+            <text class="d-s" x="458" y="104">L(w) = 0.8(w − 2)² + 0.6</text>
+            <text class="d-s" x="458" y="120">(an illustrative bowl)</text>
+            <text class="d-s" x="458" y="152">from w = −0.5: 0.5, 1.1, 1.46, …</text>
+            <text class="d-s" x="458" y="168">from w = 4.5: 3.5, 2.9, 2.54, …</text>
+            <text class="d-s" x="458" y="200">each step goes against the slope,</text>
+            <text class="d-s" x="458" y="216">and the steps shrink as the</text>
+            <text class="d-s" x="458" y="232">slope flattens near the minimum</text>
+          </svg>
+        </div>
+        <figcaption><b>Gradient descent on a loss curve</b>, drawn to scale for an illustrative bowl. From either side the update \(w_{\text{new}} = w_{\text{old}} - \eta\,\partial L/\partial w_{\text{old}}\) moves the weight toward the global minimum. The dashed lines are the tangents at the two starting points.</figcaption>
+      </figure>
+
+      <p>Where does the optimizer sit in the network? Take an input layer, one hidden layer and an output layer, all connected <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9487s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:38:07</a>. Forward propagation multiplies the inputs by the weights, applies the activation functions and produces \(\hat y\). A loss function then compares \(\hat y\) with \(y\). Krish uses the mean squared error and corrects the version from the previous session, where he wrote \(\tfrac12\) and left out the \(n\) <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9555s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:39:15</a>:</p>
+      <div class="eq">\[ \text{MSE} = \frac{1}{2n}\sum_{i=1}^{n}\big(y_i - \hat y_i\big)^2 \]</div>
+      <p>Backward propagation then updates every weight (\(w_1, w_2, w_3, w_4, \dots\)) and bias so as to minimize this loss <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9588s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:39:48</a>. The method used for that update is the <dfn>optimizer</dfn>. Gradient descent is the first example.</p>
+      <p class="note">Forward and backward propagation and the update rule are in <a href="krish-dl-02.html">Part 2</a>, the chain rule in <a href="krish-dl-03.html">Part 3</a>, and loss versus cost functions in <a href="krish-dl-04.html">Part 4</a>. For the IIT Madras treatment of gradient descent, see Lecture 3 (<a href="lecture-03.html#gd-rule">lecture-03.html</a>) and Lecture 5 (<a href="lecture-05.html">lecture-05.html</a>).</p>
+    </section>
+
+    <!-- ============ GD ============ -->
+    <section id="gd">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9619s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:40:19 epoch</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9651s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:40:51 a million records</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9749s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:42:29 disadvantage</a>
+        </div>
+        <h2>Gradient descent: all records in every update</h2>
+      </div>
+      <p>Before the optimizers, Krish defines an epoch. His first definition: one forward propagation plus one backward propagation is one <dfn>epoch</dfn>. Suppose the data set has a million records. In gradient descent all million go through forward propagation together. The network computes \(\hat y\) for every record, and the cost function sums over all of them:</p>
+      <div class="eq">\[ J = \frac{1}{2n}\sum_{i=1}^{n}\big(y_i - \hat y_i\big)^2, \qquad n = 1{,}000{,}000 \]</div>
+      <p>That is a million calculations of inputs times weights in one forward pass. Backward propagation then updates all the weights once, based on this cost. Because the whole data set goes through in one batch, one epoch of gradient descent is exactly one weight update. (Once SGD splits an epoch into several updates, an epoch becomes one pass of all the records through the network; for gradient descent the two definitions agree.)</p>
+      <p>The problem is resources <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9749s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:42:29</a>. To push a million records through at once, in every epoch, you need a very large RAM, and for the parallel processing probably GPUs as well <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9780s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:43:00</a>. The convergence itself is fine: on a big enough machine gradient descent heads straight for the global minimum. Krish calls the resource cost its major disadvantage, and asks whether another optimizer could work well with fewer resources.</p>
+      <div class="pc">
+        <div class="plus"><h4>Advantages</h4><ul><li>Uses the exact gradient of the full cost, so the path to the minimum is smooth.</li><li>Converges in few updates.</li></ul></div>
+        <div><h4>Disadvantages</h4><ul><li>Resource intensive: all records must be in memory for every update, which needs a huge RAM and often GPUs.</li></ul></div>
+      </div>
+    </section>
+
+    <!-- ============ SGD ============ -->
+    <section id="sgd">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9844s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:44:04</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9877s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:44:37 iterations</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9974s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:46:14 slow convergence</a>
+        </div>
+        <h2>Stochastic gradient descent: one record at a time</h2>
+      </div>
+      <p>In <dfn>stochastic gradient descent</dfn> (SGD) each forward and backward pass uses a single record. Pass record 1 forward, compute \(\hat y\) and the loss, and update the weights: that is <dfn>iteration</dfn> 1. Pass record 2 and update again: iteration 2. The epoch is now divided into iterations by data point. With a million records, one epoch takes a million iterations.</p>
+      <p>The update rule does not change. Only the loss inside it now comes from one record \(i\):</p>
+      <div class="eq">\[ w_t = w_{t-1} - \eta\,\frac{\partial L_i}{\partial w_{t-1}}, \qquad L_i = \tfrac12\big(y_i - \hat y_i\big)^2 \]</div>
+      <p>Deep learning models are usually trained for many epochs, say 100 (when to stop is the subject of early stopping, which comes later) <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9941s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:45:41</a>. A hundred epochs of a million iterations each is 100 million iterations.</p>
+      <p>SGD solves the memory problem, since only one record is loaded at a time. Its major disadvantage is that convergence is very, very slow <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9974s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:46:14</a>: every single record triggers its own backpropagation and weight update. Krish adds a second problem a little later <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10036s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:47:16</a>: the time complexity is high, so although the resource constraint is solved, training takes long.</p>
+      <div class="pc">
+        <div class="plus"><h4>Advantages</h4><ul><li>Needs very little RAM: one record at a time.</li></ul></div>
+        <div><h4>Disadvantages</h4><ul><li>Convergence is very slow.</li><li>High time complexity: \(n\) updates per epoch, 100 million for 100 epochs of a million records.</li><li>The noisiest path of all, as the diagram at 2:50 shows (see <a href="#noise">Noise</a>).</li></ul></div>
+      </div>
+    </section>
+
+    <!-- ============ MINI-BATCH ============ -->
+    <section id="minibatch">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10036s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:47:16</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10100s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:48:20 batch size</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10166s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:49:26 why it is better</a>
+        </div>
+        <h2>Mini-batch SGD: a batch of records per update</h2>
+      </div>
+      <p>The researchers' next fix is <dfn>mini-batch stochastic gradient descent</dfn>. Instead of one record at a time, choose a <dfn>batch size</dfn>, say 1,000. Each iteration passes 1,000 records forward and backward and updates the weights once. Iteration 2 takes the next 1,000, and so on until every record has been used, which completes the epoch.</p>
+      <div class="result">
+        <span class="lbl">Iterations per epoch</span>
+        \[ \text{iterations per epoch} = \frac{n}{\text{batch size}} = \frac{1{,}000{,}000}{1{,}000} = 1{,}000 \]
+      </div>
+      <p>Krish lists three gains over the previous two <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10166s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:49:26</a>. It is no longer as resource intensive as gradient descent, convergence is better than with SGD, and the time complexity improves, because a million iterations per epoch have become a thousand.</p>
+      <div class="pc">
+        <div class="plus"><h4>Advantages</h4><ul><li>Moderate memory: one batch at a time.</li><li>Better convergence than SGD.</li><li>Lower time complexity: \(n/\text{batch size}\) iterations per epoch.</li></ul></div>
+        <div><h4>Disadvantages</h4><ul><li>The path still zigzags; less than SGD, but the noise is there (next sections).</li></ul></div>
+      </div>
+      <p class="note">Not in the video: the cost of one update is averaged over the batch, \(J_{\text{batch}} = \frac{1}{2m}\sum_{i \in \text{batch}}(y_i - \hat y_i)^2\) with \(m\) the batch size. When the batch size does not divide \(n\), the last batch is smaller and an epoch has \(\lceil n/\text{batch size}\rceil\) iterations. Typical batch sizes are 32 to 256. For the IIT Madras treatment, see Lecture 5 (<a href="lecture-05.html#sgd">lecture-05.html</a>), which covers stochastic and mini-batch gradient descent.</p>
+    </section>
+
+    <!-- ============ EPOCHS ============ -->
+    <section id="epochs">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9354s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:35:54 agenda: batch, epochs, iterations</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10134s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:48:54 counting iterations</a>
+        </div>
+        <h2>Epochs, batches and iterations side by side</h2>
+      </div>
+      <p>The three terms the agenda promised, collected from the last three sections:</p>
+      <ul>
+        <li><b>Epoch</b>: one pass of all \(n\) training records through forward and backward propagation.</li>
+        <li><b>Batch size</b>: how many records go into one forward pass and one weight update. It is \(n\) for gradient descent, 1 for SGD and something in between for mini-batch SGD.</li>
+        <li><b>Iteration</b>: one forward pass on one batch, the cost, one backward pass and one weight update. An epoch has \(n/\text{batch size}\) iterations.</li>
+      </ul>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 296" role="img" aria-label="Three rows, each a bar standing for one epoch of 1,000,000 records. Gradient descent uses the whole bar as one batch: 1 iteration per epoch, 100 iterations in 100 epochs. Mini-batch SGD splits the bar into batches of 1,000: 1,000 iterations per epoch, 100,000 in 100 epochs. SGD splits it into single records: 1,000,000 iterations per epoch, 100,000,000 in 100 epochs.">
+            <defs>
+              <pattern id="kdl05-f2-hatch" width="3" height="10" patternUnits="userSpaceOnUse"><rect width="3" height="10" style="fill: var(--accent-soft)"/><line x1="1.5" y1="0" x2="1.5" y2="10" style="stroke: var(--accent); stroke-width: 0.9"/></pattern>
+            </defs>
+            <text class="d-h" x="20" y="24">One epoch: every one of the n = 1,000,000 records passes through once</text>
+            <text class="d-row" x="200" y="56">records of one epoch</text>
+            <text class="d-row" x="418" y="56">iterations per epoch</text>
+            <text class="d-row" x="556" y="56">in 100 epochs</text>
+            <line class="d-rule" x1="20" y1="64" x2="640" y2="64"/>
+
+            <text class="d-t" x="20" y="90">Gradient descent</text>
+            <text class="d-s" x="20" y="106">all 1,000,000 records per step</text>
+            <rect class="d-box-acc" x="200" y="76" width="200" height="34"/>
+            <text class="d-s" x="300" y="97" text-anchor="middle">one batch of 1,000,000</text>
+            <text class="d-t" x="418" y="98">1</text>
+            <text class="d-t" x="556" y="98">100</text>
+
+            <text class="d-t" x="20" y="160">Mini-batch SGD</text>
+            <text class="d-s" x="20" y="176">1,000 records per step</text>
+            <rect class="d-box-acc" x="200" y="146" width="200" height="34"/>
+            <path class="d-ln" style="stroke: var(--accent); stroke-width: 1" d="M210 146 V180 M220 146 V180 M230 146 V180 M240 146 V180 M250 146 V180 M260 146 V180 M270 146 V180 M280 146 V180 M290 146 V180 M300 146 V180 M310 146 V180 M320 146 V180 M330 146 V180 M340 146 V180 M350 146 V180 M360 146 V180 M370 146 V180 M380 146 V180 M390 146 V180"/>
+            <text class="d-t" x="418" y="168">1,000</text>
+            <text class="d-t" x="556" y="168">100,000</text>
+
+            <text class="d-t" x="20" y="230">Stochastic GD</text>
+            <text class="d-s" x="20" y="246">1 record per step</text>
+            <rect x="200" y="216" width="200" height="34" style="fill: url(#kdl05-f2-hatch); stroke: var(--accent); stroke-width: 1.6"/>
+            <text class="d-t" x="418" y="238">1,000,000</text>
+            <text class="d-t" x="556" y="238">100,000,000</text>
+
+            <text class="d-s" x="20" y="274">iteration = forward pass on one batch → cost → backward pass → weight update.</text>
+            <text class="d-s" x="20" y="288">Batches are drawn as 20 of the 1,000 and records as stripes, so the splits are not to scale.</text>
+          </svg>
+        </div>
+        <figcaption><b>Same epoch, three batch sizes.</b> Each bar is one epoch of Krish's million-record example. The batch size decides how many records sit in memory for one update and how many updates an epoch takes.</figcaption>
+      </figure>
+
+      <div class="tbl-wrap">
+        <table class="epo">
+          <thead><tr><th>Optimizer</th><th class="num">Batch size</th><th class="num">Iterations per epoch</th><th class="num">In 100 epochs</th><th>Records in memory per update</th></tr></thead>
+          <tbody>
+            <tr><td>Gradient descent</td><td class="num">1,000,000</td><td class="num">1</td><td class="num">100</td><td>all of them</td></tr>
+            <tr><td>Mini-batch SGD</td><td class="num">1,000</td><td class="num">1,000</td><td class="num">100,000</td><td>one batch</td></tr>
+            <tr><td>SGD</td><td class="num">1</td><td class="num">1,000,000</td><td class="num">100,000,000</td><td>one record</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">The 100-epoch totals for gradient descent and mini-batch SGD are worked out here from his numbers; he states the SGD total, 100 million.</p>
+    </section>
+
+    <!-- ============ NOISE ============ -->
+    <section id="noise">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10197s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:49:57</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10296s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:51:36 SGD zigzags</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10360s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:52:40 climbing a mountain</a>
+        </div>
+        <h2>Noise: how the three paths differ</h2>
+      </div>
+      <p>Krish draws the three optimizers heading for the global minimum. Gradient descent, which sees all records in every update, goes down smoothly. SGD jumps back and forth in a zigzag, because each update is based on a single data point and so points in a different direction each time. Mini-batch SGD zigzags less, since each update averages over a batch.</p>
+      <p>That zigzag movement is called <dfn>noise</dfn> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10328s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:52:08</a>. SGD has the highest noise, gradient descent the least, and mini-batch SGD very little, but some. Noise costs time: the more the path wanders, the longer it takes to reach the global minimum.</p>
+      <p>His analogy is a climber heading for a mountain peak <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10360s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:52:40</a>. Walking straight up is fastest. Moving in big zigzags from one side to the other takes the longest. Small zigzags land in between. For an optimizer the peak is the global minimum.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 680 322" role="img" aria-label="Three contour plots of the same cost over w and b, each with a path of 100 iterations from the same start toward the minimum. Gradient descent: a smooth curve. Mini-batch SGD with batches of 50: the same route with small jitter. SGD with one record per step: large jumps back and forth across the plot, still scattered around the minimum after 100 iterations.">
+            <defs>
+              <clipPath id="kdl05-f3-clip-gd"><rect x="20" y="40" width="200" height="220"/></clipPath>
+              <clipPath id="kdl05-f3-clip-mini"><rect x="240" y="40" width="200" height="220"/></clipPath>
+              <clipPath id="kdl05-f3-clip-sgd"><rect x="460" y="40" width="200" height="220"/></clipPath>
+            </defs>
+            <rect class="d-plot" x="20" y="40" width="200" height="220"/>
+            <g clip-path="url(#kdl05-f3-clip-gd)">
+            <polygon class="d-ln-mut" points="181.0,227.0 178.4,223.6 175.7,220.3 173.0,217.1 170.2,214.2 167.4,211.5 164.6,209.2 162.0,207.2 159.5,205.6 157.2,204.5 155.2,203.8 153.4,203.5 151.9,203.7 150.8,204.4 150.0,205.5 149.5,207.1 149.4,209.0 149.7,211.3 150.4,213.9 151.4,216.8 152.7,220.0 154.4,223.3 156.3,226.8 158.5,230.3 160.9,233.8 163.4,237.2 166.1,240.6 168.9,243.7 171.7,246.6 174.5,249.3 177.2,251.6 179.9,253.6 182.3,255.2 184.6,256.3 186.7,257.0 188.4,257.3 189.9,257.1 191.1,256.4 191.9,255.3 192.3,253.7 192.4,251.8 192.1,249.5 191.5,246.9 190.5,244.0 189.1,240.8 187.5,237.5 185.6,234.1 183.4,230.6"/>
+            <polygon class="d-ln-mut" points="193.4,222.9 187.7,215.2 181.7,207.7 175.5,200.7 169.2,194.1 162.9,188.2 156.8,182.9 150.9,178.5 145.4,175.0 140.3,172.5 135.7,170.9 131.8,170.3 128.5,170.8 125.9,172.3 124.1,174.8 123.1,178.2 122.9,182.5 123.5,187.7 125.0,193.6 127.2,200.1 130.2,207.1 133.9,214.5 138.2,222.2 143.1,230.1 148.4,237.9 154.1,245.6 160.2,253.1 166.4,260.2 172.6,266.7 178.9,272.7 185.0,277.9 190.9,282.3 196.4,285.8 201.5,288.4 206.1,289.9 210.1,290.5 213.4,290.0 216.0,288.5 217.8,286.0 218.8,282.6 219.0,278.3 218.3,273.1 216.9,267.2 214.6,260.7 211.7,253.7 208.0,246.3 203.7,238.6 198.8,230.7"/>
+            <polygon class="d-ln-mut" points="205.8,218.8 196.9,206.8 187.6,195.3 178.0,184.3 168.2,174.2 158.6,165.0 149.1,156.9 140.0,150.1 131.4,144.6 123.5,140.6 116.4,138.2 110.3,137.3 105.1,138.1 101.1,140.4 98.4,144.2 96.8,149.5 96.5,156.3 97.5,164.2 99.7,173.3 103.2,183.4 107.8,194.3 113.5,205.8 120.2,217.8 127.7,229.9 136.0,242.0 144.9,254.0 154.2,265.6 163.9,276.5 173.6,286.7 183.3,295.9 192.8,303.9 201.9,310.8 210.4,316.2 218.3,320.2 225.4,322.6 231.6,323.5 236.7,322.7 240.7,320.4 243.5,316.6 245.0,311.3 245.3,304.6 244.4,296.6 242.1,287.5 238.6,277.4 234.0,266.5 228.3,255.0 221.6,243.1 214.1,230.9"/>
+            <polygon class="d-ln-mut" points="218.2,214.6 206.1,198.5 193.5,182.8 180.5,168.0 167.3,154.2 154.2,141.8 141.3,130.8 129.0,121.6 117.4,114.2 106.7,108.9 97.1,105.6 88.8,104.4 81.9,105.4 76.4,108.5 72.7,113.7 70.6,120.9 70.2,130.0 71.5,140.8 74.5,153.1 79.2,166.8 85.5,181.5 93.2,197.1 102.2,213.3 112.5,229.7 123.7,246.2 135.7,262.4 148.3,278.0 161.4,292.8 174.5,306.6 187.7,319.0 200.5,330.0 212.8,339.2 224.4,346.6 235.1,352.0 244.7,355.3 253.1,356.4 260.0,355.4 265.4,352.3 269.2,347.1 271.3,339.9 271.7,330.8 270.3,320.0 267.3,307.7 262.6,294.0 256.4,279.3 248.7,263.7 239.6,247.5 229.4,231.1"/>
+            <polygon class="d-ln-mut" points="231.4,210.2 216.0,189.5 199.8,169.5 183.2,150.6 166.3,133.0 149.5,117.0 133.1,103.0 117.3,91.2 102.5,81.8 88.8,74.9 76.5,70.7 65.8,69.2 57.0,70.5 50.1,74.5 45.2,81.1 42.5,90.4 42.0,102.0 43.7,115.8 47.6,131.6 53.6,149.0 61.6,167.9 71.5,187.8 83.1,208.5 96.1,229.5 110.5,250.6 125.9,271.3 142.0,291.3 158.7,310.2 175.6,327.8 192.3,343.8 208.8,357.8 224.5,369.6 239.4,379.0 253.1,385.9 265.3,390.1 276.0,391.6 284.9,390.3 291.8,386.3 296.6,379.7 299.3,370.5 299.8,358.8 298.1,345.0 294.2,329.2 288.2,311.8 280.2,292.9 270.4,273.0 258.8,252.3 245.7,231.3"/>
+            <polygon class="d-ln-mut" points="244.9,205.7 226.1,180.3 206.3,155.8 185.9,132.6 165.2,111.1 144.7,91.6 124.6,74.4 105.3,60.0 87.1,48.4 70.3,40.0 55.3,34.8 42.2,33.0 31.4,34.5 22.9,39.4 17.0,47.6 13.7,58.9 13.1,73.1 15.2,90.0 19.9,109.4 27.3,130.8 37.1,153.9 49.1,178.3 63.3,203.6 79.3,229.3 96.9,255.1 115.8,280.5 135.5,305.0 155.9,328.2 176.6,349.7 197.2,369.3 217.3,386.4 236.6,400.9 254.8,412.4 271.5,420.8 286.6,426.0 299.6,427.8 310.5,426.3 318.9,421.4 324.9,413.2 328.2,401.9 328.8,387.7 326.7,370.8 321.9,351.5 314.6,330.1 304.8,307.0 292.7,282.5 278.5,257.2 262.5,231.5"/>
+            <polygon class="d-ln-mut" points="258.7,201.1 236.4,171.0 212.9,142.0 188.7,114.4 164.2,88.8 139.8,65.7 116.0,45.4 93.0,28.2 71.5,14.5 51.6,4.5 33.7,-1.7 18.3,-3.8 5.4,-2.0 -4.7,3.8 -11.7,13.5 -15.6,26.9 -16.3,43.8 -13.9,63.9 -8.2,86.8 0.5,112.2 12.1,139.6 26.4,168.5 43.3,198.6 62.3,229.1 83.1,259.7 105.5,289.8 129.0,318.9 153.2,346.4 177.7,372.0 202.0,395.1 225.9,415.5 248.8,432.6 270.4,446.3 290.3,456.3 308.1,462.5 323.6,464.6 336.5,462.8 346.5,457.0 353.6,447.3 357.5,433.9 358.2,417.0 355.7,396.9 350.1,374.0 341.4,348.6 329.7,321.2 315.4,292.3 298.6,262.2 279.6,231.7"/>
+            <polyline class="d-ln-acc" style="stroke-width:1.6; stroke-linejoin: round" points="123.6,54.7 101.0,67.4 88.8,76.6 82.6,83.5 80.0,89.2 79.5,94.0 80.2,98.3 81.7,102.3 83.5,105.9 85.5,109.4 87.6,112.8 89.7,116.0 91.8,119.2 93.9,122.2 96.0,125.2 98.0,128.0 100.0,130.8 101.9,133.5 103.8,136.2 105.6,138.7 107.4,141.2 109.1,143.6 110.8,146.0 112.4,148.3 114.0,150.5 115.6,152.7 117.1,154.8 118.5,156.9 120.0,158.9 121.3,160.8 122.7,162.7 124.0,164.5 125.3,166.3 126.5,168.1 127.7,169.8 128.9,171.4 130.0,173.0 131.1,174.6 132.2,176.1 133.3,177.6 134.3,179.0 135.3,180.4 136.3,181.8 137.2,183.1 138.1,184.4 139.0,185.6 139.9,186.8 140.7,188.0 141.5,189.2 142.3,190.3 143.1,191.4 143.9,192.4 144.6,193.5 145.3,194.5 146.0,195.5 146.7,196.4 147.4,197.3 148.0,198.2 148.6,199.1 149.2,199.9 149.8,200.8 150.4,201.6 150.9,202.4 151.5,203.1 152.0,203.9 152.5,204.6 153.0,205.3 153.5,206.0 154.0,206.6 154.5,207.3 154.9,207.9 155.3,208.5 155.8,209.1 156.2,209.7 156.6,210.3 157.0,210.8 157.3,211.3 157.7,211.9 158.1,212.4 158.4,212.9 158.8,213.3 159.1,213.8 159.4,214.2 159.7,214.7 160.0,215.1 160.3,215.5 160.6,215.9 160.9,216.3 161.2,216.7 161.4,217.1 161.7,217.4 161.9,217.8 162.2,218.1 162.4,218.5 162.7,218.8 162.9,219.1 163.1,219.4 163.3,219.7 163.5,220.0 163.7,220.3 163.9,220.6"/>
+            </g>
+            <circle class="pt-no" cx="123.6" cy="54.7" r="4.5"/>
+            <circle class="pt-new" cx="170.9" cy="230.4" r="4.5"/>
+            <rect class="d-plot" x="240" y="40" width="200" height="220"/>
+            <g clip-path="url(#kdl05-f3-clip-mini)">
+            <polygon class="d-ln-mut" points="401.0,227.0 398.4,223.6 395.7,220.3 393.0,217.1 390.2,214.2 387.4,211.5 384.6,209.2 382.0,207.2 379.5,205.6 377.2,204.5 375.2,203.8 373.4,203.5 371.9,203.7 370.8,204.4 370.0,205.5 369.5,207.1 369.4,209.0 369.7,211.3 370.4,213.9 371.4,216.8 372.7,220.0 374.4,223.3 376.3,226.8 378.5,230.3 380.9,233.8 383.4,237.2 386.1,240.6 388.9,243.7 391.7,246.6 394.5,249.3 397.2,251.6 399.9,253.6 402.3,255.2 404.6,256.3 406.7,257.0 408.4,257.3 409.9,257.1 411.1,256.4 411.9,255.3 412.3,253.7 412.4,251.8 412.1,249.5 411.5,246.9 410.5,244.0 409.1,240.8 407.5,237.5 405.6,234.1 403.4,230.6"/>
+            <polygon class="d-ln-mut" points="413.4,222.9 407.7,215.2 401.7,207.7 395.5,200.7 389.2,194.1 382.9,188.2 376.8,182.9 370.9,178.5 365.4,175.0 360.3,172.5 355.7,170.9 351.8,170.3 348.5,170.8 345.9,172.3 344.1,174.8 343.1,178.2 342.9,182.5 343.5,187.7 345.0,193.6 347.2,200.1 350.2,207.1 353.9,214.5 358.2,222.2 363.1,230.1 368.4,237.9 374.1,245.6 380.2,253.1 386.4,260.2 392.6,266.7 398.9,272.7 405.0,277.9 410.9,282.3 416.4,285.8 421.5,288.4 426.1,289.9 430.1,290.5 433.4,290.0 436.0,288.5 437.8,286.0 438.8,282.6 439.0,278.3 438.3,273.1 436.9,267.2 434.6,260.7 431.7,253.7 428.0,246.3 423.7,238.6 418.8,230.7"/>
+            <polygon class="d-ln-mut" points="425.8,218.8 416.9,206.8 407.6,195.3 398.0,184.3 388.2,174.2 378.6,165.0 369.1,156.9 360.0,150.1 351.4,144.6 343.5,140.6 336.4,138.2 330.3,137.3 325.1,138.1 321.1,140.4 318.4,144.2 316.8,149.5 316.5,156.3 317.5,164.2 319.7,173.3 323.2,183.4 327.8,194.3 333.5,205.8 340.2,217.8 347.7,229.9 356.0,242.0 364.9,254.0 374.2,265.6 383.9,276.5 393.6,286.7 403.3,295.9 412.8,303.9 421.9,310.8 430.4,316.2 438.3,320.2 445.4,322.6 451.6,323.5 456.7,322.7 460.7,320.4 463.5,316.6 465.0,311.3 465.3,304.6 464.4,296.6 462.1,287.5 458.6,277.4 454.0,266.5 448.3,255.0 441.6,243.1 434.1,230.9"/>
+            <polygon class="d-ln-mut" points="438.2,214.6 426.1,198.5 413.5,182.8 400.5,168.0 387.3,154.2 374.2,141.8 361.3,130.8 349.0,121.6 337.4,114.2 326.7,108.9 317.1,105.6 308.8,104.4 301.9,105.4 296.4,108.5 292.7,113.7 290.6,120.9 290.2,130.0 291.5,140.8 294.5,153.1 299.2,166.8 305.5,181.5 313.2,197.1 322.2,213.3 332.5,229.7 343.7,246.2 355.7,262.4 368.3,278.0 381.4,292.8 394.5,306.6 407.7,319.0 420.5,330.0 432.8,339.2 444.4,346.6 455.1,352.0 464.7,355.3 473.1,356.4 480.0,355.4 485.4,352.3 489.2,347.1 491.3,339.9 491.7,330.8 490.3,320.0 487.3,307.7 482.6,294.0 476.4,279.3 468.7,263.7 459.6,247.5 449.4,231.1"/>
+            <polygon class="d-ln-mut" points="451.4,210.2 436.0,189.5 419.8,169.5 403.2,150.6 386.3,133.0 369.5,117.0 353.1,103.0 337.3,91.2 322.5,81.8 308.8,74.9 296.5,70.7 285.8,69.2 277.0,70.5 270.1,74.5 265.2,81.1 262.5,90.4 262.0,102.0 263.7,115.8 267.6,131.6 273.6,149.0 281.6,167.9 291.5,187.8 303.1,208.5 316.1,229.5 330.5,250.6 345.9,271.3 362.0,291.3 378.7,310.2 395.6,327.8 412.3,343.8 428.8,357.8 444.5,369.6 459.4,379.0 473.1,385.9 485.3,390.1 496.0,391.6 504.9,390.3 511.8,386.3 516.6,379.7 519.3,370.5 519.8,358.8 518.1,345.0 514.2,329.2 508.2,311.8 500.2,292.9 490.4,273.0 478.8,252.3 465.7,231.3"/>
+            <polygon class="d-ln-mut" points="464.9,205.7 446.1,180.3 426.3,155.8 405.9,132.6 385.2,111.1 364.7,91.6 344.6,74.4 325.3,60.0 307.1,48.4 290.3,40.0 275.3,34.8 262.2,33.0 251.4,34.5 242.9,39.4 237.0,47.6 233.7,58.9 233.1,73.1 235.2,90.0 239.9,109.4 247.3,130.8 257.1,153.9 269.1,178.3 283.3,203.6 299.3,229.3 316.9,255.1 335.8,280.5 355.5,305.0 375.9,328.2 396.6,349.7 417.2,369.3 437.3,386.4 456.6,400.9 474.8,412.4 491.5,420.8 506.6,426.0 519.6,427.8 530.5,426.3 538.9,421.4 544.9,413.2 548.2,401.9 548.8,387.7 546.7,370.8 541.9,351.5 534.6,330.1 524.8,307.0 512.7,282.5 498.5,257.2 482.5,231.5"/>
+            <polygon class="d-ln-mut" points="478.7,201.1 456.4,171.0 432.9,142.0 408.7,114.4 384.2,88.8 359.8,65.7 336.0,45.4 313.0,28.2 291.5,14.5 271.6,4.5 253.7,-1.7 238.3,-3.8 225.4,-2.0 215.3,3.8 208.3,13.5 204.4,26.9 203.7,43.8 206.1,63.9 211.8,86.8 220.5,112.2 232.1,139.6 246.4,168.5 263.3,198.6 282.3,229.1 303.1,259.7 325.5,289.8 349.0,318.9 373.2,346.4 397.7,372.0 422.0,395.1 445.9,415.5 468.8,432.6 490.4,446.3 510.3,456.3 528.1,462.5 543.6,464.6 556.5,462.8 566.5,457.0 573.6,447.3 577.5,433.9 578.2,417.0 575.7,396.9 570.1,374.0 561.4,348.6 549.7,321.2 535.4,292.3 518.6,262.2 499.6,231.7"/>
+            <polyline class="d-ln-acc" style="stroke-width:1.6; stroke-linejoin: round" points="343.6,54.7 320.3,67.5 309.4,76.1 302.6,82.2 301.0,87.7 296.2,92.6 300.7,97.0 298.0,101.4 294.9,105.8 301.8,107.8 311.4,108.4 310.8,113.0 311.2,117.3 316.0,119.3 318.4,122.7 321.3,125.7 319.2,129.9 319.6,133.6 319.1,137.0 320.0,139.2 324.4,141.7 328.8,143.7 330.5,146.5 329.5,149.0 333.7,150.4 332.3,153.7 334.2,155.3 335.0,157.1 338.9,158.2 340.1,161.2 342.1,163.0 343.7,164.2 346.0,166.2 350.8,166.9 351.9,168.7 349.3,172.0 353.3,172.2 352.8,174.2 353.0,176.3 354.0,177.5 353.9,178.9 353.4,180.4 352.6,182.0 357.4,182.3 357.4,183.7 356.6,185.1 356.9,186.1 358.0,188.5 359.3,189.1 361.3,190.0 362.6,190.3 365.0,190.4 368.5,190.9 365.6,193.1 365.4,194.5 365.5,195.5 368.6,196.0 366.0,198.0 369.7,198.3 369.9,199.3 368.5,200.7 368.4,201.7 368.9,202.8 369.8,203.9 371.4,204.1 374.0,204.2 372.8,206.1 375.2,206.2 374.2,207.1 375.1,207.4 373.3,208.9 376.6,208.0 378.6,207.6 377.1,209.2 376.6,210.0 377.0,210.5 375.5,211.6 378.9,211.0 378.3,211.9 378.0,212.5 378.5,213.1 378.1,213.7 379.4,214.3 381.1,214.2 382.7,214.0 383.0,214.1 381.6,214.9 379.7,215.4 382.1,215.1 380.5,216.2 380.0,217.2 376.8,218.6 377.3,219.1 380.4,218.9 384.8,217.9 384.2,219.1 383.2,219.3 383.7,220.0 383.3,220.2 384.4,220.3 384.1,220.4"/>
+            </g>
+            <circle class="pt-no" cx="343.6" cy="54.7" r="4.5"/>
+            <circle class="pt-new" cx="390.9" cy="230.4" r="4.5"/>
+            <rect class="d-plot" x="460" y="40" width="200" height="220"/>
+            <g clip-path="url(#kdl05-f3-clip-sgd)">
+            <polygon class="d-ln-mut" points="621.0,227.0 618.4,223.6 615.7,220.3 613.0,217.1 610.2,214.2 607.4,211.5 604.6,209.2 602.0,207.2 599.5,205.6 597.2,204.5 595.2,203.8 593.4,203.5 591.9,203.7 590.8,204.4 590.0,205.5 589.5,207.1 589.4,209.0 589.7,211.3 590.4,213.9 591.4,216.8 592.7,220.0 594.4,223.3 596.3,226.8 598.5,230.3 600.9,233.8 603.4,237.2 606.1,240.6 608.9,243.7 611.7,246.6 614.5,249.3 617.2,251.6 619.9,253.6 622.3,255.2 624.6,256.3 626.7,257.0 628.4,257.3 629.9,257.1 631.1,256.4 631.9,255.3 632.3,253.7 632.4,251.8 632.1,249.5 631.5,246.9 630.5,244.0 629.1,240.8 627.5,237.5 625.6,234.1 623.4,230.6"/>
+            <polygon class="d-ln-mut" points="633.4,222.9 627.7,215.2 621.7,207.7 615.5,200.7 609.2,194.1 602.9,188.2 596.8,182.9 590.9,178.5 585.4,175.0 580.3,172.5 575.7,170.9 571.8,170.3 568.5,170.8 565.9,172.3 564.1,174.8 563.1,178.2 562.9,182.5 563.5,187.7 565.0,193.6 567.2,200.1 570.2,207.1 573.9,214.5 578.2,222.2 583.1,230.1 588.4,237.9 594.1,245.6 600.2,253.1 606.4,260.2 612.6,266.7 618.9,272.7 625.0,277.9 630.9,282.3 636.4,285.8 641.5,288.4 646.1,289.9 650.1,290.5 653.4,290.0 656.0,288.5 657.8,286.0 658.8,282.6 659.0,278.3 658.3,273.1 656.9,267.2 654.6,260.7 651.7,253.7 648.0,246.3 643.7,238.6 638.8,230.7"/>
+            <polygon class="d-ln-mut" points="645.8,218.8 636.9,206.8 627.6,195.3 618.0,184.3 608.2,174.2 598.6,165.0 589.1,156.9 580.0,150.1 571.4,144.6 563.5,140.6 556.4,138.2 550.3,137.3 545.1,138.1 541.1,140.4 538.4,144.2 536.8,149.5 536.5,156.3 537.5,164.2 539.7,173.3 543.2,183.4 547.8,194.3 553.5,205.8 560.2,217.8 567.7,229.9 576.0,242.0 584.9,254.0 594.2,265.6 603.9,276.5 613.6,286.7 623.3,295.9 632.8,303.9 641.9,310.8 650.4,316.2 658.3,320.2 665.4,322.6 671.6,323.5 676.7,322.7 680.7,320.4 683.5,316.6 685.0,311.3 685.3,304.6 684.4,296.6 682.1,287.5 678.6,277.4 674.0,266.5 668.3,255.0 661.6,243.1 654.1,230.9"/>
+            <polygon class="d-ln-mut" points="658.2,214.6 646.1,198.5 633.5,182.8 620.5,168.0 607.3,154.2 594.2,141.8 581.3,130.8 569.0,121.6 557.4,114.2 546.7,108.9 537.1,105.6 528.8,104.4 521.9,105.4 516.4,108.5 512.7,113.7 510.6,120.9 510.2,130.0 511.5,140.8 514.5,153.1 519.2,166.8 525.5,181.5 533.2,197.1 542.2,213.3 552.5,229.7 563.7,246.2 575.7,262.4 588.3,278.0 601.4,292.8 614.5,306.6 627.7,319.0 640.5,330.0 652.8,339.2 664.4,346.6 675.1,352.0 684.7,355.3 693.1,356.4 700.0,355.4 705.4,352.3 709.2,347.1 711.3,339.9 711.7,330.8 710.3,320.0 707.3,307.7 702.6,294.0 696.4,279.3 688.7,263.7 679.6,247.5 669.4,231.1"/>
+            <polygon class="d-ln-mut" points="671.4,210.2 656.0,189.5 639.8,169.5 623.2,150.6 606.3,133.0 589.5,117.0 573.1,103.0 557.3,91.2 542.5,81.8 528.8,74.9 516.5,70.7 505.8,69.2 497.0,70.5 490.1,74.5 485.2,81.1 482.5,90.4 482.0,102.0 483.7,115.8 487.6,131.6 493.6,149.0 501.6,167.9 511.5,187.8 523.1,208.5 536.1,229.5 550.5,250.6 565.9,271.3 582.0,291.3 598.7,310.2 615.6,327.8 632.3,343.8 648.8,357.8 664.5,369.6 679.4,379.0 693.1,385.9 705.3,390.1 716.0,391.6 724.9,390.3 731.8,386.3 736.6,379.7 739.3,370.5 739.8,358.8 738.1,345.0 734.2,329.2 728.2,311.8 720.2,292.9 710.4,273.0 698.8,252.3 685.7,231.3"/>
+            <polygon class="d-ln-mut" points="684.9,205.7 666.1,180.3 646.3,155.8 625.9,132.6 605.2,111.1 584.7,91.6 564.6,74.4 545.3,60.0 527.1,48.4 510.3,40.0 495.3,34.8 482.2,33.0 471.4,34.5 462.9,39.4 457.0,47.6 453.7,58.9 453.1,73.1 455.2,90.0 459.9,109.4 467.3,130.8 477.1,153.9 489.1,178.3 503.3,203.6 519.3,229.3 536.9,255.1 555.8,280.5 575.5,305.0 595.9,328.2 616.6,349.7 637.2,369.3 657.3,386.4 676.6,400.9 694.8,412.4 711.5,420.8 726.6,426.0 739.6,427.8 750.5,426.3 758.9,421.4 764.9,413.2 768.2,401.9 768.8,387.7 766.7,370.8 761.9,351.5 754.6,330.1 744.8,307.0 732.7,282.5 718.5,257.2 702.5,231.5"/>
+            <polygon class="d-ln-mut" points="698.7,201.1 676.4,171.0 652.9,142.0 628.7,114.4 604.2,88.8 579.8,65.7 556.0,45.4 533.0,28.2 511.5,14.5 491.6,4.5 473.7,-1.7 458.3,-3.8 445.4,-2.0 435.3,3.8 428.3,13.5 424.4,26.9 423.7,43.8 426.1,63.9 431.8,86.8 440.5,112.2 452.1,139.6 466.4,168.5 483.3,198.6 502.3,229.1 523.1,259.7 545.5,289.8 569.0,318.9 593.2,346.4 617.7,372.0 642.0,395.1 665.9,415.5 688.8,432.6 710.4,446.3 730.3,456.3 748.1,462.5 763.6,464.6 776.5,462.8 786.5,457.0 793.6,447.3 797.5,433.9 798.2,417.0 795.7,396.9 790.1,374.0 781.4,348.6 769.7,321.2 755.4,292.3 738.6,262.2 719.6,231.7"/>
+            <polyline class="d-ln-acc" style="stroke-width:1.1; stroke-linejoin: round" points="563.6,54.7 531.0,71.4 484.5,84.9 496.5,81.4 475.6,91.1 476.4,102.1 470.0,115.8 523.2,102.9 518.3,113.8 514.6,115.1 571.5,100.1 538.6,110.3 525.4,118.7 518.6,127.0 624.7,109.9 628.4,121.7 599.1,136.1 584.9,141.3 558.5,146.6 594.0,138.5 546.5,152.6 516.2,165.1 513.9,169.1 530.1,163.3 581.7,152.6 585.4,156.5 578.6,158.4 556.7,165.2 642.6,150.2 592.5,165.8 584.2,171.7 579.7,175.8 574.3,183.9 578.5,190.7 574.5,192.5 578.4,191.0 579.3,189.8 634.0,178.8 619.2,183.4 601.7,191.9 602.7,193.0 596.5,195.2 600.3,203.8 598.8,204.7 580.3,209.1 612.0,201.0 608.3,202.8 603.5,207.5 607.7,203.2 596.7,206.5 590.3,208.5 588.7,211.8 585.0,213.9 587.7,212.4 569.1,218.9 613.8,209.9 613.6,210.0 596.8,213.6 591.0,215.7 619.5,211.0 619.9,214.8 620.0,214.3 609.5,217.3 611.9,215.9 611.4,216.4 613.4,214.0 610.0,215.0 590.1,219.8 586.5,216.7 587.1,215.7 618.6,208.2 616.2,209.6 603.5,216.1 603.5,216.1 596.5,217.4 600.0,211.8 599.9,214.7 611.1,212.0 634.8,205.3 628.7,210.0 589.5,220.9 584.0,227.4 587.1,224.3 579.5,228.1 579.5,228.1 636.9,214.3 646.3,207.5 625.7,214.0 620.4,217.8 613.3,223.1 601.0,227.6 604.0,226.4 608.0,224.4 611.6,222.3 609.9,223.9 611.0,230.3 604.7,231.4 608.6,226.9 605.3,228.3 611.5,227.0 608.5,228.8"/>
+            </g>
+            <circle class="pt-no" cx="563.6" cy="54.7" r="4.5"/>
+            <circle class="pt-new" cx="610.9" cy="230.4" r="4.5"/>
+            <text class="d-t" x="20" y="28">Gradient descent</text>
+            <text class="d-t" x="240" y="28">Mini-batch SGD (50)</text>
+            <text class="d-t" x="460" y="28">SGD (1 record)</text>
+            <text class="d-s" x="20" y="280">1,000 records per step</text>
+            <text class="d-s" x="20" y="296">100 iterations = 100 epochs</text>
+            <text class="d-s" x="240" y="280">50 records per step</text>
+            <text class="d-s" x="240" y="296">100 iterations = 5 epochs</text>
+            <text class="d-s" x="460" y="280">1 record per step</text>
+            <text class="d-s" x="460" y="296">100 iterations = 0.1 epoch</text>
+            <circle class="pt-no" cx="26" cy="311" r="4.5"/><text class="d-s" x="36" y="315">start</text>
+            <circle class="pt-new" cx="92" cy="311" r="4.5"/><text class="d-s" x="102" y="315">minimum</text>
+            <text class="d-s" x="180" y="315">horizontal axis w, vertical axis b; rings are equal-cost contours</text>
+          </svg>
+        </div>
+        <figcaption><b>Noise grows as the batch shrinks</b> (synthetic). A straight-line model \(\hat y = wx + b\) is fitted to 1,000 generated records by minimizing \(J = \frac{1}{2n}\sum(y - \hat y)^2\), with \(\eta = 0.1\) for all three. Each panel shows the first 100 updates from the same start. These are three of the paths in the <a href="#race-fig">comparison widget</a> further down.</figcaption>
+      </figure>
+      <p>So mini-batch SGD still has noise. How can it be removed? The answer is momentum <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10427s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:53:47</a>.</p>
+    </section>
+
+    <!-- ============ MOMENTUM IDEA ============ -->
+    <section id="momentum">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10462s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:54:22</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10564s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:56:04 exponentially weighted average</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10663s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:57:43 time-step notation</a>
+        </div>
+        <h2>SGD with momentum: smoothing the journey</h2>
+      </div>
+      <p>The fourth optimizer is <dfn>SGD with momentum</dfn>. The "SGD" here means mini-batch SGD: it is mini-batch SGD with a momentum term. Momentum smooths the path to the global minimum and reduces the noise. The smoothing comes from a moving average, more precisely the <dfn>exponentially weighted average</dfn> (also called the exponential moving average). Krish notes that this kind of average is also used in time-series models such as ARIMA and ARMA.</p>
+      <p>To make the averaging easy to write, he rewrites the update rule with time steps <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10663s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:57:43</a>. The current step is \(t\) and the previous one \(t-1\), so \(w_{\text{new}}\) becomes \(w_t\) and \(w_{\text{old}}\) becomes \(w_{t-1}\):</p>
+      <div class="eq">\[ w_t = w_{t-1} - \eta\,\frac{\partial L}{\partial w_{t-1}}, \qquad b_t = b_{t-1} - \eta\,\frac{\partial L}{\partial b_{t-1}} \]</div>
+      <p>It is the same rule as before. The time index is what the average needs.</p>
+    </section>
+
+    <!-- ============ EWA ============ -->
+    <section id="ewa">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10695s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:58:15</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10831s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:00:31 β as a hyperparameter</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10863s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:01:03 β = 0.95</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10958s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:02:38 V at time 3</a>
+        </div>
+        <h2>The exponentially weighted average</h2>
+      </div>
+      <p>Take a time series: at times \(t_1, t_2, t_3, \dots, t_n\) the values are \(a_1, a_2, a_3, \dots, a_n\). The weighted average \(V\) starts at the first value, and every later step mixes the previous average with the new value:</p>
+      <div class="result">
+        <span class="lbl">Exponentially weighted average</span>
+        \[ \begin{gathered} V_1 = a_1, \qquad V_2 = \beta V_1 + (1-\beta)\,a_2, \qquad V_3 = \beta V_2 + (1-\beta)\,a_3, \qquad \dots \\ V_t = \beta V_{t-1} + (1-\beta)\,a_t \end{gathered} \]
+        <p>\(\beta\) is a hyperparameter between 0 and 1. It decides where the focus goes: on the previous average (large \(\beta\)) or on the current value (small \(\beta\)).</p>
+      </div>
+      <p>With \(\beta = 0.95\) <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10863s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:01:03</a>:</p>
+      <div class="eq">\[ V_2 = 0.95\,V_1 + 0.05\,a_2 \]</div>
+      <p>The previous value gets far more importance than the current one. Plot \(a_1\) and \(a_2\) and the average moves only a little toward \(a_2\), so a jumpy series becomes a smooth curve. Because the average depends on the earlier values, Krish adds, it can also be used for forecasting.</p>
+      <p>The average keeps its whole history. Replace \(V_2\) inside \(V_3\) by its own formula <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10958s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:02:38</a>:</p>
+      <div class="eq">\[ V_3 = \beta V_2 + (1-\beta)\,a_3 = \beta^2 a_1 + \beta(1-\beta)\,a_2 + (1-\beta)\,a_3 \]</div>
+      <p>With \(\beta = 0.95\) the weights are 0.9025, 0.0475 and 0.05. Not in the video: in general the value \(k\) steps back gets weight \((1-\beta)\beta^k\). The weights fall off as powers of \(\beta\), which is why the average is called exponentially weighted. As a rule of thumb it remembers about \(1/(1-\beta)\) values: 20 for \(\beta = 0.95\), 10 for \(\beta = 0.9\).</p>
+      <p>On the board Krish draws what this does to the optimizer's path <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10928s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:02:08</a>. Without the average, each step heads wherever the newest noisy gradient points. With it, each step bends only gently toward the new direction, and the following steps are controlled the same way until the path reaches the global minimum. The noise is removed and the curve is smoothed.</p>
+
+      <figure id="ewa-fig">
+        <div class="controls">
+          <label for="ewa-beta">\(\beta\)</label>
+          <input type="range" id="ewa-beta" min="0" max="0.99" step="0.01" value="0.95">
+          <output id="ewa-beta-out" for="ewa-beta">0.95</output>
+          <span class="check"><input type="checkbox" id="ewa-zero"><label for="ewa-zero">start from V₀ = 0 instead of V₁ = a₁</label></span>
+          <button class="btn" id="ewa-new" type="button">New noise</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">Weight on the newest value, 1 − β</span><span class="v" id="ewa-w">–</span></div>
+          <div><span class="k">Remembers about 1/(1 − β) values</span><span class="v" id="ewa-win">–</span></div>
+          <div><span class="k">Lags the trend by about β/(1 − β) steps</span><span class="v" id="ewa-lag">–</span></div>
+          <div><span class="k">Average gap to the trend</span><span class="v mine" id="ewa-gap">–</span></div>
+        </div>
+        <div class="status" id="ewa-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="ewa-svg" viewBox="0 0 640 390" role="img" aria-label="Top: 200 noisy values plotted as dots around a slowly varying dashed trend, with the exponentially weighted average drawn as a line. Bottom: bars showing the weight that the final average gives to each of the last 40 values, newest on the right."></svg></div>
+        <figcaption><b>Exponentially weighted average explorer</b> (synthetic). The dots are 200 noisy values \(a_t\), like mini-batch gradients scattered around the true gradient; the dashed curve is the trend they scatter around. The line is \(V_t = \beta V_{t-1} + (1-\beta)a_t\). Raise \(\beta\) and the line gets smoother but falls behind the trend. The bars show the weight \((1-\beta)\beta^k\) that \(V_{200}\) gives to each of the last 40 values. Not in the video: the readouts use the rules of thumb above, and "start from \(V_0 = 0\)" is how Adam's code initializes its averages (see <a href="#adam">Adam</a>).</figcaption>
+      </figure>
+    </section>
+
+    <!-- ============ MOMENTUM RULE ============ -->
+    <section id="momentum-rule">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10988s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:03:08</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11020s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:03:40 the V formula</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11114s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:05:14 what it fixes</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11179s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:06:19 recap</a>
+        </div>
+        <h2>The momentum update</h2>
+      </div>
+      <p>Where does the average go? Into the derivative of the loss with respect to the weights <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=10988s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:03:08</a>. Replace \(\partial L/\partial w_{t-1}\) in the update by \(V_{dw}\), the exponentially weighted average of the derivatives:</p>
+      <div class="result">
+        <span class="lbl">SGD with momentum</span>
+        \[ V_{dw_t} = \beta\,V_{dw_{t-1}} + (1-\beta)\,\frac{\partial L}{\partial w_{t-1}}, \qquad w_t = w_{t-1} - \eta\,V_{dw_t} \]
+        <p>The bias works the same way with \(V_{db}\); Krish writes the bias version when he reaches Adam. The gradients come from mini-batches.</p>
+      </div>
+      <p>\(V_{dw_t}\) is the value of the derivative at time \(t\): \(\beta\) times its previous value plus \((1-\beta)\) times the newest derivative. Not in the video, but it shows why this smooths the path: successive mini-batch gradients disagree in their sideways parts, which flip back and forth, and agree in the direction that leads toward the minimum. Averaging cancels the first and keeps the second.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 270" role="img" aria-label="Two copies of a long valley drawn as elongated contour ellipses with the minimum at the right. Top: raw mini-batch steps zigzag between the valley walls, each step moving sideways twice as far as it moves forward. Bottom: momentum steps with beta 0.95 run along the middle of the valley, almost straight. Right: two consecutive raw steps, one pointing up-right and one down-right; their average points straight right.">
+            <defs>
+              <clipPath id="kdl05-f4-clip-a"><rect x="20" y="26" width="430" height="100"/></clipPath>
+              <clipPath id="kdl05-f4-clip-b"><rect x="20" y="158" width="430" height="100"/></clipPath>
+              <marker id="kdl05-f4-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="kdl05-f4-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <text class="d-t" x="20" y="18">Raw mini-batch steps −η g</text>
+            <rect class="d-plot" x="20" y="26" width="430" height="100"/>
+            <g clip-path="url(#kdl05-f4-clip-a)">
+              <ellipse class="d-ln-mut" cx="430" cy="76" rx="440" ry="74"/>
+              <ellipse class="d-ln-mut" cx="430" cy="76" rx="330" ry="55"/>
+              <ellipse class="d-ln-mut" cx="430" cy="76" rx="220" ry="37"/>
+              <ellipse class="d-ln-mut" cx="430" cy="76" rx="110" ry="18"/>
+            </g>
+            <polyline class="d-ln" style="stroke-width:1.6" points="50,36 90,116 130,36 170,116 210,36 250,116 290,36 330,116"/>
+            <circle class="pt-no" cx="50" cy="36" r="3.2"/><circle class="pt-no" cx="90" cy="116" r="3.2"/><circle class="pt-no" cx="130" cy="36" r="3.2"/><circle class="pt-no" cx="170" cy="116" r="3.2"/><circle class="pt-no" cx="210" cy="36" r="3.2"/><circle class="pt-no" cx="250" cy="116" r="3.2"/><circle class="pt-no" cx="290" cy="36" r="3.2"/><circle class="pt-no" cx="330" cy="116" r="3.2"/>
+            <circle class="pt-new" cx="430" cy="76" r="5"/>
+            <text class="d-s" x="450" y="18" text-anchor="end">sideways swing = 2 × progress</text>
+
+            <text class="d-t" x="20" y="150" style="fill: var(--accent)">Momentum steps −η V (β = 0.95)</text>
+            <rect class="d-plot" x="20" y="158" width="430" height="100"/>
+            <g clip-path="url(#kdl05-f4-clip-b)">
+              <ellipse class="d-ln-mut" cx="430" cy="208" rx="440" ry="74"/>
+              <ellipse class="d-ln-mut" cx="430" cy="208" rx="330" ry="55"/>
+              <ellipse class="d-ln-mut" cx="430" cy="208" rx="220" ry="37"/>
+              <ellipse class="d-ln-mut" cx="430" cy="208" rx="110" ry="18"/>
+            </g>
+            <polyline class="d-ln-acc" style="stroke-width:2.4" points="70,208 110,210.1 150,208 190,210.1 230,208 270,210.1 310,208 350,210.1"/>
+            <circle class="pt-tree" cx="70" cy="208" r="3.4"/><circle class="pt-tree" cx="110" cy="210.1" r="3.4"/><circle class="pt-tree" cx="150" cy="208" r="3.4"/><circle class="pt-tree" cx="190" cy="210.1" r="3.4"/><circle class="pt-tree" cx="230" cy="208" r="3.4"/><circle class="pt-tree" cx="270" cy="210.1" r="3.4"/><circle class="pt-tree" cx="310" cy="208" r="3.4"/><circle class="pt-tree" cx="350" cy="210.1" r="3.4"/>
+            <circle class="pt-new" cx="430" cy="208" r="5"/>
+            <text class="d-s" x="430" y="236" text-anchor="middle">minimum</text>
+            <text class="d-s" x="450" y="150" text-anchor="end">sideways ≈ 2.6% of the swing</text>
+
+            <text class="d-t" x="470" y="70">Two steps in a row</text>
+            <line class="d-ln d-dash" x1="509" y1="94" x2="509" y2="190"/>
+            <line class="d-ln" x1="485" y1="142" x2="508.1" y2="95.8" marker-end="url(#kdl05-f4-ah)"/>
+            <line class="d-ln" x1="485" y1="142" x2="508.1" y2="188.2" marker-end="url(#kdl05-f4-ah)"/>
+            <line class="d-ln-acc" style="stroke-width:2.4" x1="485" y1="142" x2="507" y2="142" marker-end="url(#kdl05-f4-aha)"/>
+            <text class="d-s" x="518" y="98">−η gₜ₋₁</text>
+            <text class="d-s" x="518" y="194">−η gₜ</text>
+            <text class="d-s" x="518" y="146" style="fill: var(--accent)">average</text>
+            <text class="d-s" x="470" y="226">sideways parts cancel,</text>
+            <text class="d-s" x="470" y="242">forward parts add up</text>
+          </svg>
+        </div>
+        <figcaption><b>Why averaging removes the zigzag</b>, drawn to scale for an idealized case. Suppose consecutive mini-batch gradients alternate between \((1, +2)\) and \((1, -2)\) in (forward, sideways) units, so the raw steps (top) bounce between the valley walls. Once \(V\) has warmed up it settles at \((1, \pm 2\cdot\tfrac{1-\beta}{1+\beta})\): the forward part keeps its full size and the sideways part (bottom) shrinks to \(\tfrac{0.05}{1.95} \approx 2.6\%\) of the swing for \(\beta = 0.95\). (The formula \(\tfrac{1-\beta}{1+\beta}\) is added for these notes.)</figcaption>
+      </figure>
+
+      <p>What this fixes, in Krish's words <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11114s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:05:14</a>: it reduces the noise, it works with mini-batches, and it converges faster. He likes to tell the optimizers as a story, each one patching a loophole in the previous one, and jokes that finding the next loophole is how you earn a PhD.</p>
+      <p class="callout">Interview tip from the recap <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11214s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:06:54</a>: if you are asked what to do when the path of gradient descent is very noisy, the answer is to bring a smoothing factor (momentum) into the optimizer. Interviewers rarely ask for the equations; he teaches them so that the idea is understood.</p>
+      <div class="pc">
+        <div class="plus"><h4>Advantages</h4><ul><li>Reduces the noise of mini-batch SGD and smooths the path.</li><li>Faster convergence.</li></ul></div>
+        <div><h4>Disadvantages</h4><ul><li>The learning rate \(\eta\) is still fixed, the same for every step (the gap AdaGrad fills next).</li></ul></div>
+      </div>
+      <p class="note">Not in the video: libraries usually write momentum without the \((1-\beta)\): \(v_t = \beta v_{t-1} + \eta\,g_t\), \(w_t = w_{t-1} - v_t\), typically with \(\beta = 0.9\). That is the same method with the learning rate rescaled by \(1/(1-\beta)\). For the IIT Madras treatment, see Lecture 5 (<a href="lecture-05.html#momentum">lecture-05.html</a>), which also covers Nesterov momentum.</p>
+    </section>
+
+    <!-- ============ ADAGRAD ============ -->
+    <section id="adagrad">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11246s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:07:26</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11348s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:09:08 high, then lower</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11447s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:10:47 the adaptive rate</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11547s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:12:27 α and why it shrinks the rate</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11741s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:15:41 the problem</a>
+        </div>
+        <h2>AdaGrad: an adaptive learning rate</h2>
+      </div>
+      <p>The next optimizer is <dfn>AdaGrad</dfn>, adaptive gradient descent. So far the learning rate \(\eta\) has been a fixed number in every optimizer. It controls the speed of convergence, and Krish asks whether it could change instead: high at the start, when the weight is far from the global minimum, and smaller and smaller as it approaches the minimum <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11348s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:09:08</a>. "Adaptive" is the word for that.</p>
+      <p>AdaGrad keeps the update rule and replaces the learning rate by an adaptive one, \(\eta'_t\):</p>
+      <div class="result">
+        <span class="lbl">AdaGrad</span>
+        \[ w_t = w_{t-1} - \eta'_t\,\frac{\partial L}{\partial w_{t-1}}, \qquad \eta'_t = \frac{\eta}{\sqrt{\alpha_t + \epsilon}}, \qquad \alpha_t = \sum_{i=1}^{t}\left(\frac{\partial L}{\partial w_i}\right)^2 \]
+        <p>\(\eta\) is the learning rate you choose, \(\epsilon\) a small positive number. Each weight has its own \(\alpha_t\), built from its own gradients.</p>
+      </div>
+      <p class="note">Notation: on the board Krish names the new rate \(\eta\) and writes the original one as "learning rate"; here \(\eta\) is the original rate and \(\eta'_t\) the adaptive one. The audio does not say "root" when he writes AdaGrad's and RMSProp's denominators, but it does when he writes Adam's, \(\eta/\sqrt{S_{dw} + \epsilon}\). The standard AdaGrad and RMSProp rates have the square root, as written here.</p>
+      <p>The two new symbols:</p>
+      <ul>
+        <li><b>\(\epsilon\)</b> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11514s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:11:54</a> is a small number that prevents division by zero. If \(\alpha_t\) were 0, \(\eta\) divided by it would be infinite; adding \(\epsilon\) keeps the denominator above zero. (Not in the video: typical values are \(10^{-8}\) to \(10^{-7}\).)</li>
+        <li><b>\(\alpha_t\)</b> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11547s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:12:27</a> sums the squared derivatives of the loss with respect to that weight over all time steps from 1 to the current \(t\).</li>
+      </ul>
+      <p>Why does the rate go down? Every term in \(\alpha_t\) is a square, so \(\alpha_t\) can only grow from one step to the next <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11644s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:14:04</a>. It sits in the denominator, so \(\eta'_t\) keeps decreasing as training goes on and the weight gets closer to the global minimum. Krish's illustrative numbers have \(\eta'\) falling from 0.01 at \(t = 1\) to about 0.002 by \(t = 3\). That is how AdaGrad brings adaptiveness into the learning rate: it is never fixed.</p>
+      <h3>The problem <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11741s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:15:41</a></h3>
+      <p>In a deep neural network the derivatives keep being added to \(\alpha_t\) step after step, so \(\alpha_t\) can become a huge number. Then \(\eta'_t\) becomes negligible. With an already small \(\eta\) such as 0.01 divided by a huge number, the update hardly changes the weight, and \(w_t \approx w_{t-1}\) <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11838s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:17:18</a>. Learning stalls. AdaGrad also leaves out the smoothing that momentum brought: it uses the raw derivative.</p>
+      <div class="pc">
+        <div class="plus"><h4>Advantages</h4><ul><li>The learning rate adapts: large steps early, smaller steps near the minimum.</li><li>Each weight gets its own rate.</li></ul></div>
+        <div><h4>Disadvantages</h4><ul><li>\(\alpha_t\) only grows; in a deep network it can become huge, the rate becomes negligible and the weights stop changing.</li><li>No smoothing of the gradient (no momentum).</li></ul></div>
+      </div>
+      <p class="note">Not in the video: AdaGrad was designed for sparse features, whose weights see few nonzero gradients and so keep a larger rate. For the IIT Madras treatment, see Lecture 5 (<a href="lecture-05.html#adagrad">lecture-05.html</a>).</p>
+    </section>
+
+    <!-- ============ RMSPROP ============ -->
+    <section id="rmsprop">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11808s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:16:48</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11871s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:17:51 S_dw</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11938s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:18:58 β = 0.95</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12067s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:21:07 still no smoothing</a>
+        </div>
+        <h2>AdaDelta and RMSProp: keep the rate under control</h2>
+      </div>
+      <p>Krish covers <dfn>AdaDelta</dfn> and <dfn>RMSProp</dfn> together, saying the two have almost the same functionality. Both attack AdaGrad's problem: \(\alpha_t\) must not reach a huge value. The fix is to replace the running sum by an exponentially weighted average, so that its growth is controlled <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11871s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:17:51</a>:</p>
+      <div class="result">
+        <span class="lbl">RMSProp (AdaDelta as presented in the video)</span>
+        \[ \begin{gathered} S_{dw_0} = 0, \qquad S_{dw_t} = \beta\,S_{dw_{t-1}} + (1-\beta)\left(\frac{\partial L}{\partial w_{t-1}}\right)^2, \\ \eta'_t = \frac{\eta}{\sqrt{S_{dw_t} + \epsilon}}, \qquad w_t = w_{t-1} - \eta'_t\,\frac{\partial L}{\partial w_{t-1}} \end{gathered} \]
+      </div>
+      <p>With \(\beta = 0.95\) <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11938s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:18:58</a>:</p>
+      <div class="eq">\[ S_{dw_t} = 0.95\,S_{dw_{t-1}} + 0.05\left(\frac{\partial L}{\partial w_{t-1}}\right)^2 \]</div>
+      <p>Each new squared derivative enters with weight 0.05 and the old ones keep fading, so \(S_{dw}\) never jumps up by a large amount. It follows the recent size of the gradients instead of piling them all up. The learning rate still decreases, but slowly and under control, and the weights keep moving toward the global minimum.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 290" role="img" aria-label="Effective learning rate against iteration, on a logarithmic vertical axis from 0.0005 to 0.05, for a weight whose gradient has size 1 at every step and eta equal to 0.01. AdaGrad's rate starts at 0.01 and keeps falling, to about 0.0007 at iteration 200. RMSProp's rate starts at about 0.045 and settles at 0.01 after about 50 iterations.">
+            <line class="d-rule" x1="70" y1="234" x2="610" y2="234"/>
+            <line class="d-rule" x1="70" y1="34" x2="70" y2="234"/>
+            <line class="d-ln-mut" x1="70" y1="203.9" x2="610" y2="203.9"/>
+            <line class="d-ln-mut" x1="70" y1="173.8" x2="610" y2="173.8"/>
+            <line class="d-ln-mut" x1="70" y1="134.0" x2="610" y2="134.0"/>
+            <line class="d-ln-mut" x1="70" y1="103.9" x2="610" y2="103.9"/>
+            <line class="d-ln-mut" x1="70" y1="73.8" x2="610" y2="73.8"/>
+            <line class="d-ln-mut" x1="70" y1="34" x2="610" y2="34"/>
+            <text class="d-al" x="62" y="238" text-anchor="end">0.0005</text>
+            <text class="d-al" x="62" y="208" text-anchor="end">0.001</text>
+            <text class="d-al" x="62" y="178" text-anchor="end">0.002</text>
+            <text class="d-al" x="62" y="138" text-anchor="end">0.005</text>
+            <text class="d-al" x="62" y="108" text-anchor="end">0.01</text>
+            <text class="d-al" x="62" y="78" text-anchor="end">0.02</text>
+            <text class="d-al" x="62" y="38" text-anchor="end">0.05</text>
+            <text class="d-al" x="70" y="252" text-anchor="middle">0</text>
+            <text class="d-al" x="205" y="252" text-anchor="middle">50</text>
+            <text class="d-al" x="340" y="252" text-anchor="middle">100</text>
+            <text class="d-al" x="475" y="252" text-anchor="middle">150</text>
+            <text class="d-al" x="610" y="252" text-anchor="middle">200</text>
+            <text class="d-al" x="340" y="272" text-anchor="middle">iteration t</text>
+            <text class="d-al" x="20" y="22">effective learning rate η′ (log scale)</text>
+            <polyline class="d-ln" style="stroke-width:2" points="72.7,103.9 75.4,118.9 78.1,127.8 80.8,134.0 83.5,138.8 86.2,142.8 88.9,146.2 91.6,149.1 94.3,151.6 97.0,153.9 99.7,156.0 102.4,157.9 105.1,159.6 107.8,161.2 110.5,162.7 113.2,164.1 115.9,165.4 118.6,166.7 121.3,167.8 124.0,168.9 134.8,172.9 145.6,176.3 156.4,179.2 167.2,181.7 178.0,184.0 188.8,186.1 199.6,188.0 210.4,189.7 221.2,191.3 232.0,192.8 259.0,196.2 286.0,199.1 313.0,201.6 340.0,203.9 367.0,206.0 394.0,207.9 421.0,209.6 448.0,211.2 475.0,212.7 502.0,214.1 529.0,215.4 556.0,216.7 583.0,217.8 610.0,218.9"/>
+            <polyline class="d-ln-acc" style="stroke-width:2.4" points="72.7,38.8 75.4,53.3 78.1,61.6 80.8,67.3 83.5,71.6 86.2,75.1 88.9,77.9 91.6,80.3 94.3,82.3 97.0,84.1 99.7,85.6 102.4,87.0 105.1,88.3 107.8,89.4 110.5,90.4 113.2,91.3 115.9,92.1 118.6,92.9 121.3,93.6 124.0,94.3 134.8,96.4 145.6,98.0 156.4,99.2 167.2,100.2 178.0,100.9 188.8,101.5 199.6,102.0 210.4,102.3 221.2,102.6 232.0,102.9 259.0,103.3 286.0,103.5 313.0,103.7 340.0,103.8 367.0,103.8 394.0,103.9 421.0,103.9 448.0,103.9 475.0,103.9 502.0,103.9 529.0,103.9 556.0,103.9 583.0,103.9 610.0,103.9"/>
+            <text class="d-t" x="600" y="96" text-anchor="end" style="fill: var(--accent)">RMSProp: settles at η = 0.01</text>
+            <text class="d-t" x="600" y="194" text-anchor="end">AdaGrad: 0.01/√t, still falling</text>
+            <text class="d-s" x="88" y="46" style="fill: var(--accent)">starts high because S₀ = 0</text>
+          </svg>
+        </div>
+        <figcaption><b>AdaGrad's rate keeps falling; RMSProp's levels off</b> (illustrative). One weight whose gradient has size 1 at every iteration, \(\eta = 0.01\), \(\beta = 0.95\). AdaGrad: \(\alpha_t = t\), so \(\eta'_t = 0.01/\sqrt{t}\), already 0.0007 at \(t = 200\). RMSProp: \(S_{dw_t} = 1 - 0.95^t\) climbs to 1, so \(\eta'_t\) settles at 0.01. Not in the video: RMSProp's first rates are larger than \(\eta\) because \(S_{dw}\) starts at 0 and is still small; the published Adam corrects for this.</figcaption>
+      </figure>
+
+      <h3>Still missing: smoothing <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12067s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:21:07</a></h3>
+      <p>Look at the update again: it still multiplies the raw derivative \(\partial L/\partial w_{t-1}\). AdaGrad, AdaDelta and RMSProp make the learning rate adaptive, but none of them smooths the gradient the way SGD with momentum did with \(V_{dw}\). Combining \(V_{dw}\) with \(S_{dw}\) would solve both problems <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12099s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:21:39</a>, and that combination is the next optimizer.</p>
+      <div class="pc">
+        <div class="plus"><h4>Advantages</h4><ul><li>Adaptive learning rate that does not collapse: \(S_{dw}\) stays near the recent squared gradient.</li></ul></div>
+        <div><h4>Disadvantages</h4><ul><li>No smoothing: the raw, noisy derivative is still used.</li></ul></div>
+      </div>
+      <p class="note">Not in the video: the two are not identical. RMSProp is exactly the rule above. AdaDelta keeps a second exponentially weighted average, of the squared weight updates, and uses its square root in place of \(\eta\), so it needs no learning rate at all. For the IIT Madras treatment, see Lecture 5 (<a href="lecture-05.html#rmsprop">RMSProp</a> and <a href="lecture-05.html#adadelta">AdaDelta</a> in lecture-05.html).</p>
+    </section>
+
+    <!-- ============ ADAM ============ -->
+    <section id="adam">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12194s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:23:14</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12259s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:24:19 V and S for w and b</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12291s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:24:51 the update</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12420s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:27:00 what it solves</a>
+        </div>
+        <h2>Adam: momentum plus an adaptive rate</h2>
+      </div>
+      <p>The <dfn>Adam optimizer</dfn> combines momentum, the exponentially weighted average of the gradients, with the RMSProp idea of an adaptive learning rate. Krish calls it currently the best optimizer, the one most people use and the one researchers recommend. Variants such as AdaMax exist.</p>
+      <p>Adam keeps four averages, all starting at 0: \(V_{dw}\) and \(V_{db}\) for the gradients of the weight and the bias, and \(S_{dw}\) and \(S_{db}\) for their squares <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12259s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:24:19</a>. The weight and the bias are both updated with them:</p>
+      <div class="result">
+        <span class="lbl">Adam (as written in the video)</span>
+        \[ \begin{aligned} V_{dw_t} &= \beta\,V_{dw_{t-1}} + (1-\beta)\,\frac{\partial L}{\partial w_{t-1}}, & V_{db_t} &= \beta\,V_{db_{t-1}} + (1-\beta)\,\frac{\partial L}{\partial b_{t-1}}, \\ S_{dw_t} &= \beta\,S_{dw_{t-1}} + (1-\beta)\Big(\frac{\partial L}{\partial w_{t-1}}\Big)^2, & S_{db_t} &= \beta\,S_{db_{t-1}} + (1-\beta)\Big(\frac{\partial L}{\partial b_{t-1}}\Big)^2, \\ w_t &= w_{t-1} - \frac{\eta}{\sqrt{S_{dw_t} + \epsilon}}\,V_{dw_t}, & b_t &= b_{t-1} - \frac{\eta}{\sqrt{S_{db_t} + \epsilon}}\,V_{db_t} \end{aligned} \]
+        <p>\(V_{dw_0} = V_{db_0} = S_{dw_0} = S_{db_0} = 0\).</p>
+      </div>
+      <p class="note">While writing \(V_{db}\) Krish first multiplies the two terms and then corrects himself: they are added, as above. He writes a single \(\beta\) for all the averages.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 290" role="img" aria-label="Block diagram of Adam. The mini-batch gradient g feeds two exponentially weighted averages. The top one, V, averages g and smooths the direction; used alone it is SGD with momentum. The bottom one, S, averages g squared and tracks the size of the gradient; used alone it is RMSProp. The update moves w by eta times V divided by the square root of S plus epsilon.">
+            <defs>
+              <marker id="kdl05-f6-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <rect class="d-box" x="20" y="113" width="160" height="64" rx="8"/>
+            <text class="d-t" x="100" y="140" text-anchor="middle">mini-batch gradient</text>
+            <text class="d-s" x="100" y="160" text-anchor="middle">g = ∂L/∂wₜ₋₁</text>
+            <text class="d-s" x="20" y="204">V and S start at 0.</text>
+            <text class="d-s" x="20" y="220">b is updated the same</text>
+            <text class="d-s" x="20" y="236">way with its own Vdb, Sdb.</text>
+
+            <text class="d-s" x="350" y="30" text-anchor="middle">used alone: SGD with momentum</text>
+            <rect class="d-box-acc" x="240" y="40" width="220" height="64" rx="8"/>
+            <text class="d-t" x="350" y="68" text-anchor="middle">V ← β·V + (1 − β)·g</text>
+            <text class="d-s" x="350" y="88" text-anchor="middle">momentum: smooths the direction</text>
+
+            <rect class="d-box-acc" x="240" y="186" width="220" height="64" rx="8"/>
+            <text class="d-t" x="350" y="214" text-anchor="middle">S ← β·S + (1 − β)·g²</text>
+            <text class="d-s" x="350" y="234" text-anchor="middle">RMSProp: tracks the size of g</text>
+            <text class="d-s" x="350" y="272" text-anchor="middle">used alone (with g on top): RMSProp</text>
+
+            <line class="d-ln" x1="180" y1="132" x2="236.9" y2="86.5" marker-end="url(#kdl05-f6-ah)"/>
+            <line class="d-ln" x1="180" y1="158" x2="236.9" y2="203.5" marker-end="url(#kdl05-f6-ah)"/>
+            <text class="d-s" x="200" y="104" text-anchor="end">g</text>
+            <text class="d-s" x="200" y="196" text-anchor="end">g²</text>
+
+            <rect class="d-box" x="492" y="105" width="158" height="80" rx="8" style="stroke: var(--accent); stroke-width: 1.8"/>
+            <text class="d-row" x="571" y="124" text-anchor="middle">Adam update</text>
+            <text class="d-t" x="571" y="148" text-anchor="middle">w ← w − η′ · V</text>
+            <text class="d-t" x="571" y="172" text-anchor="middle">η′ = η / √(S + ε)</text>
+            <line class="d-ln" x1="460" y1="80" x2="502.5" y2="102.4" marker-end="url(#kdl05-f6-ah)"/>
+            <line class="d-ln" x1="460" y1="210" x2="502.5" y2="187.6" marker-end="url(#kdl05-f6-ah)"/>
+            <text class="d-s" x="571" y="206" text-anchor="middle">V sets the direction,</text>
+            <text class="d-s" x="571" y="222" text-anchor="middle">S sets the step size</text>
+          </svg>
+        </div>
+        <figcaption><b>Adam = momentum + RMSProp.</b> One gradient feeds two exponentially weighted averages. \(V\) (the \(V_{dw}\) of momentum) goes in the numerator and smooths the direction; \(S\) (the \(S_{dw}\) of RMSProp) goes under the square root in the denominator and adapts the learning rate.</figcaption>
+      </figure>
+
+      <p>This one update solves both problems of the story <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12420s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:27:00</a>: the path is smoothed, as with momentum, and the learning rate is adaptive, as with RMSProp. Krish ends the session with the usual invitation: if you find flaws in Adam too, start writing a research paper.</p>
+      <div class="pc">
+        <div class="plus"><h4>Advantages</h4><ul><li>Smooths the noise (momentum's \(V\)).</li><li>Adaptive learning rate per weight that does not collapse (RMSProp's \(S\)).</li><li>The most widely used optimizer.</li></ul></div>
+        <div><h4>Disadvantages</h4><ul><li>None named in the video.</li><li>Not in the video: it stores two extra numbers per weight, has more hyperparameters, and on some problems well-tuned SGD with momentum generalizes better.</li></ul></div>
+      </div>
+      <p class="note">Not in the video: the published Adam (Kingma and Ba, 2015) uses two different decay rates, \(\beta_1 = 0.9\) for \(V\) and \(\beta_2 = 0.999\) for \(S\), and a bias correction. Because \(V\) and \(S\) start at 0, they are too small in the first steps, so Adam divides them by \(1 - \beta_1^{\,t}\) and \(1 - \beta_2^{\,t}\) before the update. The usual default learning rate is \(\eta = 0.001\). For the IIT Madras treatment, see Lecture 5 (<a href="lecture-05.html#adam">Adam</a> and <a href="lecture-05.html#bias-correction">bias correction</a> in lecture-05.html).</p>
+    </section>
+
+    <!-- ============ COMPARE ============ -->
+    <section id="compare">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=11179s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:06:19 recap</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12486s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:28:06 next-day recap</a>
+        </div>
+        <h2>All seven optimizers compared</h2>
+      </div>
+      <p>Each optimizer changes one thing in \(w_t = w_{t-1} - \eta\,\partial L/\partial w_{t-1}\): how many records feed the gradient, whether the gradient is averaged over time, or whether the learning rate adapts.</p>
+      <div class="tbl-wrap">
+        <table class="cmp">
+          <thead><tr><th>Optimizer</th><th>Step \(w_{t-1} - w_t\)</th><th>Fixes</th><th>Problem left</th></tr></thead>
+          <tbody>
+            <tr><td>Gradient descent</td><td>\(\eta\,\partial J/\partial w\) over all \(n\) records</td><td>exact gradient, smooth path</td><td>needs huge RAM in every epoch</td></tr>
+            <tr><td>SGD</td><td>\(\eta\,\partial L_i/\partial w\) for one record</td><td>memory</td><td>\(n\) iterations per epoch: slow, very noisy</td></tr>
+            <tr><td>Mini-batch SGD</td><td>\(\eta\,\partial J_{\text{batch}}/\partial w\)</td><td>memory and time</td><td>still some noise</td></tr>
+            <tr><td>SGD with momentum</td><td>\(\eta\,V_{dw}\)</td><td>noise (smoothing)</td><td>fixed learning rate</td></tr>
+            <tr><td>AdaGrad</td><td>\(\dfrac{\eta}{\sqrt{\alpha_t + \epsilon}}\,\dfrac{\partial L}{\partial w}\)</td><td>adaptive learning rate</td><td>\(\alpha_t\) grows without limit, learning stalls; no smoothing</td></tr>
+            <tr><td>AdaDelta, RMSProp</td><td>\(\dfrac{\eta}{\sqrt{S_{dw} + \epsilon}}\,\dfrac{\partial L}{\partial w}\)</td><td>rate under control</td><td>no smoothing</td></tr>
+            <tr><td>Adam</td><td>\(\dfrac{\eta}{\sqrt{S_{dw} + \epsilon}}\,V_{dw}\)</td><td>smoothing and adaptive rate</td><td>none named in the video</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The widget runs all seven on one problem, a straight line \(\hat y = wx + b\) fitted to 1,000 generated records, so that the noise of each path comes from real sampling of records. Pick any two optimizers and watch them from the same start. The readouts count epochs as well as iterations: gradient descent's smooth path costs an epoch per step, SGD's ragged one a thousandth of an epoch per step.</p>
+
+      <figure id="race-fig">
+        <div class="controls">
+          <label for="race-a">Path A</label>
+          <select id="race-a">
+            <option value="gd">Gradient descent</option>
+            <option value="sgd">SGD (1 record)</option>
+            <option value="mini">Mini-batch SGD</option>
+            <option value="mom" selected>SGD with momentum</option>
+            <option value="adagrad">AdaGrad</option>
+            <option value="rms">RMSProp</option>
+            <option value="adam">Adam</option>
+          </select>
+          <label for="race-b">Path B</label>
+          <select id="race-b">
+            <option value="none">none</option>
+            <option value="gd">Gradient descent</option>
+            <option value="sgd">SGD (1 record)</option>
+            <option value="mini" selected>Mini-batch SGD</option>
+            <option value="mom">SGD with momentum</option>
+            <option value="adagrad">AdaGrad</option>
+            <option value="rms">RMSProp</option>
+            <option value="adam">Adam</option>
+          </select>
+          <label for="race-bs">Mini-batch size</label>
+          <select id="race-bs">
+            <option value="10">10</option>
+            <option value="50" selected>50</option>
+            <option value="200">200</option>
+          </select>
+        </div>
+        <div class="controls">
+          <label for="race-t">Iterations shown</label>
+          <input type="range" id="race-t" min="0" max="200" step="1" value="200">
+          <output id="race-t-out" for="race-t">200</output>
+          <button class="btn" id="race-run" type="button">Run</button>
+          <button class="btn" id="race-new" type="button">New shuffle</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">Cost J, path A</span><span class="v mine" id="race-ja">–</span></div>
+          <div><span class="k">Epochs used, A</span><span class="v" id="race-ea">–</span></div>
+          <div><span class="k">Cost J, path B</span><span class="v" id="race-jb">–</span></div>
+          <div><span class="k">Epochs used, B</span><span class="v" id="race-eb">–</span></div>
+        </div>
+        <div class="status" id="race-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="race-svg" viewBox="0 0 640 440" role="img" aria-label="Contour plot of the cost over w and b with the minimum marked. Two optimizer paths, A and B, run from the same start toward the minimum; dots mark their positions after the chosen number of iterations."></svg></div>
+        <figcaption><b>Seven optimizers on one cost surface</b> (synthetic). 1,000 records with \(x\) drawn around 1.5 and \(y = 2x - 1\) plus noise; cost \(J = \frac{1}{2n}\sum(y - \hat y)^2\); start \((w, b) = (1.3, 2.6)\). Update rules exactly as in the result boxes above, with \(\eta = 0.1\) for gradient descent, SGD, mini-batch SGD and momentum; \(\eta = 0.25\) for AdaGrad; \(\eta = 0.04\) for RMSProp; \(\eta = 0.08\) for Adam; \(\beta = 0.95\) for every average and \(\epsilon = 10^{-8}\). All averages start at 0, and Adam has no bias correction, as in the video. Every optimizer that uses mini-batches sees the same shuffled batches; "New shuffle" reshuffles. With these settings, one surface and one seed, the ranking is illustrative only.</figcaption>
+      </figure>
+
+      <p>Not in the video, for the practical parts that follow: in Keras the batch size is an argument of <code>fit</code> and the update rule is the optimizer passed to <code>compile</code>.</p>
+      <p class="code-cap">Keras · choosing the optimizer and the batch size (added for these notes)</p>
+      <pre class="codeblock"><code><span class="kw">from</span> tensorflow.keras <span class="kw">import</span> optimizers
+
+<span class="cm"># the update rule</span>
+opt = optimizers.SGD(learning_rate=<span class="kw">0.01</span>)                   <span class="cm"># plain (mini-batch) SGD</span>
+opt = optimizers.SGD(learning_rate=<span class="kw">0.01</span>, momentum=<span class="kw">0.9</span>)     <span class="cm"># SGD with momentum</span>
+opt = optimizers.Adagrad(learning_rate=<span class="kw">0.01</span>)
+opt = optimizers.Adadelta(learning_rate=<span class="kw">1.0</span>, rho=<span class="kw">0.95</span>)
+opt = optimizers.RMSprop(learning_rate=<span class="kw">0.001</span>, rho=<span class="kw">0.9</span>)
+opt = optimizers.Adam(learning_rate=<span class="kw">0.001</span>, beta_1=<span class="kw">0.9</span>, beta_2=<span class="kw">0.999</span>)
+model.compile(optimizer=opt, loss=<span class="kw">'mse'</span>)
+
+<span class="cm"># the batch size: n = len(X_train)</span>
+model.fit(X_train, y_train, epochs=<span class="kw">100</span>, batch_size=len(X_train))  <span class="cm"># gradient descent: 1 iteration per epoch</span>
+model.fit(X_train, y_train, epochs=<span class="kw">100</span>, batch_size=<span class="kw">1</span>)             <span class="cm"># SGD: n iterations per epoch</span>
+model.fit(X_train, y_train, epochs=<span class="kw">100</span>, batch_size=<span class="kw">32</span>)            <span class="cm"># mini-batch SGD: n/32 per epoch</span></code></pre>
+      <p class="note">Keras's <code>rho</code> plays the role of \(\beta\) in RMSProp and AdaDelta, and <code>beta_1</code>, <code>beta_2</code> are Adam's two decay rates. Its SGD momentum uses the library form without \((1-\beta)\) described under <a href="#momentum-rule">the momentum update</a>. Write only one <code>opt = …</code> line in real code; they are stacked here for comparison.</p>
+    </section>
+
+    <!-- ============ NEXT ============ -->
+    <section id="next">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12454s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:27:34</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12557s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:29:17 day 4 agenda</a>
+        </div>
+        <h2>Recap and what comes next</h2>
+      </div>
+      <p>The last minutes of this chapter belong to the next session, day 4 of the series. It opens with a recap of the optimizers: gradient descent, SGD, mini-batch SGD, SGD with momentum and the exponentially weighted average, AdaGrad and its adaptive learning rate, AdaDelta and RMSProp, and Adam, which uses the adaptive learning rate together with the exponentially weighted average.</p>
+      <p>The agenda for day 4 <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12557s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:29:17</a>:</p>
+      <ol>
+        <li>A practical ANN implementation. The data set is linked (on Google Drive) from the video's pinned comment, and the notebook runs in Google Colab. See <a href="krish-dl-06.html">Part 6</a>.</li>
+        <li>Early stopping, which answers how many epochs to train for <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12589s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:29:49</a>. For the IIT Madras treatment, see Lecture 6 (<a href="lecture-06.html#early-stopping">lecture-06.html</a>).</li>
+        <li>Black-box versus white-box models, and an introduction to CNNs. See <a href="krish-dl-07.html">Part 7</a>, and for the IIT Madras treatment of CNNs, Lecture 8 (<a href="lecture-08.html">lecture-08.html</a>).</li>
+      </ol>
+    </section>
+
+    <!-- ============ REVISION ============ -->
+    <section id="terms">
+      <div class="sec-head"><h2>Key terms</h2></div>
+      <dl class="terms">
+        <div><dt>Optimizer</dt><dd>The rule that updates weights and biases during backpropagation to reduce the cost; each one modifies \(w_t = w_{t-1} - \eta\,\partial L/\partial w_{t-1}\).</dd></div>
+        <div><dt>Learning rate \(\eta\)</dt><dd>The step size of the update. Fixed in gradient descent, SGD, mini-batch SGD and momentum; adapted per weight in AdaGrad, RMSProp and Adam.</dd></div>
+        <div><dt>Epoch</dt><dd>One pass of all \(n\) training records through forward and backward propagation.</dd></div>
+        <div><dt>Batch size</dt><dd>The number of records used for one weight update: \(n\) for gradient descent, 1 for SGD, in between for mini-batch SGD.</dd></div>
+        <div><dt>Iteration</dt><dd>One forward pass, cost, backward pass and weight update on one batch. An epoch has \(n/\text{batch size}\) of them.</dd></div>
+        <div><dt>Gradient descent</dt><dd>All records in every update: one iteration per epoch and a smooth path, but a huge memory requirement.</dd></div>
+        <div><dt>Stochastic gradient descent (SGD)</dt><dd>One record per update: little memory, \(n\) iterations per epoch, slow and very noisy convergence.</dd></div>
+        <div><dt>Mini-batch SGD</dt><dd>A batch of records (e.g. 1,000) per update: moderate memory, \(n/\text{batch size}\) iterations per epoch, some noise.</dd></div>
+        <div><dt>Noise</dt><dd>The zigzag of the path to the minimum caused by gradients computed on part of the data. Highest for SGD, lowest for gradient descent.</dd></div>
+        <div><dt>Exponentially weighted average</dt><dd>\(V_t = \beta V_{t-1} + (1-\beta)a_t\). The value \(k\) steps back has weight \((1-\beta)\beta^k\), so large \(\beta\) means heavy smoothing.</dd></div>
+        <div><dt>SGD with momentum</dt><dd>Mini-batch SGD that steps along \(V_{dw}\), the exponentially weighted average of the gradients, instead of the raw gradient.</dd></div>
+        <div><dt>AdaGrad</dt><dd>Adaptive rate \(\eta/\sqrt{\alpha_t + \epsilon}\) with \(\alpha_t\) the sum of all past squared gradients and \(\epsilon\) a small guard against division by zero. The rate can shrink until learning stops.</dd></div>
+        <div><dt>RMSProp, AdaDelta</dt><dd>Replace AdaGrad's sum by an exponentially weighted average \(S_{dw}\) of squared gradients, so the rate stays under control.</dd></div>
+        <div><dt>Adam</dt><dd>Momentum's \(V_{dw}\) over RMSProp's \(\sqrt{S_{dw} + \epsilon}\): \(w_t = w_{t-1} - \eta\,V_{dw}/\sqrt{S_{dw} + \epsilon}\).</dd></div>
+      </dl>
+    </section>
+
+    <section id="test">
+      <div class="sec-head"><h2>Test yourself</h2></div>
+      <div class="quiz">
+        <details><summary><span class="q">Q1</span><span>A data set has 50,000 records. How many iterations does one epoch take with gradient descent, with SGD, and with mini-batch SGD at batch size 250? How many in 20 epochs?</span><span class="tog"></span></summary>
+          <p>Gradient descent: 1 per epoch, 20 in total. SGD: 50,000 per epoch, 1,000,000 in total. Mini-batch SGD: \(50{,}000/250 = 200\) per epoch, 4,000 in total. In all three cases each record is used once per epoch; only the number of records per update changes.</p></details>
+        <details><summary><span class="q">Q2</span><span>Krish calls gradient descent resource intensive and SGD slow with high time complexity. Explain both, and where mini-batch SGD sits.</span><span class="tog"></span></summary>
+          <p>Gradient descent pushes all \(n\) records through one forward pass, so all of them must be in memory at once (huge RAM, GPUs), even though it makes just one update per epoch. SGD holds one record, but it needs \(n\) separate forward passes, backward passes and updates per epoch, each based on one noisy record, so it converges slowly. Mini-batch SGD holds one batch (e.g. 1,000 records), makes \(n/1{,}000\) updates per epoch and averages each gradient over enough records to keep the noise low.</p></details>
+        <details><summary><span class="q">Q3</span><span>Compute the exponentially weighted average of \(a = (10, 14, 6, 12)\) with \(V_1 = a_1\), for \(\beta = 0.5\) and for \(\beta = 0.9\). Which is smoother?</span><span class="tog"></span></summary>
+          <p>\(\beta = 0.5\): \(V_2 = 0.5\cdot 10 + 0.5\cdot 14 = 12\), \(V_3 = 0.5\cdot 12 + 0.5\cdot 6 = 9\), \(V_4 = 0.5\cdot 9 + 0.5\cdot 12 = 10.5\). \(\beta = 0.9\): \(V_2 = 9 + 1.4 = 10.4\), \(V_3 = 9.36 + 0.6 = 9.96\), \(V_4 = 8.964 + 1.2 = 10.164\). The data jump by up to 8. With \(\beta = 0.5\) the average still moves by 3; with \(\beta = 0.9\) it stays between 9.96 and 10.4. The larger \(\beta\) is smoother.</p></details>
+        <details><summary><span class="q">Q4</span><span>Unroll \(V_3\) with \(V_1 = a_1\). What weights do \(a_1\), \(a_2\), \(a_3\) get for \(\beta = 0.95\), and why is the average called exponentially weighted?</span><span class="tog"></span></summary>
+          <p>\(V_3 = \beta^2 a_1 + \beta(1-\beta)a_2 + (1-\beta)a_3\), so the weights are 0.9025, 0.0475 and 0.05, which add up to 1. In general the value \(k\) steps back gets \((1-\beta)\beta^k\): the weights decay as powers of \(\beta\), that is exponentially. The large weight on \(a_1\) comes from starting at \(V_1 = a_1\); it fades as \(\beta^{t-1}\).</p></details>
+        <details><summary><span class="q">Q5</span><span>One weight's gradients over three iterations are 2, 1 and 1. With \(\eta = 0.1\) and \(\epsilon\) negligible, find AdaGrad's learning rate at each step, then RMSProp's with \(\beta = 0.95\) and \(S_{dw_0} = 0\).</span><span class="tog"></span></summary>
+          <p>AdaGrad: \(\alpha = 4, 5, 6\), so \(\eta' = 0.1/2 = 0.050\), \(0.1/\sqrt5 = 0.045\), \(0.1/\sqrt6 = 0.041\). It keeps falling although the gradients did not grow. RMSProp: \(S_1 = 0.05\cdot 4 = 0.2\), \(S_2 = 0.95\cdot 0.2 + 0.05\cdot 1 = 0.24\), \(S_3 = 0.95\cdot 0.24 + 0.05 = 0.278\), so \(\eta' = 0.224\), \(0.204\), \(0.190\). \(S\) moves only slowly, so the rate barely changes. (Here it is even above \(\eta\), because \(S\) started at 0 and is still small, the start-up effect Adam's bias correction removes.)</p></details>
+        <details><summary><span class="q">Q6</span><span>Why can AdaGrad stop learning in a deep network, and what exactly do AdaDelta and RMSProp change to prevent it?</span><span class="tog"></span></summary>
+          <p>\(\alpha_t\) is a running sum of squares, so it never decreases. After many iterations it can be huge, \(\eta/\sqrt{\alpha_t + \epsilon}\) becomes negligible and \(w_t \approx w_{t-1}\). RMSProp (and AdaDelta as presented) replaces the sum by \(S_{dw_t} = \beta S_{dw_{t-1}} + (1-\beta)(\partial L/\partial w)^2\). Each new square enters with weight \(1 - \beta\) and old squares fade, so \(S_{dw}\) stays near the recent squared gradient and the rate does not collapse.</p></details>
+        <details><summary><span class="q">Q7</span><span>Write Adam's updates for a weight and a bias. Which parts come from SGD with momentum and which from RMSProp? What does the published Adam add?</span><span class="tog"></span></summary>
+          <p>\(w_t = w_{t-1} - \eta V_{dw_t}/\sqrt{S_{dw_t} + \epsilon}\) and \(b_t = b_{t-1} - \eta V_{db_t}/\sqrt{S_{db_t} + \epsilon}\), with \(V\) the exponentially weighted average of the gradients (from momentum, in the numerator) and \(S\) that of the squared gradients (from RMSProp, in the denominator), all starting at 0. The published Adam uses \(\beta_1 = 0.9\) for \(V\), \(\beta_2 = 0.999\) for \(S\), and divides them by \(1 - \beta_1^{\,t}\) and \(1 - \beta_2^{\,t}\) to correct their start at 0.</p></details>
+        <details><summary><span class="q">Q8</span><span>Interview question: "My mini-batch training is very noisy and slow to settle. What would you change?"</span><span class="tog"></span></summary>
+          <p>Krish's answer is to add a smoothing factor to the optimizer: use SGD with momentum (or Adam, which includes it). The exponentially weighted average of the gradients cancels the parts that flip from batch to batch and keeps the direction they agree on, so the path stops zigzagging. From the earlier comparison, a larger batch also reduces the noise, at the cost of more memory per update.</p></details>
+      </div>
+    </section>
+
+    <!-- PAGER:START --><nav class="pager" aria-label="Previous and next part"><a href="krish-dl-04.html"><span class="dir">← Part 4</span><span class="nm">Activation functions and loss functions</span></a><a class="next" href="krish-dl-06.html"><span class="dir">Part 6 →</span><span class="nm">Practical: building an ANN</span></a></nav><!-- PAGER:END -->
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the YouTube auto-generated captions of Krish Naik's video «Deep Learning In-depth Tutorials in 5 Hours». Timestamp links open the video at that moment. Code is reconstructed from the audio. Charts marked synthetic use data generated for these notes. Not affiliated with Krish Naik or IIT Madras.</div>
+</footer>
+
+<script src="notes.js"></script>
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const mkRand = s0 => { let seed = s0; return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
+  const mkNormal = rand => () => { let u = 0; while (u === 0) u = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rand()); };
+  const num = (v, d) => { const s = (Math.abs(v) < 0.5 * Math.pow(10, -d) ? 0 : v).toFixed(d); return s.replace('-', '−'); };
+  const pts = arr => arr.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+
+  /* ---------- Exponentially weighted average explorer ---------- */
+  (() => {
+    const svg = document.getElementById('ewa-svg'); if (!svg) return;
+    const bS = document.getElementById('ewa-beta'), bO = document.getElementById('ewa-beta-out'), zero = document.getElementById('ewa-zero');
+    const oW = document.getElementById('ewa-w'), oWin = document.getElementById('ewa-win'), oLag = document.getElementById('ewa-lag'), oGap = document.getElementById('ewa-gap');
+    const status = document.getElementById('ewa-status');
+    const T = 200, K = 40, X0 = 56, X1 = 620, Y0 = 30, Y1 = 236, BY0 = 300, BY1 = 362;
+    const sx = t => X0 + (t - 1) / (T - 1) * (X1 - X0);
+    let seed = 5, a = [], trend = [], lo = -3, hi = 4;
+    const sy = v => Y1 - (v - lo) / (hi - lo) * (Y1 - Y0);
+
+    const frame = mk('g', {}, svg);
+    const dots = mk('g', {}, svg);
+    const trendL = mk('polyline', { style: 'fill: none; stroke: var(--ink); stroke-width: 1.4; stroke-dasharray: 6 5' }, svg);
+    const vL = mk('polyline', { style: 'fill: none; stroke: var(--accent); stroke-width: 2.6; stroke-linejoin: round' }, svg);
+    /* legend */
+    mk('circle', { cx: 66, cy: 16, r: 3, style: 'fill: var(--muted)' }, svg); mk('text', { x: 74, y: 20, class: 'c-tick' }, svg).textContent = 'values aₜ';
+    mk('line', { x1: 150, y1: 16, x2: 174, y2: 16, style: 'stroke: var(--ink); stroke-width: 1.4; stroke-dasharray: 6 5' }, svg); mk('text', { x: 180, y: 20, class: 'c-tick' }, svg).textContent = 'trend';
+    mk('line', { x1: 230, y1: 16, x2: 254, y2: 16, style: 'stroke: var(--accent); stroke-width: 2.6' }, svg); mk('text', { x: 260, y: 20, class: 'c-tick' }, svg).textContent = 'weighted average Vₜ';
+    mk('text', { x: X1, y: Y1 + 26, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = 'time step t';
+    /* weights panel */
+    mk('text', { x: X0, y: BY0 - 12, class: 'c-title' }, svg).textContent = 'Weight that V₂₀₀ gives to each of the last 40 values (newest on the right)';
+    mk('line', { x1: X0, y1: BY1, x2: X1, y2: BY1, class: 'c-axis' }, svg);
+    const bw = (X1 - X0) / K;
+    const bars = []; for (let k = 0; k < K; k++) bars.push(mk('rect', { x: (X1 - (k + 1) * bw + 1.5).toFixed(1), width: (bw - 3).toFixed(1), style: 'fill: var(--accent)' }, svg));
+    mk('text', { x: X0, y: BY1 + 16, class: 'c-tick' }, svg).textContent = 'a₁₆₁';
+    mk('text', { x: X1, y: BY1 + 16, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = 'a₂₀₀';
+    const wTop = mk('text', { x: X1, y: BY0 + 2, 'text-anchor': 'end', class: 'c-tick' }, svg);
+
+    const gen = () => {
+      const nrm = mkNormal(mkRand(seed));
+      a = []; trend = [];
+      for (let t = 1; t <= T; t++) { const m = 1.4 * Math.sin(2 * Math.PI * (t - 20) / 300) + 0.6; trend.push(m); a.push(m + 0.9 * nrm()); }
+      lo = Math.floor(Math.min(...a)); hi = Math.ceil(Math.max(...a));
+      while (frame.firstChild) frame.removeChild(frame.firstChild);
+      const g = mk('g', { class: 'c-grid' }, frame);
+      for (let v = lo; v <= hi; v++) { mk('line', { x1: X0, x2: X1, y1: sy(v), y2: sy(v) }, g); mk('text', { x: X0 - 8, y: sy(v) + 4, 'text-anchor': 'end', class: 'c-tick' }, frame).textContent = num(v, 0); }
+      for (let t = 0; t <= T; t += 50) { const x = sx(Math.max(t, 1)); mk('line', { x1: x, x2: x, y1: Y0, y2: Y1 }, g); mk('text', { x, y: Y1 + 14, 'text-anchor': 'middle', class: 'c-tick' }, frame).textContent = String(Math.max(t, 1)); }
+      if (lo < 0 && hi > 0) mk('line', { x1: X0, x2: X1, y1: sy(0), y2: sy(0), class: 'c-axis' }, frame);
+      while (dots.firstChild) dots.removeChild(dots.firstChild);
+      a.forEach((v, i) => mk('circle', { cx: sx(i + 1).toFixed(1), cy: sy(v).toFixed(1), r: 2.4, style: 'fill: var(--muted); fill-opacity: .75' }, dots));
+      trendL.setAttribute('points', pts(trend.map((v, i) => [sx(i + 1), sy(v)])));
+    };
+
+    const draw = () => {
+      const beta = parseFloat(bS.value), z = zero.checked;
+      bO.textContent = beta.toFixed(2);
+      const V = []; let v = z ? 0 : a[0];
+      for (let t = 1; t <= T; t++) { if (z || t > 1) v = beta * v + (1 - beta) * a[t - 1]; V.push(v); }
+      vL.setAttribute('points', pts(V.map((q, i) => [sx(i + 1), sy(Math.max(lo, Math.min(hi, q)))])));
+      const gap = Math.sqrt(V.reduce((s, q, i) => s + (q - trend[i]) ** 2, 0) / T);
+      const w = k => (1 - beta) * Math.pow(beta, k);
+      const wMax = w(0) || 1;
+      for (let k = 0; k < K; k++) { const h = (w(k) / wMax) * (BY1 - BY0 - 8); bars[k].setAttribute('y', (BY1 - h).toFixed(1)); bars[k].setAttribute('height', Math.max(0, h).toFixed(1)); }
+      wTop.textContent = 'tallest bar = ' + num(wMax, 2);
+      oW.textContent = num(1 - beta, 2);
+      oWin.textContent = beta >= 0.995 ? '–' : num(1 / (1 - beta), 0);
+      oLag.textContent = num(beta / (1 - beta), 0);
+      oGap.textContent = num(gap, 2);
+      let s;
+      if (beta < 0.05) s = 'With β = 0 the average is just the newest value, so it copies every bit of noise.';
+      else if (beta < 0.6) s = 'Light smoothing: the newest value still gets ' + Math.round((1 - beta) * 100) + '% of the weight, so V follows most of the noise.';
+      else if (beta < 0.9) s = 'Moderate smoothing: V follows the trend and ignores much of the noise.';
+      else if (beta <= 0.96) s = 'Strong smoothing (Krish\'s example uses β = 0.95): V averages about ' + num(1 / (1 - beta), 0) + ' values and ignores most of the noise, at the price of running about ' + num(beta / (1 - beta), 0) + ' steps behind the trend.';
+      else s = 'Very strong smoothing: V is very smooth but falls about ' + num(beta / (1 - beta), 0) + ' steps behind the trend, so the gap grows again.';
+      const first = Math.pow(beta, T - 1);
+      if (z) s += ' Starting from V₀ = 0 pulls the first values of V toward 0; after t steps the weights add up to only 1 − βᵗ (' + Math.round((1 - Math.pow(beta, 10)) * 100) + '% at t = 10).';
+      else if (first > 0.02) s += ' Because V₁ = a₁, the first value still carries ' + Math.round(first * 100) + '% of the weight in V₂₀₀.';
+      status.textContent = s;
+    };
+    bS.addEventListener('input', draw);
+    zero.addEventListener('change', draw);
+    document.getElementById('ewa-new').addEventListener('click', () => { seed++; gen(); draw(); });
+    gen(); draw();
+  })();
+
+  /* ---------- Seven optimizers on one regression cost ---------- */
+  (() => {
+    const svg = document.getElementById('race-svg'); if (!svg) return;
+    const selA = document.getElementById('race-a'), selB = document.getElementById('race-b'), selBS = document.getElementById('race-bs');
+    const tS = document.getElementById('race-t'), tO = document.getElementById('race-t-out');
+    const oJA = document.getElementById('race-ja'), oEA = document.getElementById('race-ea'), oJB = document.getElementById('race-jb'), oEB = document.getElementById('race-eb');
+    const status = document.getElementById('race-status'), runB = document.getElementById('race-run');
+    const N = 1000, T = 200, START = [1.3, 2.6];
+    /* data: x around 1.5, y = 2x - 1 + noise */
+    const nrm = mkNormal(mkRand(7)); const X = [], Y = [];
+    for (let i = 0; i < N; i++) { const x = 1.5 + nrm(); X.push(x); Y.push(2 * x - 1 + 0.8 * nrm()); }
+    let Sxx = 0, Sx = 0, Sxy = 0, Sy = 0, Syy = 0;
+    for (let i = 0; i < N; i++) { Sxx += X[i] * X[i]; Sx += X[i]; Sxy += X[i] * Y[i]; Sy += Y[i]; Syy += Y[i] * Y[i]; }
+    const det = Sxx * N - Sx * Sx, WS = (N * Sxy - Sx * Sy) / det, BSTAR = (Sxx * Sy - Sx * Sxy) / det;
+    const J = (w, b) => (w * w * Sxx + 2 * w * b * Sx + N * b * b - 2 * w * Sxy - 2 * b * Sy + Syy) / (2 * N);
+    const JMIN = J(WS, BSTAR);
+    const all = Array.from({ length: N }, (_, i) => i);
+    const grad = (w, b, idx) => { let gw = 0, gb = 0; for (const i of idx) { const e = w * X[i] + b - Y[i]; gw += e * X[i]; gb += e; } return [gw / idx.length, gb / idx.length]; };
+    const OPT = {
+      gd: { name: 'Gradient descent', kind: 'plain', eta: 0.1, batch: () => N, say: 'Gradient descent uses all 1,000 records in every update: the smoothest path, but every iteration is a whole epoch.' },
+      sgd: { name: 'SGD', kind: 'plain', eta: 0.1, batch: () => 1, say: 'SGD uses one record per update: each step is cheap, but the path jumps around and keeps wandering near the minimum.' },
+      mini: { name: 'Mini-batch SGD', kind: 'plain', eta: 0.1, batch: m => m, say: 'Mini-batch SGD averages each gradient over a batch: far less noise than SGD, but the path still jitters.' },
+      mom: { name: 'SGD with momentum', kind: 'mom', eta: 0.1, batch: m => m, say: 'Momentum steps along the weighted average of the mini-batch gradients: the jitter disappears and the path swings in one smooth curve.' },
+      adagrad: { name: 'AdaGrad', kind: 'adagrad', eta: 0.25, batch: m => m, say: 'AdaGrad\'s rate shrinks as the squared gradients pile up in α, so its steps get shorter and shorter and it slows down before reaching the minimum.' },
+      rms: { name: 'RMSProp', kind: 'rms', eta: 0.04, batch: m => m, say: 'RMSProp keeps its rate under control, so it keeps moving, but it uses the raw gradient and jitters near the minimum.' },
+      adam: { name: 'Adam', kind: 'adam', eta: 0.08, batch: m => m, say: 'Adam combines momentum\'s smoothing with RMSProp\'s rate: a smooth path that keeps its pace.' }
+    };
+    const BETA = 0.95, EPS = 1e-8;
+    let seed = 3, paths = {}, timer = null;
+    const run = (key, m) => {
+      const o = OPT[key], bs = o.batch(m), rr = mkRand(seed);
+      let order = [], pos = N;
+      const shuffle = () => { order = all.slice(); for (let i = N - 1; i > 0; i--) { const j = Math.floor(rr() * (i + 1)); const tmp = order[i]; order[i] = order[j]; order[j] = tmp; } pos = 0; };
+      const batch = k => { if (k >= N) return all; if (pos + k > N) shuffle(); const b = order.slice(pos, pos + k); pos += k; return b; };
+      let w = START[0], b = START[1], V = [0, 0], S = [0, 0], A = [0, 0];
+      const path = [[w, b]];
+      for (let t = 1; t <= T; t++) {
+        const g = grad(w, b, batch(bs)); let d;
+        if (o.kind === 'plain') d = [o.eta * g[0], o.eta * g[1]];
+        else if (o.kind === 'mom') { V = [BETA * V[0] + (1 - BETA) * g[0], BETA * V[1] + (1 - BETA) * g[1]]; d = [o.eta * V[0], o.eta * V[1]]; }
+        else if (o.kind === 'adagrad') { A = [A[0] + g[0] * g[0], A[1] + g[1] * g[1]]; d = [o.eta / Math.sqrt(A[0] + EPS) * g[0], o.eta / Math.sqrt(A[1] + EPS) * g[1]]; }
+        else if (o.kind === 'rms') { S = [BETA * S[0] + (1 - BETA) * g[0] * g[0], BETA * S[1] + (1 - BETA) * g[1] * g[1]]; d = [o.eta / Math.sqrt(S[0] + EPS) * g[0], o.eta / Math.sqrt(S[1] + EPS) * g[1]]; }
+        else { V = [BETA * V[0] + (1 - BETA) * g[0], BETA * V[1] + (1 - BETA) * g[1]]; S = [BETA * S[0] + (1 - BETA) * g[0] * g[0], BETA * S[1] + (1 - BETA) * g[1] * g[1]]; d = [o.eta / Math.sqrt(S[0] + EPS) * V[0], o.eta / Math.sqrt(S[1] + EPS) * V[1]]; }
+        w -= d[0]; b -= d[1]; path.push([w, b]);
+      }
+      return { path, bs };
+    };
+    const compute = () => { const m = parseInt(selBS.value, 10); paths = {}; Object.keys(OPT).forEach(k => { paths[k] = run(k, m); }); };
+
+    /* chart */
+    const W0 = -0.3, W1 = 3.2, B0 = -2.2, B1 = 3.2, PX0 = 56, PX1 = 620, PY0 = 16, PY1 = 400;
+    const sx = w => PX0 + (w - W0) / (W1 - W0) * (PX1 - PX0), sy = b => PY1 - (b - B0) / (B1 - B0) * (PY1 - PY0);
+    const defs = mk('defs', {}, svg);
+    const cp = mk('clipPath', { id: 'kdl05-race-clip' }, defs); mk('rect', { x: PX0, y: PY0, width: PX1 - PX0, height: PY1 - PY0 }, cp);
+    mk('rect', { x: PX0, y: PY0, width: PX1 - PX0, height: PY1 - PY0, style: 'fill: none; stroke: var(--rule)' }, svg);
+    const grid = mk('g', { class: 'c-grid' }, svg);
+    [0, 1, 2, 3].forEach(w => { mk('line', { x1: sx(w), x2: sx(w), y1: PY0, y2: PY1 }, grid); mk('text', { x: sx(w), y: PY1 + 16, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = String(w); });
+    [-2, -1, 0, 1, 2, 3].forEach(b => { mk('line', { x1: PX0, x2: PX1, y1: sy(b), y2: sy(b) }, grid); mk('text', { x: PX0 - 8, y: sy(b) + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = num(b, 0); });
+    mk('text', { x: PX1, y: PY1 + 34, 'text-anchor': 'end', class: 'c-title' }, svg).textContent = 'w (slope of the fitted line)';
+    mk('text', { x: 16, y: (PY0 + PY1) / 2, 'text-anchor': 'middle', class: 'c-title', transform: 'rotate(-90 16 ' + (PY0 + PY1) / 2 + ')' }, svg).textContent = 'b (bias)';
+    /* contours: ellipses of equal cost */
+    const hww = Sxx / N, hwb = Sx / N, tr = hww + 1, dt = hww - hwb * hwb, disc = Math.sqrt(tr * tr / 4 - dt);
+    const l1 = tr / 2 + disc, l2 = tr / 2 - disc, v1 = [hwb, l1 - hww], n1 = Math.hypot(v1[0], v1[1]), e1 = [v1[0] / n1, v1[1] / n1], e2 = [-e1[1], e1[0]];
+    const cg = mk('g', { 'clip-path': 'url(#kdl05-race-clip)' }, svg);
+    [0.05, 0.25, 0.6, 1.1, 1.8, 2.7, 3.8, 5.2].forEach(c => {
+      const ra = Math.sqrt(2 * c / l1), rb = Math.sqrt(2 * c / l2), ring = [];
+      for (let k = 0; k < 64; k++) { const th = 2 * Math.PI * k / 64, u = ra * Math.cos(th), v = rb * Math.sin(th); ring.push([sx(WS + u * e1[0] + v * e2[0]), sy(BSTAR + u * e1[1] + v * e2[1])]); }
+      mk('polygon', { points: pts(ring), style: 'fill: none; stroke: var(--muted); stroke-opacity: .45; stroke-width: 1' }, cg);
+    });
+    const pg = mk('g', { 'clip-path': 'url(#kdl05-race-clip)' }, svg);
+    const lineB = mk('polyline', { class: 'c-path-b' }, pg), lineA = mk('polyline', { class: 'c-path-a' }, pg);
+    mk('circle', { cx: sx(WS), cy: sy(BSTAR), r: 6, class: 'c-centroid' }, svg);
+    mk('text', { x: sx(WS) + 10, y: sy(BSTAR) + 20, class: 'c-note' }, svg).textContent = 'minimum';
+    mk('circle', { cx: sx(START[0]), cy: sy(START[1]), r: 5.5, style: 'fill: var(--surface); stroke: var(--ink); stroke-width: 1.6' }, svg);
+    mk('text', { x: sx(START[0]) + 10, y: sy(START[1]) - 8, class: 'c-note' }, svg).textContent = 'start';
+    const dotB = mk('circle', { r: 5, style: 'fill: var(--ink-2); stroke: var(--surface); stroke-width: 1.5' }, svg);
+    const dotA = mk('circle', { r: 6, style: 'fill: var(--accent); stroke: var(--surface); stroke-width: 1.5' }, svg);
+    /* legend */
+    mk('rect', { x: PX1 - 214, y: PY0 + 10, width: 204, height: 52, rx: 6, style: 'fill: var(--surface); stroke: var(--rule)' }, svg);
+    mk('line', { x1: PX1 - 202, y1: PY0 + 28, x2: PX1 - 178, y2: PY0 + 28, style: 'stroke: var(--accent); stroke-width: 2.4' }, svg);
+    const legLineB = mk('line', { x1: PX1 - 202, y1: PY0 + 48, x2: PX1 - 178, y2: PY0 + 48, style: 'stroke: var(--ink-2); stroke-width: 1.4' }, svg);
+    const legA = mk('text', { x: PX1 - 170, y: PY0 + 32, class: 'c-note' }, svg), legB = mk('text', { x: PX1 - 170, y: PY0 + 52, class: 'c-note' }, svg);
+
+    const epochs = (t, bs) => { const e = t * bs / N; return e === 0 ? '0' : e < 1 ? num(e, e < 0.1 ? 3 : 2) : num(e, Number.isInteger(e) ? 0 : 1); };
+    const label = (k, m) => OPT[k].name + (k === 'gd' ? ' (1,000)' : k === 'sgd' ? ' (1)' : ' (' + m + ')');
+    const draw = () => {
+      const t = parseInt(tS.value, 10), m = parseInt(selBS.value, 10), ka = selA.value, kb = selB.value;
+      tO.textContent = String(t);
+      const A = paths[ka], pa = A.path.slice(0, t + 1);
+      lineA.setAttribute('points', pts(pa.map(p => [sx(p[0]), sy(p[1])])));
+      dotA.setAttribute('cx', sx(pa[t][0]).toFixed(1)); dotA.setAttribute('cy', sy(pa[t][1]).toFixed(1));
+      legA.textContent = 'A: ' + label(ka, m);
+      const ja = J(pa[t][0], pa[t][1]);
+      oJA.textContent = num(ja, 3); oEA.textContent = epochs(t, A.bs);
+      let sB = '';
+      if (kb === 'none') {
+        lineB.setAttribute('visibility', 'hidden'); dotB.setAttribute('visibility', 'hidden'); legLineB.setAttribute('visibility', 'hidden'); legB.textContent = 'B: none';
+        oJB.textContent = '–'; oEB.textContent = '–';
+      } else {
+        const B = paths[kb], pb = B.path.slice(0, t + 1), jb = J(pb[t][0], pb[t][1]);
+        lineB.setAttribute('visibility', 'visible'); dotB.setAttribute('visibility', 'visible'); legLineB.setAttribute('visibility', 'visible');
+        lineB.setAttribute('points', pts(pb.map(p => [sx(p[0]), sy(p[1])])));
+        dotB.setAttribute('cx', sx(pb[t][0]).toFixed(1)); dotB.setAttribute('cy', sy(pb[t][1]).toFixed(1));
+        legB.textContent = 'B: ' + label(kb, m);
+        oJB.textContent = num(jb, 3); oEB.textContent = epochs(t, B.bs);
+        sB = ', B ' + num(jb, 3) + ' after ' + epochs(t, B.bs) + ' epochs';
+      }
+      status.textContent = OPT[ka].say + ' At t = ' + t + ': cost of A ' + num(ja, 3) + ' after ' + epochs(t, A.bs) + ' epochs' + sB + '. The lowest possible cost is ' + num(JMIN, 3) + '.';
+    };
+    const stop = () => { if (timer) { cancelAnimationFrame(timer); timer = null; } runB.textContent = 'Run'; };
+    const play = () => {
+      stop();
+      if (reduce) { tS.value = String(T); draw(); return; }
+      tS.value = '0'; draw(); runB.textContent = 'Running…';
+      let last = 0;
+      const tick = ts => { if (ts - last > 18) { last = ts; const t = parseInt(tS.value, 10) + 1; tS.value = String(t); draw(); if (t >= T) { stop(); return; } } timer = requestAnimationFrame(tick); };
+      timer = requestAnimationFrame(tick);
+    };
+    selA.addEventListener('change', draw);
+    selB.addEventListener('change', draw);
+    selBS.addEventListener('change', () => { compute(); draw(); });
+    tS.addEventListener('input', () => { stop(); draw(); });
+    runB.addEventListener('click', play);
+    document.getElementById('race-new').addEventListener('click', () => { stop(); seed++; compute(); draw(); });
+    compute(); draw();
+  })();
+})();
+</script>
+</body>
+</html>
