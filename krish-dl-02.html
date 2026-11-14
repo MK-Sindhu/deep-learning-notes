@@ -1,0 +1,992 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DL in 5 hours · Part 2 · Weights, bias and backpropagation · DL Notes</title>
+<meta name="description" content="Notes on Krish Naik's Deep Learning In-depth Tutorials in 5 Hours, Part 2: what a neuron computes with weights and a bias, the sigmoid activation, forward propagation, the loss, backpropagation with an optimizer, multi-layer networks, and the weight update w_new = w_old − η ∂L/∂w with the learning rate.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<script src="theme.js"></script>
+<style>
+.btn.tog { padding: 8px 12px; font-family: var(--font-mono); font-weight: 500; }
+.btn.tog[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.controls select { font: 500 14px/1.3 var(--font-head); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 10px; }
+.fn-table { min-width: 620px; }
+.fn-table th, .fn-table td { text-align: center; padding: 7px 5px; font-family: var(--font-mono); font-size: 13px; }
+.fn-table th:first-child, .fn-table td:first-child { text-align: left; white-space: nowrap; padding-left: 12px; font-family: var(--font-head); }
+.fn-table .ns { background: var(--accent-soft); }
+#mp-svg .hit { cursor: pointer; }
+</style>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <!-- PARTNAV:START --><nav class="partnav" aria-label="Parts"><a href="index.html#extra">All notes</a><span class="sep">/</span><span>DL in 5 hours · Part 2 of 7</span><span class="sep">·</span><a href="krish-dl-01.html">← Part 1</a></nav><!-- PARTNAV:END -->
+    <div class="eyebrow">Krish Naik · Deep Learning In-depth Tutorials in 5 Hours</div>
+    <h1>Weights and bias, forward and backward propagation</h1>
+    <p class="lede">Every neuron adds up its inputs multiplied by weights, plus a bias, and passes the sum through an activation function such as the sigmoid. Forward propagation runs this up to the prediction, the loss measures how wrong the prediction is, and backpropagation lowers the loss by moving each weight with \(w_{\text{new}} = w_{\text{old}} - \eta\,\partial L/\partial w_{\text{old}}\).</p>
+    <div class="meta">
+      <span><b>Part 2</b> of 7</span>
+      <span>Teacher <b>Krish Naik</b></span>
+      <span>About <b>48 min</b> of video</span>
+      <span><b>2</b> chapters</span>
+    </div>
+    <div class="watch">
+      <a class="btn solid" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1827s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>30:27 · Perceptron with weights and bias</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=3621s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:00:21 · Forward and backward propagation</a>
+    </div>
+  </div>
+</header>
+
+<div class="page gutter">
+  <nav class="toc" aria-label="Contents">
+    <div>
+      <h4>30:27 · Weights and bias</h4>
+      <ul>
+        <li><a href="#neuron">Inside a neuron</a></li>
+        <li><a href="#weights">What weights do</a></li>
+        <li><a href="#bias">Why a bias</a></li>
+        <li><a href="#activation">The activation function</a></li>
+        <li><a href="#forward">Forward propagation</a></li>
+        <li><a href="#loss">The loss</a></li>
+        <li><a href="#backprop">Backpropagation, optimizers</a></li>
+        <li><a href="#story">Training in five steps</a></li>
+        <li><a href="#multilayer">Multi-layer networks</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>1:00:21 · Weight update</h4>
+      <ul>
+        <li><a href="#recap">Day 2 recap</a></li>
+        <li><a href="#update-rule">The update formula</a></li>
+        <li><a href="#slope-sign">Why it moves the right way</a></li>
+        <li><a href="#learning-rate">The learning rate</a></li>
+        <li><a href="#one-step">One full step, live</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Revision</h4>
+      <ul>
+        <li><a href="#terms">Key terms</a></li>
+        <li><a href="#test">Test yourself</a></li>
+        <li><a href="index.html#extra">All notes</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="glance" id="glance">
+      <h2>At a glance</h2>
+      <ul>
+        <li>Two steps happen inside every neuron. Step 1 is the weighted sum plus a bias, \(z = \sum_i x_i w_i + b = \mathbf{w}^\top\mathbf{x} + b\), the same form as linear regression. Step 2 is an activation function. The <b>sigmoid</b> \(\sigma(z) = 1/(1 + e^{-z})\) gives a value between 0 and 1, read as class 1 when it is at least 0.5. A regression output uses a linear activation.</li>
+        <li><b>Weights</b> decide how strongly each input activates a neuron, like the nerves that make only the hand holding something hot pull away. The <b>bias</b> is a constant, the counterpart of an intercept, added in every layer. Krish motivates it with weights that start at 0.</li>
+        <li><b>Forward propagation</b> runs inputs × weights + bias → activation, layer by layer, up to the prediction \(\hat y\). The <b>loss</b> measures the gap to the truth. The first student in the data passed (\(y = 1\)) but is predicted 0, so \(y - \hat y = 1\).</li>
+        <li><b>Backpropagation</b> lowers the loss by updating every weight with an optimizer such as gradient descent, \(w_{\text{new}} = w_{\text{old}} - \eta\,\partial L/\partial w_{\text{old}}\). A negative slope makes the weight grow and a positive slope makes it shrink, so either way it moves toward the global minimum.</li>
+        <li>The <b>learning rate</b> \(\eta\) should be small, such as 0.001 or 0.01, so that the weights converge. A large one jumps around the minimum. Training repeats forward and backward passes many times, and a multi-layer network runs the same steps in every layer. The chain rule that computes \(\partial L/\partial w\) is the subject of Part 3.</li>
+      </ul>
+    </div>
+
+    <!-- ============ CHAPTER 1 · PERCEPTRON WITH WEIGHTS AND BIAS ============ -->
+    <section id="neuron">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1827s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>30:27</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1910s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>31:50 the data set</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1976s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>32:56 every input to every neuron</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2074s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>34:34 the weighted sum</a>
+        </div>
+        <h2>What happens inside a neuron</h2>
+      </div>
+      <p>Part 1 (<a href="krish-dl-01.html">krish-dl-01.html</a>) ended with the layers of a network: an input layer, an output layer and, between them, any number of hidden layers. Each hidden layer can have its own number of neurons, for example five to ten in the first and a hundred in the next, and the signal passes from neuron to neuron. This part asks what a neuron does with the signal it receives, and what the lines between neurons are for.</p>
+      <p>The example is the student data set from Part 1. For each student it records hours of study, play and sleep, and whether the student passed (1) or failed (0). The first record is study 7, play 3, sleep 7, passed. Its three values enter the input layer as \(x_1, x_2, x_3\), one record at a time. Krish first draws two neurons in the hidden layer and stresses that every input is connected to every neuron, the way brain cells pass signals on <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1976s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>32:56</a>. Each connection carries a weight. To keep the drawing readable he then reduces the hidden layer to one large neuron, with room for the two operations that happen inside it, followed by one output neuron.</p>
+      <p><b>Step 1 is the weighted sum.</b> Multiply each input by the weight on its connection and add the products <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2074s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>34:34</a>:</p>
+      <div class="eq">\[ \sum_{i=1}^{3} x_i w_i = x_1 w_1 + x_2 w_2 + x_3 w_3 = \mathbf{w}^\top\mathbf{x} \]</div>
+      <p>This has the same form as linear regression, written as \(\beta_0 + \beta_1 x\), as \(\boldsymbol\beta^\top\mathbf{x}\) or as \(y = mx + c\) <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2136s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>35:36</a>. A bias \(b\) is added to it shortly and plays the part of the intercept. <b>Step 2</b> passes the result to an activation function. Before step 2, Krish explains what the weights and the bias are for.</p>
+      <p class="note">Notation. In the video the weighted sum is called \(y\) on day 1, and on day 2 the activated value is called \(z\). These notes keep \(y\) for the true label, write \(z\) for the weighted sum, and write \(O_1\) for the hidden neuron's output, as Krish does on day 1.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 300" role="img" aria-label="Three inputs, study 7, play 3 and sleep 7, connect through weights w1, w2 and w3 to one hidden neuron drawn as a box with two halves. The left half, step 1, computes the weighted sum of the inputs plus the bias b, which enters from above. The right half, step 2, applies the activation sigma. The neuron's output O1 goes through weight w4 to an output neuron that repeats the two steps and produces y hat.">
+            <defs>
+              <marker id="kdl02-f1-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="kdl02-f1-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <text class="d-row" x="120" y="20" text-anchor="middle">input layer</text>
+            <text class="d-row" x="350" y="20" text-anchor="middle">hidden layer 1 (one neuron)</text>
+            <text class="d-row" x="540" y="20" text-anchor="middle">output layer</text>
+
+            <circle class="node" cx="120" cy="70" r="20"/><text class="d-t" x="120" y="75" text-anchor="middle">x₁</text>
+            <circle class="node" cx="120" cy="140" r="20"/><text class="d-t" x="120" y="145" text-anchor="middle">x₂</text>
+            <circle class="node" cx="120" cy="210" r="20"/><text class="d-t" x="120" y="215" text-anchor="middle">x₃</text>
+            <text class="d-s" x="92" y="67" text-anchor="end">study</text><text class="d-al" x="92" y="81" text-anchor="end">7 h</text>
+            <text class="d-s" x="92" y="137" text-anchor="end">play</text><text class="d-al" x="92" y="151" text-anchor="end">3 h</text>
+            <text class="d-s" x="92" y="207" text-anchor="end">sleep</text><text class="d-al" x="92" y="221" text-anchor="end">7 h</text>
+
+            <line class="d-ln" x1="138.3" y1="78.1" x2="260" y2="124" marker-end="url(#kdl02-f1-ah)"/>
+            <line class="d-ln" x1="140" y1="140" x2="260" y2="140" marker-end="url(#kdl02-f1-ah)"/>
+            <line class="d-ln" x1="138.3" y1="201.9" x2="260" y2="156" marker-end="url(#kdl02-f1-ah)"/>
+            <text class="d-t" x="196" y="91" text-anchor="middle">w₁</text>
+            <text class="d-t" x="200" y="133" text-anchor="middle">w₂</text>
+            <text class="d-t" x="196" y="200" text-anchor="middle">w₃</text>
+
+            <circle class="node" cx="306" cy="58" r="14"/><text class="d-t" x="306" y="63" text-anchor="middle">b</text>
+            <text class="d-s" x="326" y="62">bias</text>
+            <line class="d-ln" x1="306" y1="72" x2="306" y2="97" marker-end="url(#kdl02-f1-ah)"/>
+
+            <rect class="d-box-acc" x="262" y="100" width="176" height="80" rx="10"/>
+            <line class="d-ln d-dash" x1="350" y1="104" x2="350" y2="176"/>
+            <text class="d-t" x="306" y="132" text-anchor="middle">Σ xᵢwᵢ + b</text>
+            <text class="d-s" x="306" y="152" text-anchor="middle">step 1</text>
+            <text class="d-s" x="306" y="166" text-anchor="middle">weighted sum</text>
+            <text class="d-t" x="394" y="132" text-anchor="middle">σ(z)</text>
+            <text class="d-s" x="394" y="152" text-anchor="middle">step 2</text>
+            <text class="d-s" x="394" y="166" text-anchor="middle">activation</text>
+
+            <line class="d-ln-acc" x1="438" y1="140" x2="514" y2="140" marker-end="url(#kdl02-f1-aha)"/>
+            <text class="d-t" x="476" y="132" text-anchor="middle">w₄</text>
+            <text class="d-al" x="476" y="156" text-anchor="middle">O₁ = σ(z)</text>
+            <circle class="node-acc" cx="540" cy="140" r="24"/><text class="d-t" x="540" y="145" text-anchor="middle">Σ, σ</text>
+            <text class="d-s" x="540" y="184" text-anchor="middle">the same</text>
+            <text class="d-s" x="540" y="198" text-anchor="middle">two steps</text>
+            <line class="d-ln" x1="564" y1="140" x2="604" y2="140" marker-end="url(#kdl02-f1-ah)"/>
+            <text class="d-t" x="610" y="145">ŷ</text>
+
+            <text class="d-t" x="20" y="256">step 1: z = x₁w₁ + x₂w₂ + x₃w₃ + b = wᵀx + b</text>
+            <text class="d-t" x="20" y="276">step 2: O₁ = σ(z), sent on to the output neuron through w₄</text>
+            <text class="d-s" x="20" y="294">first record: x = (7, 3, 7), true label y = 1 (pass)</text>
+          </svg>
+        </div>
+        <figcaption><b>The two steps inside a neuron</b>, redrawn from Krish's whiteboard. Each input is multiplied by the weight on its connection. The hidden neuron adds the products and the bias (step 1) and applies an activation function (step 2). Its output \(O_1\) travels to the output neuron through \(w_4\), where the same two steps produce the prediction \(\hat y\).</figcaption>
+      </figure>
+      <p class="note">For the IIT Madras treatment, see Lecture 2 (<a href="lecture-02.html#perceptron">lecture-02.html</a>), where the perceptron gets weights and a bias, and Lecture 4 (<a href="lecture-04.html#forward">lecture-04.html</a>) for the pre-activation and activation of a neuron.</p>
+    </section>
+
+    <section id="weights">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2169s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>36:09</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2203s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>36:43 the hot object</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2269s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>37:49 weights in training</a>
+        </div>
+        <h2>What the weights do</h2>
+      </div>
+      <p>Krish's analogy: if someone puts a hot object in your right hand, you pull the right hand away and leave the left hand where it is. The neurons on the path from the right hand pass the signal to the brain and get activated, and the ones for the left hand do not. In a network the weights play this role. They decide whether a neuron is activated, and to what level.</p>
+      <p>In his words, a weight says "how much the neuron should get activated or deactivated". Training a network means finding the value of each weight that makes the right neurons fire to the right degree. He offers this as the simplest way to understand weights, and the explanation he would give in a job interview.</p>
+    </section>
+
+    <section id="bias">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2300s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>38:20</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2334s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>38:54 the bias</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2399s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>39:59 in every hidden layer</a>
+        </div>
+        <h2>Why a bias is added</h2>
+      </div>
+      <p>Suppose the weights start at 0, which is one possible starting point among several. Then \(x_1 \cdot 0\), \(x_2 \cdot 0\) and \(x_3 \cdot 0\) are all 0, and the neuron passes on nothing but 0. To avoid that, a second kind of parameter is added, the <dfn>bias</dfn> \(b\). It is a constant, the counterpart of the intercept \(c\) in \(y = mx + c\). Even if every weight was initialized to 0, the bias keeps the value away from 0, so training can carry on and the weights can be updated later.</p>
+      <p>Answering a viewer's question, he adds that a bias is needed in every hidden layer. Step 1 therefore becomes</p>
+      <div class="result">
+        <span class="lbl">Step 1 with the bias</span>
+        \[ z = \sum_{i=1}^{n} x_i w_i + b = \mathbf{w}^\top\mathbf{x} + b \]
+      </div>
+      <p class="callout"><b>Not in the video:</b> the usual reasons. A bias lets a neuron shift the point where it switches on. Without it the weighted sum is 0 whenever every input is 0, just as a line without an intercept must pass through the origin. A weighted sum of 0 does not stop the signal either, since the sigmoid turns it into 0.5. Starting every weight at 0 has a different problem. The neurons of a hidden layer then start identical, receive identical updates and stay identical, and a bias does not change that. This is why weights start at small random values, as Krish says on day 2. Lecture 7 (<a href="lecture-07.html#zero-init">lecture-07.html</a>) covers it.</p>
+    </section>
+
+    <section id="activation">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2432s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>40:32 sigmoid</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2496s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>41:36 the 0.5 threshold</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2559s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>42:39 the next layer</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2590s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>43:10 linear activation</a>
+        </div>
+        <h2>Step 2: the activation function</h2>
+      </div>
+      <p>The weighted sum \(z\) goes into an <dfn>activation function</dfn>, which decides whether the neuron is activated or not, like the hand that moves or stays still. Krish's first example is the <dfn>sigmoid activation function</dfn>, used for binary classification. ReLU and the other activation functions come later, in Part 4 (<a href="krish-dl-04.html">krish-dl-04.html</a>).</p>
+      <div class="result">
+        <span class="lbl">Sigmoid activation</span>
+        \[ \sigma(z) = \frac{1}{1 + e^{-z}}, \qquad z = \sum_i x_i w_i + b \]
+      </div>
+      <p>The sigmoid's output lies between 0 and 1. (Krish first says it outputs 0 or 1, then corrects himself.) To get a class, a threshold is applied <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2496s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>41:36</a>:</p>
+      <div class="eq">\[ \text{class} = \begin{cases} 1 & \text{if } \sigma(z) \ge 0.5 \\ 0 & \text{if } \sigma(z) &lt; 0.5 \end{cases} \]</div>
+      <p>The two steps happen in every neuron. The hidden neuron's output \(O_1 = \sigma(z)\) travels to the output neuron along a new weight \(w_4\). There the same two steps run again, a weighted sum and an activation, and the network's final output is 0 or 1. For binary classification the output neuron uses the sigmoid. For regression it uses a <dfn>linear activation function</dfn>, which leaves the weighted sum as it is.</p>
+      <p>At this point Krish lists the terms met so far: neurons, weights, bias, hidden layers and activation functions.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 262" role="img" aria-label="Left: the sigmoid curve for z from minus 6 to 6, rising from 0 to 1 and crossing 0.5 at z equals 0. The region z at least 0 is shaded and labelled class 1, the rest is class 0. A marked point at z equals minus 0.5 has sigmoid 0.38, class 0. Right: the linear activation f of z equals z, a straight line through the origin.">
+            <text class="d-h" x="50" y="24">Sigmoid: binary classification</text>
+            <rect x="225" y="50" width="175" height="170" style="fill: var(--accent-soft); fill-opacity: .8"/>
+            <line class="d-rule" x1="50" y1="50" x2="400" y2="50"/>
+            <line class="d-rule" x1="225" y1="50" x2="225" y2="220"/>
+            <line class="d-ln d-dash" x1="50" y1="135" x2="400" y2="135" style="stroke-width:1"/>
+            <line class="d-ln" x1="50" y1="220" x2="400" y2="220"/>
+            <line class="d-ln" x1="50" y1="50" x2="50" y2="220"/>
+            <text class="d-al" x="44" y="54" text-anchor="end">1</text>
+            <text class="d-al" x="44" y="139" text-anchor="end">0.5</text>
+            <text class="d-al" x="44" y="224" text-anchor="end">0</text>
+            <text class="d-al" x="50" y="236" text-anchor="middle">−6</text>
+            <text class="d-al" x="137.5" y="236" text-anchor="middle">−3</text>
+            <text class="d-al" x="225" y="236" text-anchor="middle">0</text>
+            <text class="d-al" x="312.5" y="236" text-anchor="middle">3</text>
+            <text class="d-al" x="400" y="236" text-anchor="middle">6</text>
+            <text class="d-al" x="400" y="254" text-anchor="end">z = wᵀx + b</text>
+            <path class="d-ln-acc" style="stroke-width:2.4" d="M50.0 219.6 L57.3 219.5 L64.6 219.3 L71.9 219.1 L79.2 218.9 L86.5 218.5 L93.8 218.1 L101.0 217.6 L108.3 216.9 L115.6 216.1 L122.9 215.0 L130.2 213.7 L137.5 211.9 L144.8 209.8 L152.1 207.1 L159.4 203.8 L166.7 199.7 L174.0 194.8 L181.2 189.0 L188.5 182.1 L195.8 174.3 L203.1 165.5 L210.4 155.8 L217.7 145.6 L225.0 135.0 L232.3 124.4 L239.6 114.2 L246.9 104.5 L254.2 95.7 L261.5 87.9 L268.8 81.0 L276.0 75.2 L283.3 70.3 L290.6 66.2 L297.9 62.9 L305.2 60.2 L312.5 58.1 L319.8 56.3 L327.1 55.0 L334.4 53.9 L341.7 53.1 L349.0 52.4 L356.2 51.9 L363.5 51.5 L370.8 51.1 L378.1 50.9 L385.4 50.7 L392.7 50.5 L400.0 50.4"/>
+            <text class="d-t" x="60" y="72">σ(z) = 1 / (1 + e^(−z))</text>
+            <text class="d-s" x="60" y="96">σ(z) &lt; 0.5 → class 0</text>
+            <text class="d-s" x="392" y="208" text-anchor="end">σ(z) ≥ 0.5 → class 1</text>
+            <circle class="pt-new" cx="210.4" cy="155.8" r="5"/>
+            <text class="d-s" x="202" y="150" text-anchor="end">z = −0.5 gives 0.38, class 0</text>
+
+            <line class="d-rule" x1="440" y1="14" x2="440" y2="250"/>
+
+            <text class="d-h" x="470" y="24">Linear: regression</text>
+            <line class="d-ln" x1="470" y1="135" x2="640" y2="135"/>
+            <line class="d-ln" x1="555" y1="50" x2="555" y2="220"/>
+            <line class="d-ln-acc" style="stroke-width:2.4" x1="470" y1="220" x2="640" y2="50"/>
+            <text class="d-t" x="476" y="72">f(z) = z</text>
+            <text class="d-al" x="640" y="152" text-anchor="end">z</text>
+            <text class="d-al" x="561" y="62">f(z)</text>
+            <text class="d-s" x="470" y="246">any real number comes out</text>
+          </svg>
+        </div>
+        <figcaption><b>The two activation functions of this section</b>, drawn to scale. Left: the sigmoid squeezes any weighted sum into the range 0 to 1. With the 0.5 threshold, a positive \(z\) gives class 1 and a negative \(z\) gives class 0. The marked point, \(z = -0.5\), is the hidden neuron's value in the widget at the end of the page. Right: the linear activation used at the output for regression leaves \(z\) unchanged.</figcaption>
+      </figure>
+      <p class="note">For the IIT Madras treatment of the sigmoid neuron, see Lecture 3 (<a href="lecture-03.html#sigmoid-neuron">lecture-03.html</a>).</p>
+    </section>
+
+    <section id="forward">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2621s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>43:41</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2654s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>44:14 inputs, weights, bias, activate</a>
+        </div>
+        <h2>Forward propagation</h2>
+      </div>
+      <p>Everything done so far, from the inputs to the output, has a name. Take the inputs, multiply them by the weights, add a bias and activate, layer after layer until the output is reached. This whole pass is <dfn>forward propagation</dfn>. For the small network of the figure above it is four lines:</p>
+      <ol class="algo">
+        <li class="algo-title">Forward propagation, 3 inputs, 1 hidden neuron, 1 output neuron</li>
+        <li>\(z_1 = w_1 x_1 + w_2 x_2 + w_3 x_3 + b_1\), the weighted sum plus bias in the hidden neuron.</li>
+        <li>\(O_1 = \sigma(z_1)\), its activation.</li>
+        <li>\(z_2 = w_4 O_1 + b_2\), the weighted sum in the output neuron.</li>
+        <li>\(\hat y = \sigma(z_2)\), read as class 1 if \(\hat y \ge 0.5\) and class 0 otherwise.</li>
+      </ol>
+      <p class="note">On day 1 Krish puts a bias in the hidden layer only. For the multi-layer network he says a bias is added in every layer, so the output bias \(b_2\) is included here.</p>
+    </section>
+
+    <section id="loss">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2688s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>44:48</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2757s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>45:57 y − ŷ</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2820s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>47:00 the loss function</a>
+        </div>
+        <h2>Prediction, truth and the loss</h2>
+      </div>
+      <p>Pass the first record, \((7, 3, 7)\), forward, and suppose the network outputs 0. That output is the <dfn>predicted value</dfn> \(\hat y\). The <dfn>true value</dfn> \(y\) for this student is 1, since the student passed. The difference is</p>
+      <div class="eq">\[ y - \hat y = 1 - 0 = 1 \]</div>
+      <p>The output is completely wrong. The aim is to bring this difference very close to 0, because only then does \(\hat y\) match \(y\). The quantity that measures the difference between the predicted and the real value is the <dfn>loss function</dfn>. There are several kinds, covered in Part 4, and the goal with every one of them is to minimize it.</p>
+      <p class="callout"><b>Not in the video:</b> as a training target a plain difference is not enough, because it can be negative. For a student who failed (\(y = 0\)) and a prediction \(\hat y = 1\), \(y - \hat y = -1\), and making that number smaller would push \(\hat y\) further up. Losses therefore measure the size of the error, for example the squared error \((y - \hat y)^2\), which Krish mentions on day 2 for linear regression. The widget at the end of this page uses it.</p>
+    </section>
+
+    <section id="backprop">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2852s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>47:32</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=2922s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>48:42 optimizers</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=3017s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>50:17 gradient descent</a>
+        </div>
+        <h2>Backpropagation and optimizers</h2>
+      </div>
+      <p>When the loss is large, the network runs <dfn>backpropagation</dfn> (backward propagation). Its main aim is to update the weights, since only by changing the weights can the predicted output come to match the real one. The problem is supervised, so the real output is known. Here it should be 1, and the network says 0.</p>
+      <p>The updating is done by an <dfn>optimizer</dfn>, which makes sure each weight is updated while the error is propagated back. Krish asks viewers not to worry yet about the maths inside it and to focus on the training process. That process involves the weights and the bias, the two operations inside each neuron, forward propagation to the output, the loss, and, if the loss is high, a backward pass in which an optimizer updates the weights.</p>
+      <p>The familiar example of an optimizer is gradient descent in simple linear regression <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=3049s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>50:49</a>. There the cost plotted against a coefficient is a U-shaped curve. Gradient descent changes the coefficient step by step until it reaches the global minimum, the point where the difference between \(y\) and \(\hat y\) is smallest. The same happens to the weights of a neural network. Gradient descent is one kind of optimizer, and Part 5 (<a href="krish-dl-05.html">krish-dl-05.html</a>) covers the others.</p>
+      <p class="note">For the IIT Madras treatment of gradient descent, see Lecture 3 (<a href="lecture-03.html#gd-rule">lecture-03.html</a>), and of optimizers, Lecture 5 (<a href="lecture-05.html">lecture-05.html</a>).</p>
+    </section>
+
+    <section id="story">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=3111s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>51:51</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=3174s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>52:54 repeat many times</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=3273s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>54:33 the black rose</a>
+        </div>
+        <h2>The training loop in five steps</h2>
+      </div>
+      <p>Krish sums up the first session as a story in five steps.</p>
+      <ol class="algo">
+        <li class="algo-title">Training a neural network</li>
+        <li><b>Input layer.</b> A record enters the network.</li>
+        <li><b>Weights.</b> Each connection multiplies its input by a weight.</li>
+        <li><b>Sum and bias.</b> Each neuron adds up the weighted inputs together with its bias.</li>
+        <li><b>Activation.</b> An activation function is applied. Steps 2 to 4 repeat until the last layer. Together they are forward propagation.</li>
+        <li><b>Backward propagation.</b> First the loss is computed, the difference between \(y\) and \(\hat y\). An optimizer then updates the weights to minimize it.</li>
+      </ol>
+      <p>One forward pass and one backward pass, repeated many times (he says a thousand, for instance), train the network, much as a baby learns a word by hearing it day after day. Every model in deep learning trains this way, whether it is an ANN, a CNN, an RNN or an object detector; what changes is the optimizer. Sometimes ten rounds are already enough <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=3240s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>54:00</a>.</p>
+      <p>His second illustration: show someone a flower they have never seen and tell them it is a black rose. The next day they may not remember the name. After seeing it again on the second, third and fourth day, they name it confidently themselves. A network is trained the same way, by seeing the data again and again.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 252" role="img" aria-label="Six boxes in a row: 1 inputs x equals 7, 3, 7; 2 weights w1, w2, w3; 3 sum w transpose x plus b; 4 activate O1 equals sigma of z; output y hat equals 0; 5 loss y minus y hat equals 1. A bracket over the first five boxes is labelled forward propagation. A dashed arrow runs from the loss box back to the weights box, labelled backward propagation, an optimizer updates every weight.">
+            <defs>
+              <marker id="kdl02-f3-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="kdl02-f3-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <path class="d-ln-acc" d="M21 60 V54 H533 V60"/>
+            <text class="d-t" x="277" y="44" text-anchor="middle" style="fill: var(--accent)">forward propagation (steps 1–4, layer by layer to the output)</text>
+
+            <rect class="d-box" x="21" y="70" width="88" height="52" rx="8"/>
+            <rect class="d-box" x="127" y="70" width="88" height="52" rx="8"/>
+            <rect class="d-box" x="233" y="70" width="88" height="52" rx="8"/>
+            <rect class="d-box" x="339" y="70" width="88" height="52" rx="8"/>
+            <rect class="d-box" x="445" y="70" width="88" height="52" rx="8"/>
+            <rect class="d-box-acc" x="551" y="70" width="88" height="52" rx="8"/>
+            <text class="d-t" x="65" y="92" text-anchor="middle">1 · inputs</text><text class="d-s" x="65" y="110" text-anchor="middle">x = (7, 3, 7)</text>
+            <text class="d-t" x="171" y="92" text-anchor="middle">2 · weights</text><text class="d-s" x="171" y="110" text-anchor="middle">w₁, w₂, w₃</text>
+            <text class="d-t" x="277" y="92" text-anchor="middle">3 · sum</text><text class="d-s" x="277" y="110" text-anchor="middle">z = wᵀx + b</text>
+            <text class="d-t" x="383" y="92" text-anchor="middle">4 · activate</text><text class="d-s" x="383" y="110" text-anchor="middle">O₁ = σ(z)</text>
+            <text class="d-t" x="489" y="92" text-anchor="middle">output</text><text class="d-s" x="489" y="110" text-anchor="middle">ŷ = 0</text>
+            <text class="d-t" x="595" y="92" text-anchor="middle">5 · loss</text><text class="d-s" x="595" y="110" text-anchor="middle">y − ŷ = 1</text>
+            <line class="d-ln" x1="109" y1="96" x2="125" y2="96" marker-end="url(#kdl02-f3-ah)"/>
+            <line class="d-ln" x1="215" y1="96" x2="231" y2="96" marker-end="url(#kdl02-f3-ah)"/>
+            <line class="d-ln" x1="321" y1="96" x2="337" y2="96" marker-end="url(#kdl02-f3-ah)"/>
+            <line class="d-ln" x1="427" y1="96" x2="443" y2="96" marker-end="url(#kdl02-f3-ah)"/>
+            <line class="d-ln" x1="533" y1="96" x2="549" y2="96" marker-end="url(#kdl02-f3-ah)"/>
+
+            <path class="d-ln-acc d-dash" d="M595 122 V172 H171 V126" marker-end="url(#kdl02-f3-aha)"/>
+            <text class="d-t" x="383" y="192" text-anchor="middle" style="fill: var(--accent)">backward propagation (step 5): an optimizer updates every weight</text>
+            <text class="d-s" x="383" y="210" text-anchor="middle">new w = old w − η · ∂L/∂w, for example with gradient descent</text>
+            <text class="d-s" x="330" y="240" text-anchor="middle">one forward pass and one backward pass, repeated many times, train the network</text>
+          </svg>
+        </div>
+        <figcaption><b>Krish's five-step summary of training.</b> Steps 1 to 4 are forward propagation, run layer by layer up to the output. Step 5 starts the backward pass, in which the loss compares \(\hat y\) with \(y\) and an optimizer updates the weights. The numbers are his example, a student who passed but is predicted as 0. The update formula on the arrow arrives on day 2.</figcaption>
+      </figure>
+    </section>
+
+    <section id="multilayer">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=3305s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>55:05</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=3369s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>56:09 multi-class</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=3403s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>56:43 end of day 1</a>
+        </div>
+        <h2>Multi-layer neural networks</h2>
+      </div>
+      <p>The network drawn so far, with one hidden layer, is what Krish calls a single-layer neural network. A <dfn>multi-layer neural network</dfn> has many inputs, several hidden layers with any number of neurons each, and an output layer that can have several neurons, for example one per class in multi-class classification. Every neuron is connected to every neuron of the next layer.</p>
+      <p>It works exactly like the single-layer network. In every layer the neurons compute a weighted sum, add a bias and apply an activation, and training is still forward and backward propagation. For multi-class problems a different activation function and a different loss function may be used, and that is the only difference. Nor is the network limited to two hidden layers; it can have any number.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 326" role="img" aria-label="A fully connected network with four inputs x1 to x4, a first hidden layer of five neurons, a second hidden layer of four neurons and an output layer of three neurons y hat 1 to y hat 3. Every neuron is connected to every neuron in the next layer. Each hidden and output layer is marked plus bias.">
+            <text class="d-row" x="90" y="20" text-anchor="middle">input layer</text>
+            <text class="d-row" x="250" y="20" text-anchor="middle">hidden layer 1</text>
+            <text class="d-row" x="410" y="20" text-anchor="middle">hidden layer 2</text>
+            <text class="d-row" x="560" y="20" text-anchor="middle">output layer (multi-class)</text>
+            <g class="d-ln" style="stroke-width: .9; opacity: .55">
+              <line x1="104.8" y1="72.7" x2="235.2" y2="52.3"/>
+              <line x1="104.8" y1="77.3" x2="235.2" y2="97.7"/>
+              <line x1="103.6" y1="81.4" x2="236.4" y2="143.6"/>
+              <line x1="101.8" y1="84.2" x2="238.2" y2="190.8"/>
+              <line x1="100.1" y1="86.1" x2="239.9" y2="238.9"/>
+              <line x1="103.6" y1="118.6" x2="236.4" y2="56.4"/>
+              <line x1="104.8" y1="122.7" x2="235.2" y2="102.3"/>
+              <line x1="104.8" y1="127.3" x2="235.2" y2="147.7"/>
+              <line x1="103.6" y1="131.4" x2="236.4" y2="193.6"/>
+              <line x1="101.8" y1="134.2" x2="238.2" y2="240.8"/>
+              <line x1="101.8" y1="165.8" x2="238.2" y2="59.2"/>
+              <line x1="103.6" y1="168.6" x2="236.4" y2="106.4"/>
+              <line x1="104.8" y1="172.7" x2="235.2" y2="152.3"/>
+              <line x1="104.8" y1="177.3" x2="235.2" y2="197.7"/>
+              <line x1="103.6" y1="181.4" x2="236.4" y2="243.6"/>
+              <line x1="100.1" y1="213.9" x2="239.9" y2="61.1"/>
+              <line x1="101.8" y1="215.8" x2="238.2" y2="109.2"/>
+              <line x1="103.6" y1="218.6" x2="236.4" y2="156.4"/>
+              <line x1="104.8" y1="222.7" x2="235.2" y2="202.3"/>
+              <line x1="104.8" y1="227.3" x2="235.2" y2="247.7"/>
+              <line x1="264.8" y1="52.3" x2="395.2" y2="72.7"/>
+              <line x1="263.6" y1="56.4" x2="396.4" y2="118.6"/>
+              <line x1="261.8" y1="59.2" x2="398.2" y2="165.8"/>
+              <line x1="260.1" y1="61.1" x2="399.9" y2="213.9"/>
+              <line x1="264.8" y1="97.7" x2="395.2" y2="77.3"/>
+              <line x1="264.8" y1="102.3" x2="395.2" y2="122.7"/>
+              <line x1="263.6" y1="106.4" x2="396.4" y2="168.6"/>
+              <line x1="261.8" y1="109.2" x2="398.2" y2="215.8"/>
+              <line x1="263.6" y1="143.6" x2="396.4" y2="81.4"/>
+              <line x1="264.8" y1="147.7" x2="395.2" y2="127.3"/>
+              <line x1="264.8" y1="152.3" x2="395.2" y2="172.7"/>
+              <line x1="263.6" y1="156.4" x2="396.4" y2="218.6"/>
+              <line x1="261.8" y1="190.8" x2="398.2" y2="84.2"/>
+              <line x1="263.6" y1="193.6" x2="396.4" y2="131.4"/>
+              <line x1="264.8" y1="197.7" x2="395.2" y2="177.3"/>
+              <line x1="264.8" y1="202.3" x2="395.2" y2="222.7"/>
+              <line x1="260.1" y1="238.9" x2="399.9" y2="86.1"/>
+              <line x1="261.8" y1="240.8" x2="398.2" y2="134.2"/>
+              <line x1="263.6" y1="243.6" x2="396.4" y2="181.4"/>
+              <line x1="264.8" y1="247.7" x2="395.2" y2="227.3"/>
+              <line x1="424.8" y1="77.5" x2="545.2" y2="97.5"/>
+              <line x1="423.4" y1="81.7" x2="546.6" y2="143.3"/>
+              <line x1="421.5" y1="84.6" x2="548.5" y2="190.4"/>
+              <line x1="424.8" y1="122.5" x2="545.2" y2="102.5"/>
+              <line x1="424.8" y1="127.5" x2="545.2" y2="147.5"/>
+              <line x1="423.4" y1="131.7" x2="546.6" y2="193.3"/>
+              <line x1="423.4" y1="168.3" x2="546.6" y2="106.7"/>
+              <line x1="424.8" y1="172.5" x2="545.2" y2="152.5"/>
+              <line x1="424.8" y1="177.5" x2="545.2" y2="197.5"/>
+              <line x1="421.5" y1="215.4" x2="548.5" y2="109.6"/>
+              <line x1="423.4" y1="218.3" x2="546.6" y2="156.7"/>
+              <line x1="424.8" y1="222.5" x2="545.2" y2="202.5"/>
+            </g>
+            <circle class="node" cx="90" cy="75" r="15"/><text class="d-t" x="90" y="80" text-anchor="middle">x₁</text>
+            <circle class="node" cx="90" cy="125" r="15"/><text class="d-t" x="90" y="130" text-anchor="middle">x₂</text>
+            <circle class="node" cx="90" cy="175" r="15"/><text class="d-t" x="90" y="180" text-anchor="middle">x₃</text>
+            <circle class="node" cx="90" cy="225" r="15"/><text class="d-t" x="90" y="230" text-anchor="middle">x₄</text>
+            <circle class="node-acc" cx="250" cy="50" r="15"/>
+            <circle class="node-acc" cx="250" cy="100" r="15"/>
+            <circle class="node-acc" cx="250" cy="150" r="15"/>
+            <circle class="node-acc" cx="250" cy="200" r="15"/>
+            <circle class="node-acc" cx="250" cy="250" r="15"/>
+            <circle class="node-acc" cx="410" cy="75" r="15"/>
+            <circle class="node-acc" cx="410" cy="125" r="15"/>
+            <circle class="node-acc" cx="410" cy="175" r="15"/>
+            <circle class="node-acc" cx="410" cy="225" r="15"/>
+            <circle class="node" cx="560" cy="100" r="15"/><text class="d-t" x="560" y="105" text-anchor="middle">ŷ₁</text>
+            <circle class="node" cx="560" cy="150" r="15"/><text class="d-t" x="560" y="155" text-anchor="middle">ŷ₂</text>
+            <circle class="node" cx="560" cy="200" r="15"/><text class="d-t" x="560" y="205" text-anchor="middle">ŷ₃</text>
+            <text class="d-s" x="250" y="288" text-anchor="middle">+ bias</text>
+            <text class="d-s" x="410" y="288" text-anchor="middle">+ bias</text>
+            <text class="d-s" x="560" y="288" text-anchor="middle">+ bias</text>
+            <text class="d-s" x="330" y="316" text-anchor="middle">every neuron: weighted sum plus bias, then activation; any number of hidden layers</text>
+          </svg>
+        </div>
+        <figcaption><b>A multi-layer neural network.</b> Four inputs, two hidden layers of five and four neurons, and three output neurons for a three-class problem. Every neuron is connected to every neuron in the next layer, and every hidden and output neuron adds a bias. The sizes are an example; Krish stresses that any number of hidden layers and neurons can be used.</figcaption>
+      </figure>
+
+      <p>Krish closes day 1 with the plan ahead <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=3434s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>57:14</a>. Neural networks exist to mimic the way a human brain learns. The next session covers activation functions and loss functions in depth, and the chain rule of differentiation that backpropagation relies on <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=3466s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>57:46</a>. Optimizers and practical examples follow, and the course moves from ANNs to CNNs, RNNs and object detection. NLP gets only an introduction; covering it in depth would take about another week of sessions. In his view this level of understanding, together with some practical work, is already enough for many interviews; the maths inside the optimizers is for those who want to learn more.</p>
+      <p class="note">For the IIT Madras treatment of networks of neurons, see Lecture 2 (<a href="lecture-02.html#network">lecture-02.html</a>) and Lecture 4 (<a href="lecture-04.html#architecture">lecture-04.html</a>).</p>
+    </section>
+
+    <!-- ============ CHAPTER 2 · FORWARD AND BACKWARD PROPAGATION, WEIGHT UPDATE ============ -->
+    <section id="recap">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=3621s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:00:21 day 2 agenda</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=3691s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:01:31 the recap</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=3850s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:04:10 non-linear problems</a>
+        </div>
+        <h2>Day 2: back to the forward pass</h2>
+      </div>
+      <p>Day 2 opens with an agenda: forward propagation again, the chain rule of derivatives, the vanishing gradient problem, and loss functions. This page covers the first item and the weight update that goes with it. The chain rule and the vanishing gradient are in Part 3 (<a href="krish-dl-03.html">krish-dl-03.html</a>), and the loss functions in Part 4.</p>
+      <p>The recap uses the same small network: inputs \(x_1, x_2, x_3\), one hidden neuron, one output neuron, and a bias in each hidden layer. The inputs are the data points, one record at a time. At the start of forward propagation the weights \(w_1, w_2, w_3\) and \(w_4\) are assigned randomly. There are several ways to initialize them, which come later. Each neuron computes</p>
+      <div class="eq">\[ z = w_1 x_1 + w_2 x_2 + w_3 x_3 + b = \mathbf{w}^\top\mathbf{x} + b, \qquad O = \sigma(z) \]</div>
+      <p>and the sigmoid's output is turned into a class with the 0.5 threshold. The output \(\hat y\) is compared with \(y\) through the loss, and the aim is to reduce the loss.</p>
+      <p>One remark is new. On its own, \(\mathbf{w}^\top\mathbf{x} + b\) is just linear regression. The activation function gives the network its non-linear properties, so that it can solve non-linear problems.</p>
+      <p class="callout"><b>Not in the video:</b> why stacking layers does not help without an activation. Two layers with no activation compute \(W_2(W_1\mathbf{x} + \mathbf{b}_1) + \mathbf{b}_2\), which equals \((W_2 W_1)\mathbf{x} + (W_2\mathbf{b}_1 + \mathbf{b}_2)\) and is again one linear function of \(\mathbf{x}\). However many such layers are stacked, the network stays a linear model.</p>
+    </section>
+
+    <section id="update-rule">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=3943s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:05:43</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4039s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:07:19 which weights</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4072s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:07:52 the formula</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4103s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:08:23 slope and learning rate</a>
+        </div>
+        <h2>The weight update formula</h2>
+      </div>
+      <p>To reduce the loss the weights must change, and that happens in backpropagation. Krish splits backpropagation into two parts, the weight update formula and the chain rule of differentiation. In the small network the backward pass has to update \(w_4\), \(w_1\), \(w_2\) and \(w_3\). The generic formula, and the place where optimizers come in, is</p>
+      <div class="result">
+        <span class="lbl">Weight update formula</span>
+        \[ w_{\text{new}} = w_{\text{old}} - \eta\,\frac{\partial L}{\partial w_{\text{old}}} \]
+      </div>
+      <ul>
+        <li>\(w_{\text{old}}\) is the weight's current value, the one used in the forward pass.</li>
+        <li>\(\eta\) is the <dfn>learning rate</dfn>, a small positive number discussed below.</li>
+        <li>\(\partial L/\partial w_{\text{old}}\) is the derivative of the loss with respect to that weight. It is the <b>slope</b> of the loss at the current weight.</li>
+      </ul>
+      <p>Linear regression updates its coefficients in the same way. For the IIT Madras derivation of this rule from a Taylor series, see Lecture 3 (<a href="lecture-03.html#gd-rule">lecture-03.html</a>).</p>
+      <p class="note">Not in the video: biases are updated by the same rule, \(b_{\text{new}} = b_{\text{old}} - \eta\,\partial L/\partial b_{\text{old}}\).</p>
+    </section>
+
+    <section id="slope-sign">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4135s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:08:55</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4232s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:10:32 the tangent</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4297s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:11:37 negative slope</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4431s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:13:51 positive slope</a>
+        </div>
+        <h2>Why the formula moves the weight the right way</h2>
+      </div>
+      <p>Plot the loss against one weight and you get a U-shaped curve, the same picture as in linear regression. Krish calls it the gradient descent curve. Its lowest point is the <dfn>global minimum</dfn>, and training must bring the weight there. The curve is drawn in two dimensions, but with many weights it is a surface, like a mountain turned upside down, and the aim is still to reach its lowest point <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4199s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:09:59</a>.</p>
+      <p>To find the slope at the current weight, draw the tangent to the curve there. Calculation gives the sign of the slope directly, but there is a quick visual check. If the right-hand end of the tangent points down, the slope is negative. If it points up, the slope is positive.</p>
+      <ul>
+        <li><b>Negative slope</b> (left of the minimum, point A in the figure). To reach the minimum the weight must increase. The formula gives \(w_{\text{new}} = w_{\text{old}} - \eta \cdot (\text{negative})\), which is \(w_{\text{old}}\) plus a positive amount, so \(w_{\text{new}} > w_{\text{old}}\) and the weight does increase.</li>
+        <li><b>Positive slope</b> (right of the minimum, point B). The weight must decrease, and \(w_{\text{new}} = w_{\text{old}} - \eta \cdot (\text{positive}) &lt; w_{\text{old}}\).</li>
+      </ul>
+      <p>On either side the minus sign turns the slope into a step toward the minimum. That is gradient descent. In linear regression the curve comes from the loss \((y - \hat y)^2\) plotted against the weights <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4497s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:14:57</a>.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 290" role="img" aria-label="A U-shaped loss curve against the weight w, with its global minimum in the middle where the slope is 0. Point A on the left has a tangent that falls to the right, a negative slope, and an arrow shows w increasing toward the minimum. Point B on the right has a tangent that rises to the right, a positive slope, and an arrow shows w decreasing toward the minimum.">
+            <defs><marker id="kdl02-f5-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <line class="d-ln" x1="90" y1="200" x2="590" y2="200"/>
+            <line class="d-ln" x1="90" y1="20" x2="90" y2="200"/>
+            <text class="d-al" x="84" y="26" text-anchor="end">loss L</text>
+            <text class="d-al" x="590" y="214" text-anchor="end">weight w</text>
+            <path class="d-ln" style="stroke-width:2" d="M90.0 30.0 L98.0 40.0 L106.0 49.7 L114.0 59.1 L122.0 68.1 L130.0 76.8 L138.0 85.1 L146.0 93.1 L154.0 100.7 L162.0 108.0 L170.0 115.0 L178.0 121.6 L186.0 127.9 L194.0 133.9 L202.0 139.5 L210.0 144.8 L218.0 149.7 L226.0 154.3 L234.0 158.5 L242.0 162.4 L250.0 166.0 L258.0 169.2 L266.0 172.1 L274.0 174.7 L282.0 176.9 L290.0 178.8 L298.0 180.3 L306.0 181.5 L314.0 182.3 L322.0 182.8 L330.0 183.0 L338.0 182.8 L346.0 182.3 L354.0 181.5 L362.0 180.3 L370.0 178.8 L378.0 176.9 L386.0 174.7 L394.0 172.1 L402.0 169.2 L410.0 166.0 L418.0 162.4 L426.0 158.5 L434.0 154.3 L442.0 149.7 L450.0 144.8 L458.0 139.5 L466.0 133.9 L474.0 127.9 L482.0 121.6 L490.0 115.0 L498.0 108.0 L506.0 100.7 L514.0 93.1 L522.0 85.1 L530.0 76.8 L538.0 68.1 L546.0 59.1 L554.0 49.7 L562.0 40.0 L570.0 30.0"/>
+
+            <line class="d-ln d-dash" x1="300" y1="183" x2="360" y2="183" style="stroke-width:1"/>
+            <circle class="pt-tree" cx="330" cy="183" r="5"/>
+            <text class="d-s" x="330" y="150" text-anchor="middle">global minimum, slope 0</text>
+
+            <line class="d-ln-acc" style="stroke-width:2" x1="122" y1="74.2" x2="218" y2="155.8"/>
+            <line class="d-ln d-dash" style="stroke-width:1" x1="170" y1="121" x2="170" y2="200"/>
+            <line class="d-ln d-dash" style="stroke-width:1" x1="234" y1="164" x2="234" y2="200"/>
+            <circle class="pt-new" cx="170" cy="115" r="6"/>
+            <circle class="pt-no" cx="234" cy="158.5" r="5"/>
+            <text class="d-t" x="158" y="106" text-anchor="end">A</text>
+            <line class="d-ln-acc" x1="172" y1="192" x2="230" y2="192" marker-end="url(#kdl02-f5-aha)"/>
+            <text class="d-al" x="170" y="213" text-anchor="middle">old</text>
+            <text class="d-al" x="234" y="213" text-anchor="middle">new</text>
+
+            <line class="d-ln-acc" style="stroke-width:2" x1="442" y1="155.8" x2="538" y2="74.2"/>
+            <line class="d-ln d-dash" style="stroke-width:1" x1="490" y1="121" x2="490" y2="200"/>
+            <line class="d-ln d-dash" style="stroke-width:1" x1="426" y1="164" x2="426" y2="200"/>
+            <circle class="pt-new" cx="490" cy="115" r="6"/>
+            <circle class="pt-no" cx="426" cy="158.5" r="5"/>
+            <text class="d-t" x="502" y="106">B</text>
+            <line class="d-ln-acc" x1="488" y1="192" x2="430" y2="192" marker-end="url(#kdl02-f5-aha)"/>
+            <text class="d-al" x="490" y="213" text-anchor="middle">old</text>
+            <text class="d-al" x="426" y="213" text-anchor="middle">new</text>
+
+            <text class="d-t" x="170" y="234" text-anchor="middle">A: slope &lt; 0</text>
+            <text class="d-s" x="170" y="250" text-anchor="middle">the tangent falls to the right</text>
+            <text class="d-s" x="170" y="266" text-anchor="middle">new w = old w − η × (negative)</text>
+            <text class="d-s" x="170" y="282" text-anchor="middle">so w increases, toward the minimum</text>
+            <text class="d-t" x="490" y="234" text-anchor="middle">B: slope &gt; 0</text>
+            <text class="d-s" x="490" y="250" text-anchor="middle">the tangent rises to the right</text>
+            <text class="d-s" x="490" y="266" text-anchor="middle">new w = old w − η × (positive)</text>
+            <text class="d-s" x="490" y="282" text-anchor="middle">so w decreases, toward the minimum</text>
+          </svg>
+        </div>
+        <figcaption><b>Why \(w_{\text{new}} = w_{\text{old}} - \eta\,\partial L/\partial w_{\text{old}}\) heads for the minimum from either side</b>, on a made-up U-shaped loss drawn to scale. At A the tangent falls to the right, the slope is negative and the update increases \(w\). At B the tangent rises, the slope is positive and the update decreases \(w\). Hollow points show where one step lands. With many weights the curve becomes a bowl-shaped surface, Krish's upside-down mountain.</figcaption>
+      </figure>
+      <p class="note">Strictly, the curve is the loss curve, and gradient descent is the procedure that walks down it. Krish uses the name for both.</p>
+    </section>
+
+    <section id="learning-rate">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4528s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:15:28</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4560s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:16:00 small or large</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4591s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:16:31 0.001 or 0.01</a>
+        </div>
+        <h2>The learning rate</h2>
+      </div>
+      <p>The learning rate \(\eta\) sets the size of each step toward the global minimum. The weight can take large steps or small ones, and Krish's advice is to keep the learning rate small. With a small learning rate the weight converges slowly and steadily to the global minimum. With a large one the weight jumps here and there and may never reach the minimum at all.</p>
+      <p>The values he usually takes, and in his words most researchers too, are 0.001 or 0.01. He promises to show the effect in the practical session (Part 6, <a href="krish-dl-06.html">krish-dl-06.html</a>). The widget below shows it on a made-up loss curve.</p>
+
+      <figure id="lr-fig">
+        <div class="controls">
+          <label for="lr-eta">Learning rate η</label>
+          <input type="range" id="lr-eta" min="0" max="9" step="1" value="2">
+          <output id="lr-eta-out" for="lr-eta">0.1</output>
+        </div>
+        <div class="controls">
+          <label for="lr-start">Start</label>
+          <select id="lr-start">
+            <option value="0.5" selected>left of the minimum, w = 0.5</option>
+            <option value="5.5">right of the minimum, w = 5.5</option>
+          </select>
+          <button class="btn" id="lr-step" type="button">One step</button>
+          <button class="btn" id="lr-run" type="button">Run 20 steps</button>
+          <button class="btn" id="lr-reset" type="button">Reset</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">Steps</span><span class="v" id="lr-n">0</span></div>
+          <div><span class="k">Weight w</span><span class="v mine" id="lr-w">–</span></div>
+          <div><span class="k">Slope dL/dw</span><span class="v" id="lr-s">–</span></div>
+          <div><span class="k">Loss L</span><span class="v" id="lr-l">–</span></div>
+        </div>
+        <div class="status" id="lr-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="lr-svg" viewBox="0 0 640 330" role="img" aria-label="The made-up loss L of w equals w minus 3 squared, a U-shaped curve with its minimum at w equals 3. The weights visited by gradient descent are joined by a line, the current weight is a large dot and the dashed line is the tangent there."></svg></div>
+        <figcaption><b>The learning rate on a made-up loss</b>, \(L(w) = (w - 3)^2\), whose slope is \(2(w - 3)\) and whose global minimum is at \(w = 3\). Each step applies the update formula, and the dashed line is the tangent at the current weight. Not in the video: on this curve each step multiplies the distance to the minimum by \(1 - 2\eta\). Below \(\eta = 0.5\) the weight creeps in from one side, slowly when \(\eta\) is tiny. Between 0.5 and 1 it overshoots and zigzags in, at exactly 1 it bounces between two values for ever, and above 1 it is thrown further out with every step. Real losses are less tidy, but the same three behaviours appear.</figcaption>
+      </figure>
+      <p class="note">For the IIT Madras treatment of choosing and annealing the learning rate, see Lecture 5 (<a href="lecture-05.html#lr-tips">lecture-05.html</a>).</p>
+    </section>
+
+    <section id="one-step">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4625s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:17:05</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4659s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:17:39 the chain rule</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4722s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:18:42 ∂L/∂w₄</a>
+        </div>
+        <h2>Where the slope comes from, and one full step</h2>
+      </div>
+      <p>With the update formula in place, Krish turns to the second part of backpropagation, the <dfn>chain rule of differentiation</dfn>. The formula needs \(\partial L/\partial w_{4,\text{old}}\), and \(w_4\) affects the loss only through the output neuron. The chain rule computes such a derivative one link at a time. The chapter ends just as he starts on \(w_4\), and Part 3 (<a href="krish-dl-03.html">krish-dl-03.html</a>) works it out.</p>
+      <p class="callout"><b>Not in the video</b> (a preview of Part 3): for this network with sigmoid neurons and the squared error \(L = (y - \hat y)^2\), the chain rule gives the slopes below. The second one multiplies two more links, through \(O_1\) and the hidden neuron's sigmoid.</p>
+      <div class="eq">\[ \frac{\partial L}{\partial w_4} = \underbrace{-2(y - \hat y)}_{\partial L/\partial \hat y}\;\underbrace{\hat y(1 - \hat y)}_{\partial \hat y/\partial z_2}\;\underbrace{O_1}_{\partial z_2/\partial w_4}, \qquad \frac{\partial L}{\partial w_1} = -2(y - \hat y)\,\hat y(1 - \hat y)\, w_4\, O_1(1 - O_1)\, x_1 \]</div>
+      <p>The widget runs one forward pass and one update on Krish's small network with live numbers. The records are the three students of Part 1's data set, and the starting weights are made up. With them the first student, who passed, gets \(\hat y = 0.399\), which is class 0, the same kind of wrong answer as in Krish's example. For \(w_4\) the slope is \(-2(0.601)(0.240)(0.378) = -0.109\). With \(\eta = 1\) the update gives \(w_4 = 0.5 + 0.109 = 0.609\), and the loss falls from 0.362 to 0.350. Choose another weight or record, read its slope, and apply the formula.</p>
+
+      <figure id="net-fig">
+        <div class="controls">
+          <label for="net-rec">Record</label>
+          <select id="net-rec">
+            <option value="0" selected>study 7, play 3, sleep 7, passed (y = 1)</option>
+            <option value="1">study 2, play 5, sleep 8, failed (y = 0)</option>
+            <option value="2">study 4, play 3, sleep 7, passed (y = 1)</option>
+          </select>
+          <label for="net-par">Weight to update</label>
+          <select id="net-par">
+            <option value="w4" selected>w₄, hidden to output</option>
+            <option value="w1">w₁, from study</option>
+            <option value="w2">w₂, from play</option>
+            <option value="w3">w₃, from sleep</option>
+            <option value="b1">b₁, hidden bias</option>
+            <option value="b2">b₂, output bias</option>
+          </select>
+        </div>
+        <div class="controls">
+          <label for="net-w">Its current value</label>
+          <input type="range" id="net-w" min="-6" max="6" step="0.01" value="0.5">
+          <output id="net-w-out" for="net-w">0.50</output>
+        </div>
+        <div class="controls">
+          <label for="net-eta">Learning rate η</label>
+          <input type="range" id="net-eta" min="0" max="6" step="1" value="4">
+          <output id="net-eta-out" for="net-eta">1</output>
+        </div>
+        <div class="controls">
+          <button class="btn" id="net-step" type="button">Apply the update</button>
+          <button class="btn" id="net-run" type="button">Apply 10 updates</button>
+          <button class="btn" id="net-reset" type="button">Reset</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">Prediction ŷ</span><span class="v" id="net-yhat">–</span></div>
+          <div><span class="k">Loss (y − ŷ)²</span><span class="v" id="net-loss">–</span></div>
+          <div><span class="k" id="net-g-k">Slope ∂L/∂w₄</span><span class="v" id="net-g">–</span></div>
+          <div><span class="k" id="net-new-k">New w₄</span><span class="v mine" id="net-new">–</span></div>
+        </div>
+        <div class="status" id="net-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="net-svg" viewBox="0 0 640 430" role="img" aria-label="Top: a network with three inputs, one hidden neuron and one output neuron, showing the current input values, weights, weighted sums, activations, the prediction and the loss. A dashed arrow runs from the loss back to the chosen weight, labelled with its slope. Bottom: the loss plotted against the chosen weight with the other weights fixed, the current value as a filled dot with its tangent, and an arrow to the value after one update, drawn as a hollow dot."></svg></div>
+        <figcaption><b>One forward pass and one weight update on Krish's 3-1-1 network</b>, with sigmoid neurons and the squared error \(L = (y - \hat y)^2\). Top: the forward pass with live numbers; the dashed arrow carries the chosen weight's slope back from the loss. Bottom: the loss as the chosen weight varies, with the tangent at its current value and the step to \(w_{\text{new}}\). Real backpropagation updates all six parameters in the same step, each with its own slope. The widget moves one at a time so that the loss can be drawn as a curve. With a single record the loss only approaches 0 as the weight moves the right way, so this curve flattens out instead of turning up again. Try \(\eta = 0.01\) to see how small Krish's recommended steps are on a toy problem.</figcaption>
+      </figure>
+      <p class="note">For the IIT Madras treatment of backpropagation through a whole network, see Lecture 4 (<a href="lecture-04.html">lecture-04.html</a>).</p>
+    </section>
+
+    <!-- ============ REVISION ============ -->
+    <section id="terms">
+      <div class="sec-head"><h2>Key terms</h2></div>
+      <dl class="terms">
+        <div><dt>Neuron (two steps)</dt><dd>Computes the weighted sum \(z = \sum_i x_i w_i + b = \mathbf{w}^\top\mathbf{x} + b\), then applies an activation function to it.</dd></div>
+        <div><dt>Weight</dt><dd>The number on a connection that multiplies an input. It decides how strongly that input activates the next neuron, and it is learned in training.</dd></div>
+        <div><dt>Bias \(b\)</dt><dd>A constant added to the weighted sum, like the intercept of a line. Every hidden and output neuron has one.</dd></div>
+        <div><dt>Activation function</dt><dd>Applied to \(z\). It decides whether, and how strongly, the neuron is activated, and it makes the network non-linear.</dd></div>
+        <div><dt>Sigmoid</dt><dd>\(\sigma(z) = 1/(1 + e^{-z})\), with output between 0 and 1, read as class 1 if it is at least 0.5. Used for binary classification.</dd></div>
+        <div><dt>Linear activation</dt><dd>Leaves \(z\) unchanged. Used in the output layer for regression.</dd></div>
+        <div><dt>Forward propagation</dt><dd>Inputs times weights, plus bias, then activation, layer by layer up to the prediction \(\hat y\).</dd></div>
+        <div><dt>Loss function</dt><dd>Measures the difference between the prediction \(\hat y\) and the true value \(y\). Training minimizes it.</dd></div>
+        <div><dt>Backpropagation</dt><dd>The backward pass that updates every weight so as to reduce the loss.</dd></div>
+        <div><dt>Optimizer</dt><dd>The method that updates the weights during backpropagation. Gradient descent is one example.</dd></div>
+        <div><dt>Weight update formula</dt><dd>\(w_{\text{new}} = w_{\text{old}} - \eta\,\partial L/\partial w_{\text{old}}\), where \(\partial L/\partial w_{\text{old}}\) is the slope of the loss at the current weight.</dd></div>
+        <div><dt>Learning rate \(\eta\)</dt><dd>The step size of the update. Small values such as 0.001 or 0.01 converge slowly but surely; large ones can jump past the minimum.</dd></div>
+        <div><dt>Global minimum</dt><dd>The lowest point of the loss curve, where the slope is 0. Training moves the weights toward it.</dd></div>
+        <div><dt>Multi-layer neural network</dt><dd>A network with several hidden layers, every neuron connected to every neuron in the next layer.</dd></div>
+      </dl>
+    </section>
+
+    <section id="test">
+      <div class="sec-head"><h2>Test yourself</h2></div>
+      <div class="quiz">
+        <details><summary><span class="q">Q1</span><span>Run the forward pass for the first student, \(\mathbf{x} = (7, 3, 7)\), with \(w_1 = 0.2\), \(w_2 = -0.4\), \(w_3 = -0.1\), \(b_1 = 0\), \(w_4 = 0.5\) and \(b_2 = -0.6\). Which class does the network predict, and is it right?</span><span class="tog"></span></summary>
+          <p>Hidden neuron: \(z_1 = 0.2 \cdot 7 - 0.4 \cdot 3 - 0.1 \cdot 7 + 0\), that is \(1.4 - 1.2 - 0.7 = -0.5\), so \(O_1 = \sigma(-0.5) = 0.378\). Output neuron: \(z_2 = 0.5 \cdot 0.378 - 0.6 = -0.411\), so \(\hat y = \sigma(-0.411) = 0.399\). This is below 0.5, so the predicted class is 0. The student passed (\(y = 1\)), so the prediction is wrong, and the squared error is \((1 - 0.399)^2 = 0.362\).</p></details>
+        <details><summary><span class="q">Q2</span><span>A weight has \(w_{\text{old}} = 0.5\) and the slope there is \(\partial L/\partial w = -0.8\). With \(\eta = 0.01\), what is \(w_{\text{new}}\)? Repeat for a slope of \(+2.4\) at \(w_{\text{old}} = 1.2\) with \(\eta = 0.001\).</span><span class="tog"></span></summary>
+          <p>\(w_{\text{new}} = 0.5 - 0.01 \times (-0.8)\), which is \(0.5 + 0.008 = 0.508\). The slope is negative, so the weight increases. In the second case \(w_{\text{new}} = 1.2 - 0.001 \times 2.4\), which is \(1.2 - 0.0024 = 1.1976\). The slope is positive, so the weight decreases. Both steps move toward the minimum, and both are small because \(\eta\) is small.</p></details>
+        <details><summary><span class="q">Q3</span><span>Why does a neuron have a bias? Give Krish's reason and the usual one.</span><span class="tog"></span></summary>
+          <p>Krish's reason: if all weights start at 0, every product \(x_i w_i\) is 0 and the neuron passes on 0. The bias, a constant like the intercept \(c\) in \(y = mx + c\), keeps the value away from 0 so training can continue. The usual reason: the bias shifts the point where the neuron switches on. Without it the weighted sum must be 0 whenever all inputs are 0, just as a line without an intercept must pass through the origin. Zero initialization is avoided for a separate reason: identical neurons get identical updates and stay identical.</p></details>
+        <details><summary><span class="q">Q4</span><span>The first record gives \(\hat y = 0\) while \(y = 1\). What is \(y - \hat y\)? Why is a plain difference a poor quantity to minimize, and what is used instead?</span><span class="tog"></span></summary>
+          <p>\(y - \hat y = 1 - 0 = 1\), so the prediction is completely wrong and training should bring the difference close to 0. A plain difference can be negative: for \(y = 0\) and \(\hat y = 1\) it is \(-1\), and making it smaller would push \(\hat y\) further from the truth. A loss measures the size of the error instead, for example the squared error \((y - \hat y)^2\). Here it equals 1, and it is 0 only when \(\hat y = y\).</p></details>
+        <details><summary><span class="q">Q5</span><span>A loss is \(L(w) = (w - 3)^2\), so \(dL/dw = 2(w - 3)\). Start at \(w = 1\). What happens with \(\eta = 0.25\), and with \(\eta = 1\)?</span><span class="tog"></span></summary>
+          <p>With \(\eta = 0.25\) the update is \(w \leftarrow w - 0.5(w - 3)\), so \(w\) goes \(1 \to 2 \to 2.5 \to 2.75 \to \dots\). Each step halves the distance to 3 and the weight converges. With \(\eta = 1\) the update is \(w \leftarrow w - 2(w - 3) = 6 - w\), so \(w\) goes \(1 \to 5 \to 1 \to 5 \to \dots\). It bounces for ever and never reaches the minimum, which is Krish's warning about a large learning rate. Any \(\eta > 1\) on this curve throws the weight further away with every step.</p></details>
+        <details><summary><span class="q">Q6</span><span>Why does a network need an activation function at all?</span><span class="tog"></span></summary>
+          <p>Without one, each neuron computes \(\mathbf{w}^\top\mathbf{x} + b\), which is linear regression. Stacking such layers does not help, because \(W_2(W_1\mathbf{x} + \mathbf{b}_1) + \mathbf{b}_2\) equals \((W_2W_1)\mathbf{x} + (W_2\mathbf{b}_1 + \mathbf{b}_2)\), which is still linear. The activation function gives the network non-linear properties, so it can solve non-linear problems. The sigmoid also squeezes the output into the range 0 to 1, which the 0.5 threshold turns into a class.</p></details>
+        <details><summary><span class="q">Q7</span><span>List Krish's five training steps and say which belong to forward propagation and which to backward propagation.</span><span class="tog"></span></summary>
+          <p>(1) The input layer receives a record, (2) the weights are applied, (3) each neuron adds up the weighted inputs and its bias, and (4) an activation function is applied. Steps 2 to 4 repeat layer by layer up to the output, and steps 1 to 4 are forward propagation. (5) The loss between \(y\) and \(\hat y\) is computed, and an optimizer updates the weights to minimize it. That is backward propagation. The two passes repeat many times until the network is trained.</p></details>
+        <details><summary><span class="q">Q8</span><span>How many weights and biases does the multi-layer network in the figure have (4 inputs, hidden layers of 5 and 4 neurons, 3 outputs)?</span><span class="tog"></span></summary>
+          <p>Weights: \(4 \cdot 5 + 5 \cdot 4 + 4 \cdot 3 = 20 + 20 + 12 = 52\), one per connection. Biases: one per hidden and output neuron, \(5 + 4 + 3 = 12\). That makes 64 parameters, and every backward pass updates each of them with \(w_{\text{new}} = w_{\text{old}} - \eta\,\partial L/\partial w_{\text{old}}\).</p></details>
+      </div>
+    </section>
+
+    <!-- PAGER:START --><nav class="pager" aria-label="Previous and next part"><a href="krish-dl-01.html"><span class="dir">← Part 1</span><span class="nm">Why deep learning, and the perceptron</span></a><a class="next" href="index.html#extra"><span class="dir">Part 3 · coming</span><span class="nm">Chain rule and the vanishing gradient problem</span></a></nav><!-- PAGER:END -->
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the YouTube auto-generated captions of Krish Naik's video “Deep Learning In-depth Tutorials in 5 Hours”. Timestamp links open the video at that moment. Code is reconstructed from the audio. Charts marked synthetic use data generated for these notes. Not affiliated with Krish Naik or IIT Madras.</div>
+</footer>
+
+<script src="notes.js"></script>
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const num = (v, d) => { const s = (Math.abs(v) < 0.5 * Math.pow(10, -d) ? 0 : v).toFixed(d); return s.replace('-', '−'); };
+  const setLine = (el, p, q) => { el.setAttribute('x1', p[0]); el.setAttribute('y1', p[1]); el.setAttribute('x2', q[0]); el.setAttribute('y2', q[1]); };
+  const arrowHead = (defs, id, token) => { const m = mk('marker', { id, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse' }, defs); mk('path', { d: 'M0,0 L10,5 L0,10 z', style: 'fill: var(' + token + ')' }, m); };
+  const txt = (svg, x, y, cls, anchor) => mk('text', { x, y, class: cls, 'text-anchor': anchor || 'middle' }, svg);
+  const sig = z => 1 / (1 + Math.exp(-z));
+
+  /* ---------- Learning rate on a made-up U-shaped loss ---------- */
+  (() => {
+    const svg = document.getElementById('lr-svg'); if (!svg) return;
+    const ETAS = [0.01, 0.05, 0.1, 0.25, 0.45, 0.6, 0.8, 0.95, 1, 1.05];
+    const eS = document.getElementById('lr-eta'), eO = document.getElementById('lr-eta-out'), startSel = document.getElementById('lr-start');
+    const oN = document.getElementById('lr-n'), oW = document.getElementById('lr-w'), oS = document.getElementById('lr-s'), oL = document.getElementById('lr-l');
+    const status = document.getElementById('lr-status');
+    const C = 3, Lf = w => (w - C) * (w - C), dL = w => 2 * (w - C);
+    const lo = -1, hi = 7, X0 = 60, X1 = 610, Y0 = 290, Y1 = 40, LMAX = 16;
+    const sx = w => X0 + (w - lo) * (X1 - X0) / (hi - lo), sy = L => Y0 - L * (Y0 - Y1) / LMAX;
+    const defs = mk('defs', {}, svg);
+    const cp = mk('clipPath', { id: 'kdl02-lr-clip' }, defs); mk('rect', { x: X0, y: Y1 - 6, width: X1 - X0, height: Y0 - Y1 + 6 }, cp);
+
+    txt(svg, X0, 22, 'c-title', 'start').textContent = 'Made-up loss L(w) = (w − 3)², minimum at w = 3';
+    const grid = mk('g', { class: 'c-grid' }, svg);
+    [4, 8, 12, 16].forEach(L => { mk('line', { x1: X0, x2: X1, y1: sy(L), y2: sy(L) }, grid); txt(svg, X0 - 8, sy(L) + 4, 'c-tick', 'end').textContent = String(L); });
+    txt(svg, X0 - 8, Y0 + 4, 'c-tick', 'end').textContent = '0';
+    mk('line', { x1: X0, x2: X1, y1: Y0, y2: Y0, class: 'c-axis' }, svg);
+    mk('line', { x1: X0, x2: X0, y1: Y1, y2: Y0, class: 'c-axis' }, svg);
+    for (let w = lo; w <= hi; w++) txt(svg, sx(w), Y0 + 16, 'c-tick').textContent = num(w, 0);
+    txt(svg, X1, Y0 + 32, 'c-note', 'end').textContent = 'weight w';
+    let d = ''; for (let i = 0; i <= 160; i++) { const w = lo + (hi - lo) * i / 160; d += (i ? ' L' : 'M') + sx(w).toFixed(1) + ' ' + sy(Lf(w)).toFixed(1); }
+    mk('path', { d, style: 'fill: none; stroke: var(--ink-2); stroke-width: 2' }, svg);
+    mk('circle', { cx: sx(C), cy: sy(0), r: 4, style: 'fill: var(--ink-2)' }, svg);
+
+    const tan = mk('line', { 'clip-path': 'url(#kdl02-lr-clip)', style: 'stroke: var(--accent); stroke-width: 1.4; stroke-dasharray: 5 4' }, svg);
+    const path = mk('polyline', { 'clip-path': 'url(#kdl02-lr-clip)', style: 'fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linejoin: round' }, svg);
+    const dots = mk('g', { 'clip-path': 'url(#kdl02-lr-clip)' }, svg);
+    const cur = mk('circle', { r: 6, 'clip-path': 'url(#kdl02-lr-clip)', style: 'fill: var(--accent); stroke: var(--surface); stroke-width: 1.5' }, svg);
+
+    let ws = [], done = false, diverged = false, converged = false, timer = null;
+    const eta = () => ETAS[+eS.value];
+    const reset = () => { stop(); ws = [parseFloat(startSel.value)]; done = diverged = converged = false; draw(); };
+    const step = () => {
+      if (done) return;
+      const w = ws[ws.length - 1], wn = w - eta() * dL(w);
+      ws.push(wn);
+      if (Math.abs(wn - C) > 4.2) { diverged = true; done = true; }
+      else if (Math.abs(wn - C) < 0.005) { converged = true; done = true; }
+    };
+    const draw = () => {
+      const e = eta(), f = 1 - 2 * e, w = ws[ws.length - 1], n = ws.length - 1, s = dL(w);
+      eO.textContent = String(e);
+      const P = ws.map(v => { const c = Math.max(lo - 0.4, Math.min(hi + 0.4, v)); return [sx(c), sy(Math.min(Lf(c), LMAX + 2))]; });
+      path.setAttribute('points', P.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' '));
+      while (dots.firstChild) dots.removeChild(dots.firstChild);
+      P.slice(0, -1).forEach(p => mk('circle', { cx: p[0], cy: p[1], r: 3.2, style: 'fill: var(--accent)' }, dots));
+      const last = P[P.length - 1];
+      cur.setAttribute('cx', last[0]); cur.setAttribute('cy', last[1]);
+      const h = 0.8; setLine(tan, [sx(w - h), sy(Lf(w) - s * h)], [sx(w + h), sy(Lf(w) + s * h)]);
+      tan.setAttribute('visibility', diverged ? 'hidden' : 'visible');
+      oN.textContent = String(n); oW.textContent = num(w, 3); oS.textContent = num(s, 3); oL.textContent = num(Lf(w), 3);
+      let msg;
+      if (n === 0) msg = 'Start at w = ' + num(w, 2) + '. The slope there is ' + num(s, 2) + (s < 0 ? ', negative, so the first step increases w.' : ', positive, so the first step decreases w.') + ' Each step applies w_new = w_old − η × slope.';
+      else if (diverged) msg = 'After ' + n + ' steps w has been thrown off the chart. Every step overshoots the minimum by more than the one before, so the loss keeps growing. This learning rate is too large.';
+      else if (converged) msg = 'w reached the minimum, within 0.005 of 3, after ' + n + ' step' + (n === 1 ? '' : 's') + '.' + (e <= 0.05 ? ' Small steps get there, but slowly.' : '');
+      else if (e < 0.5) msg = 'Each step lands on the same side of the minimum, ' + num(f, 2) + ' times as far from it as before. ' + (e <= 0.05 ? 'Steady, but slow: run more steps.' : 'Steady progress.');
+      else if (e < 1) msg = 'Each step overshoots to the other side of the minimum but lands closer than before (' + num(Math.abs(f), 2) + ' times the distance), so the path zigzags in.';
+      else if (e === 1) msg = 'Each step lands exactly as far from the minimum on the other side, so w bounces between ' + num(ws[0], 1) + ' and ' + num(2 * C - ws[0], 1) + ' and never settles.';
+      else msg = 'Each step overshoots by more than it gains (' + num(Math.abs(f), 2) + ' times the distance), so w moves further from the minimum every time.';
+      status.textContent = msg;
+    };
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+    eS.addEventListener('input', reset);
+    startSel.addEventListener('change', reset);
+    document.getElementById('lr-step').addEventListener('click', () => { stop(); step(); draw(); });
+    document.getElementById('lr-reset').addEventListener('click', reset);
+    document.getElementById('lr-run').addEventListener('click', () => {
+      stop(); if (done) return;
+      if (reduce) { for (let i = 0; i < 20 && !done; i++) step(); draw(); return; }
+      let k = 0;
+      timer = setInterval(() => { step(); draw(); if (done || ++k >= 20) stop(); }, 180);
+    });
+    reset();
+  })();
+
+  /* ---------- Tiny network: forward pass and one weight update ---------- */
+  (() => {
+    const svg = document.getElementById('net-svg'); if (!svg) return;
+    const recSel = document.getElementById('net-rec'), parSel = document.getElementById('net-par');
+    const wS = document.getElementById('net-w'), wO = document.getElementById('net-w-out');
+    const eS = document.getElementById('net-eta'), eO = document.getElementById('net-eta-out');
+    const oY = document.getElementById('net-yhat'), oL = document.getElementById('net-loss'), oG = document.getElementById('net-g'), oGk = document.getElementById('net-g-k');
+    const oN = document.getElementById('net-new'), oNk = document.getElementById('net-new-k'), status = document.getElementById('net-status');
+    const RECS = [{ x: [7, 3, 7], y: 1 }, { x: [2, 5, 8], y: 0 }, { x: [4, 3, 7], y: 1 }];
+    const INIT = { w1: 0.2, w2: -0.4, w3: -0.1, b1: 0, w4: 0.5, b2: -0.6 };
+    const ETAS = [0.001, 0.01, 0.1, 0.5, 1, 2, 5];
+    const BASE = { w1: [-0.8, 0.8], w2: [-0.8, 0.8], w3: [-0.8, 0.8], b1: [-2, 2], w4: [-1, 3], b2: [-2, 2] };
+    const NAME = { w1: 'w₁', w2: 'w₂', w3: 'w₃', b1: 'b₁', w4: 'w₄', b2: 'b₂' };
+    let P = Object.assign({}, INIT), timer = null;
+
+    const fwd = (p, r) => { const z1 = p.w1 * r.x[0] + p.w2 * r.x[1] + p.w3 * r.x[2] + p.b1, o1 = sig(z1), z2 = p.w4 * o1 + p.b2, yh = sig(z2); return { z1, o1, z2, yh, L: (r.y - yh) * (r.y - yh) }; };
+    const grad = (p, r, key) => {
+      const f = fwd(p, r), d2 = -2 * (r.y - f.yh) * f.yh * (1 - f.yh), d1 = d2 * p.w4 * f.o1 * (1 - f.o1);
+      return { w1: d1 * r.x[0], w2: d1 * r.x[1], w3: d1 * r.x[2], b1: d1, w4: d2 * f.o1, b2: d2 }[key];
+    };
+    const span = (key, a, b) => {
+      let [lo, hi] = BASE[key]; const m = 0.08 * (hi - lo);
+      lo = Math.min(lo, a - m, b - m); hi = Math.max(hi, a + m, b + m);
+      return [Math.max(lo, -60), Math.min(hi, 60)];
+    };
+
+    const defs = mk('defs', {}, svg);
+    arrowHead(defs, 'kdl02-net-ah', '--ink-2'); arrowHead(defs, 'kdl02-net-aha', '--accent');
+    const X0 = 60, X1 = 606, Y0 = 392, Y1 = 232;
+    const cp = mk('clipPath', { id: 'kdl02-net-clip' }, defs); mk('rect', { x: X0, y: Y1 - 4, width: X1 - X0, height: Y0 - Y1 + 4 }, cp);
+    const EDGE = 'stroke: var(--ink-2); stroke-width: 1.4', EDGE_ON = 'stroke: var(--accent); stroke-width: 2.6';
+
+    /* top band: the network */
+    [['inputs', 60], ['hidden neuron', 255], ['output neuron', 445], ['truth and loss', 580]].forEach(([t, x]) => { txt(svg, x, 16, 'c-tick').textContent = t; });
+    const IN = [[60, 50], [60, 100], [60, 150]], HT = [[200, 84], [200, 100], [200, 116]];
+    const edges = IN.map((p, i) => { const q = HT[i], dx = q[0] - p[0], dy = q[1] - p[1], L = Math.hypot(dx, dy); return mk('line', { x1: p[0] + 17 * dx / L, y1: p[1] + 17 * dy / L, x2: q[0] - 2, y2: q[1] }, svg); });
+    const mids = edges.map(e => { const a = [+e.getAttribute('x1'), +e.getAttribute('y1')], b = [+e.getAttribute('x2'), +e.getAttribute('y2')]; return [a[0] + 0.85 * (b[0] - a[0]), a[1] + 0.85 * (b[1] - a[1])]; });
+    IN.forEach((p, i) => { mk('circle', { cx: p[0], cy: p[1], r: 17, style: 'fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.5' }, svg); txt(svg, 36, p[1] + 4, 'c-tick', 'end').textContent = 'x' + ['₁', '₂', '₃'][i]; });
+    const inV = IN.map(p => txt(svg, p[0], p[1] + 4, 'c-note'));
+    const wLbl = [[84, 44], [84, 92], [84, 168]].map(p => txt(svg, p[0], p[1], 'c-tick', 'start'));
+    const box = (x, y, w, h, st) => mk('rect', { x, y, width: w, height: h, rx: 8, style: st }, svg);
+    const ACC = 'fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.6';
+    box(200, 66, 110, 68, ACC); box(390, 66, 110, 68, ACC);
+    box(530, 66, 100, 68, 'fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.2');
+    const hZ = txt(svg, 255, 94, 'c-note'), hO = txt(svg, 255, 114, 'c-note');
+    const oZ = txt(svg, 445, 90, 'c-note'), oYh = txt(svg, 445, 108, 'c-note'), oCl = txt(svg, 445, 125, 'c-tick');
+    const lY = txt(svg, 580, 90, 'c-note'), lD = txt(svg, 580, 108, 'c-tick'), lL = txt(svg, 580, 125, 'c-lbl');
+    const b1T = txt(svg, 255, 40, 'c-tick'), b2T = txt(svg, 445, 40, 'c-tick');
+    const b1A = mk('line', { x1: 255, y1: 46, x2: 255, y2: 64 }, svg), b2A = mk('line', { x1: 445, y1: 46, x2: 445, y2: 64 }, svg);
+    const w4E = mk('line', { x1: 310, y1: 100, x2: 388, y2: 100 }, svg), w4T = txt(svg, 349, 92, 'c-tick');
+    mk('line', { x1: 500, y1: 100, x2: 528, y2: 100, 'marker-end': 'url(#kdl02-net-ah)', style: EDGE }, svg);
+    const back = mk('path', { 'marker-end': 'url(#kdl02-net-aha)', style: 'fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 5 4' }, svg);
+    const backT = txt(svg, 0, 178, 'c-lbl');
+    const ANCH = { w1: mids[0], w2: mids[1], w3: mids[2], w4: [349, 100], b1: [255, 134], b2: [445, 134] };
+    const LINES = { w1: edges[0], w2: edges[1], w3: edges[2], w4: w4E, b1: b1A, b2: b2A };
+    const LBLS = { w1: wLbl[0], w2: wLbl[1], w3: wLbl[2], w4: w4T, b1: b1T, b2: b2T };
+
+    /* bottom band: the loss against the chosen weight */
+    mk('line', { x1: 12, y1: 196, x2: 628, y2: 196, style: 'stroke: var(--rule); stroke-width: 1' }, svg);
+    const title = txt(svg, X0, 216, 'c-title', 'start');
+    const grid = mk('g', { class: 'c-grid' }, svg);
+    [0.25, 0.5, 0.75, 1].forEach(L => { const y = Y0 - L * (Y0 - Y1); mk('line', { x1: X0, x2: X1, y1: y, y2: y }, grid); txt(svg, X0 - 8, y + 4, 'c-tick', 'end').textContent = num(L, 2); });
+    txt(svg, X0 - 8, Y0 + 4, 'c-tick', 'end').textContent = '0';
+    mk('line', { x1: X0, x2: X1, y1: Y0, y2: Y0, class: 'c-axis' }, svg);
+    mk('line', { x1: X0, x2: X0, y1: Y1, y2: Y0, class: 'c-axis' }, svg);
+    const ticks = mk('g', {}, svg);
+    const axName = txt(svg, X1 + 8, Y0 + 4, 'c-note', 'start');
+    const curve = mk('path', { 'clip-path': 'url(#kdl02-net-clip)', style: 'fill: none; stroke: var(--ink-2); stroke-width: 2' }, svg);
+    const gOld = mk('line', { style: 'stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3' }, svg);
+    const gNew = mk('line', { style: 'stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3' }, svg);
+    const tan = mk('line', { 'clip-path': 'url(#kdl02-net-clip)', style: 'stroke: var(--accent); stroke-width: 1.6' }, svg);
+    const stepA = mk('line', { 'marker-end': 'url(#kdl02-net-aha)', style: 'stroke: var(--accent); stroke-width: 2' }, svg);
+    const pNew = mk('circle', { r: 6, style: 'fill: var(--surface); stroke: var(--accent); stroke-width: 2' }, svg);
+    const pOld = mk('circle', { r: 6, style: 'fill: var(--accent); stroke: var(--surface); stroke-width: 1.5' }, svg);
+    const tOld = txt(svg, 0, Y0 + 32, 'c-tick'), tNew = txt(svg, 0, Y0 + 32, 'c-lbl');
+
+    const tickStep = s => { for (const t of [0.1, 0.2, 0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50]) if (s / t <= 8) return t; return 100; };
+    const syncSlider = () => {
+      const key = parSel.value, [lo, hi] = span(key, P[key], P[key]);
+      wS.min = String(Math.floor(lo * 100) / 100); wS.max = String(Math.ceil(hi * 100) / 100); wS.value = String(P[key]);
+    };
+
+    const draw = () => {
+      const r = RECS[+recSel.value], key = parSel.value, eta = ETAS[+eS.value], nm = NAME[key];
+      const f = fwd(P, r), g = grad(P, r, key), wOld = P[key], wNew = wOld - eta * g;
+      const Q = Object.assign({}, P); Q[key] = wNew; const fN = fwd(Q, r);
+      eO.textContent = String(eta); wO.textContent = num(wOld, 2);
+
+      /* network */
+      inV.forEach((t, i) => { t.textContent = String(r.x[i]); });
+      ['w1', 'w2', 'w3'].forEach((k, i) => { wLbl[i].textContent = NAME[k] + ' = ' + num(P[k], 2); });
+      w4T.textContent = 'w₄ = ' + num(P.w4, 2); b1T.textContent = 'b₁ = ' + num(P.b1, 2); b2T.textContent = 'b₂ = ' + num(P.b2, 2);
+      Object.keys(LINES).forEach(k => {
+        const on = k === key;
+        LINES[k].setAttribute('style', on ? EDGE_ON : EDGE);
+        LINES[k].setAttribute('marker-end', on ? 'url(#kdl02-net-aha)' : 'url(#kdl02-net-ah)');
+        LBLS[k].setAttribute('class', on ? 'c-lbl' : 'c-tick');
+      });
+      hZ.textContent = 'z₁ = ' + num(f.z1, 3); hO.textContent = 'O₁ = ' + num(f.o1, 3);
+      oZ.textContent = 'z₂ = ' + num(f.z2, 3); oYh.textContent = 'ŷ = ' + num(f.yh, 3); oCl.textContent = 'class ' + (f.yh >= 0.5 ? 1 : 0);
+      lY.textContent = 'y = ' + r.y; lD.textContent = 'y − ŷ = ' + num(r.y - f.yh, 3); lL.textContent = 'L = ' + num(f.L, 3);
+      const a = ANCH[key];
+      back.setAttribute('d', 'M580 134 V160 H' + a[0].toFixed(1) + ' V' + (a[1] + 6).toFixed(1));
+      backT.setAttribute('x', ((580 + a[0]) / 2).toFixed(1));
+      backT.textContent = 'backward: ∂L/∂' + nm + ' = ' + num(g, 4);
+
+      /* loss curve */
+      const [lo, hi] = span(key, wOld, wNew);
+      const sx = v => X0 + (v - lo) / (hi - lo) * (X1 - X0), sy = L => Y0 - L * (Y0 - Y1);
+      title.textContent = 'Loss L = (y − ŷ)² as ' + nm + ' varies, the other weights fixed';
+      axName.textContent = nm;
+      let d = '';
+      for (let i = 0; i <= 200; i++) { const v = lo + (hi - lo) * i / 200, R = Object.assign({}, P); R[key] = v; d += (i ? ' L' : 'M') + sx(v).toFixed(1) + ' ' + sy(fwd(R, r).L).toFixed(1); }
+      curve.setAttribute('d', d);
+      while (ticks.firstChild) ticks.removeChild(ticks.firstChild);
+      const st = tickStep(hi - lo), dec = st < 1 ? (st === 0.25 ? 2 : 1) : 0;
+      for (let t = Math.ceil(lo / st) * st; t <= hi + 1e-9; t += st) {
+        mk('line', { x1: sx(t), x2: sx(t), y1: Y0, y2: Y0 + 4, class: 'c-axis' }, ticks);
+        txt(ticks, sx(t), Y0 + 16, 'c-tick').textContent = num(t, dec);
+      }
+      const xo = sx(wOld), xn = sx(wNew), yo = sy(f.L), yn = sy(fN.L), h = 0.12 * (hi - lo);
+      setLine(tan, [sx(wOld - h), sy(f.L - g * h)], [sx(wOld + h), sy(f.L + g * h)]);
+      pOld.setAttribute('cx', xo); pOld.setAttribute('cy', yo);
+      pNew.setAttribute('cx', xn); pNew.setAttribute('cy', yn);
+      setLine(gOld, [xo, yo + 6], [xo, Y0]); setLine(gNew, [xn, yn + 6], [xn, Y0]);
+      const far = Math.abs(xn - xo) > 10, apart = Math.abs(xn - xo) > 3;
+      stepA.setAttribute('visibility', far ? 'visible' : 'hidden');
+      if (far) setLine(stepA, [xo + (xn > xo ? 4 : -4), Y0 - 8], [xn + (xn > xo ? -4 : 4), Y0 - 8]);
+      tOld.textContent = 'old'; tNew.textContent = apart ? 'new' : '';
+      if (apart && Math.abs(xn - xo) < 34) {
+        tOld.setAttribute('text-anchor', xn > xo ? 'end' : 'start'); tNew.setAttribute('text-anchor', xn > xo ? 'start' : 'end');
+        tOld.setAttribute('x', xo + (xn > xo ? -2 : 2)); tNew.setAttribute('x', xn + (xn > xo ? 2 : -2));
+      } else {
+        tOld.setAttribute('text-anchor', 'middle'); tNew.setAttribute('text-anchor', 'middle');
+        tOld.setAttribute('x', xo); tNew.setAttribute('x', xn);
+      }
+
+      /* readouts and status */
+      oY.textContent = num(f.yh, 3) + ' → ' + (f.yh >= 0.5 ? 1 : 0);
+      oL.textContent = num(f.L, 4);
+      oGk.textContent = 'Slope ∂L/∂' + nm; oG.textContent = num(g, 4);
+      oNk.textContent = 'New ' + nm; oN.textContent = num(wNew, 3);
+      const dir = Math.abs(g) < 5e-5 ? 'The slope is almost 0, so ' + nm + ' barely moves' : (g < 0 ? 'The slope is negative, so ' + nm + ' increases' : 'The slope is positive, so ' + nm + ' decreases');
+      const eff = fN.L < f.L - 5e-7 ? ', and the loss falls from ' + num(f.L, 4) + ' to ' + num(fN.L, 4) + '.' : (fN.L > f.L + 5e-7 ? ', but the step is so large that the loss rises from ' + num(f.L, 4) + ' to ' + num(fN.L, 4) + '.' : ', and the loss stays at ' + num(f.L, 4) + '.');
+      const cls = (f.yh >= 0.5 ? 1 : 0), ok = cls === r.y ? 'right' : 'wrong';
+      status.textContent = 'Prediction ' + num(f.yh, 3) + ' means class ' + cls + ', truth ' + r.y + ' (' + ok + '). Update: ' + nm + ' new = ' + num(wOld, 3) + ' − ' + eta + ' × (' + num(g, 4) + ') = ' + num(wNew, 3) + '. ' + dir + eff;
+    };
+
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+    const apply = () => { const key = parSel.value; P[key] = P[key] - ETAS[+eS.value] * grad(P, RECS[+recSel.value], key); syncSlider(); draw(); };
+    recSel.addEventListener('change', () => { stop(); draw(); });
+    parSel.addEventListener('change', () => { stop(); syncSlider(); draw(); });
+    eS.addEventListener('input', () => { stop(); draw(); });
+    wS.addEventListener('input', () => { stop(); P[parSel.value] = parseFloat(wS.value); draw(); });
+    document.getElementById('net-step').addEventListener('click', () => { stop(); apply(); });
+    document.getElementById('net-reset').addEventListener('click', () => { stop(); P = Object.assign({}, INIT); syncSlider(); draw(); });
+    document.getElementById('net-run').addEventListener('click', () => {
+      stop();
+      if (reduce) { for (let i = 0; i < 10; i++) { const key = parSel.value; P[key] = P[key] - ETAS[+eS.value] * grad(P, RECS[+recSel.value], key); } syncSlider(); draw(); return; }
+      let k = 0;
+      timer = setInterval(() => { apply(); if (++k >= 10) stop(); }, 260);
+    });
+    syncSlider(); draw();
+  })();
+})();
+</script>
+</body>
+</html>
