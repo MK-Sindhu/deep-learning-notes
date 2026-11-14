@@ -1,0 +1,1532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DL in 5 hours · Part 7 · Black-box models and CNNs · DL Notes</title>
+<meta name="description" content="Notes on Krish Naik's Deep Learning In-depth Tutorials in 5 Hours, Part 7: black-box and white-box models, convolutional neural networks (images as pixels and channels, convolution with filters, padding, stride and the output-size formula, ReLU, max pooling, flattening, fully connected layers) and a CNN for CIFAR-10 in TensorFlow Keras.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<script src="theme.js"></script>
+<style>
+.controls select { font: 500 14px/1.3 var(--font-head); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 10px; }
+#cp-svg .hit { cursor: pointer; }
+.controls .grp { display: inline-flex; align-items: center; gap: 10px; }
+.controls .grp label { white-space: nowrap; }
+</style>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <!-- PARTNAV:START --><nav class="partnav" aria-label="Parts"><a href="index.html#extra">All notes</a><span class="sep">/</span><span>DL in 5 hours · Part 7 of 7</span><span class="sep">·</span><a href="krish-dl-06.html">← Part 6</a></nav><!-- PARTNAV:END -->
+    <div class="eyebrow">Krish Naik · Deep Learning In-depth Tutorials in 5 Hours</div>
+    <h1>Black-box models, convolutional neural networks and a CNN in Keras</h1>
+    <p class="lede">The last part opens with a quick question about which models you can see inside, then spends an hour on convolutional neural networks: images as grids of pixels, filters that slide over them, padding, stride, ReLU, max pooling and flattening. It ends by running TensorFlow's CIFAR-10 tutorial in Colab, a small CNN that reaches about 70% test accuracy after 10 epochs.</p>
+    <div class="meta">
+      <span><b>Part 7</b> of 7</span>
+      <span>Teacher <b>Krish Naik</b></span>
+      <span>About <b>72 min</b> of video</span>
+      <span><b>3</b> chapters</span>
+    </div>
+    <div class="watch">
+      <a class="btn solid" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16248s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:30:48 · Black-box vs white-box</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16603s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:36:43 · Convolutional neural networks</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19850s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:30:50 · CNN practical</a>
+    </div>
+  </div>
+</header>
+
+<div class="page gutter">
+  <nav class="toc" aria-label="Contents">
+    <div>
+      <h4>Black-box vs white-box</h4>
+      <ul>
+        <li><a href="#black-box">Which models can you see into?</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Convolutional neural networks</h4>
+      <ul>
+        <li><a href="#cnn-plan">What CNNs are for</a></li>
+        <li><a href="#visual-cortex">The visual cortex</a></li>
+        <li><a href="#pixels">Pixels and channels</a></li>
+        <li><a href="#convolution">The convolution operation</a></li>
+        <li><a href="#edge-example">Finding a vertical edge</a></li>
+        <li><a href="#output-size">Output size and padding</a></li>
+        <li><a href="#learned-filters">Learned filters and ReLU</a></li>
+        <li><a href="#stride">Stride and the formula</a></li>
+        <li><a href="#pooling">Max pooling</a></li>
+        <li><a href="#flatten">Flatten and dense layers</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Practical: a CNN in Keras</h4>
+      <ul>
+        <li><a href="#practical-setup">Colab and imports</a></li>
+        <li><a href="#cifar">The CIFAR-10 data</a></li>
+        <li><a href="#build">Convolutional base</a></li>
+        <li><a href="#summary">Reading model.summary()</a></li>
+        <li><a href="#head">Flatten and dense head</a></li>
+        <li><a href="#train">Compile and train</a></li>
+        <li><a href="#evaluate">Evaluate and improve</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Revision</h4>
+      <ul>
+        <li><a href="#terms">Key terms</a></li>
+        <li><a href="#test">Test yourself</a></li>
+        <li><a href="index.html#extra">All notes</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="glance" id="glance">
+      <h2>At a glance</h2>
+      <ul>
+        <li>A <dfn>white-box</dfn> model lets you follow how it reaches a prediction (linear regression, a decision tree). A <dfn>black-box</dfn> model has too many parts to follow (random forest, XGBoost, ANNs, CNNs, RNNs). <b>Explainable AI</b> is research on tools that open the box.</li>
+        <li>A CNN imitates the layered <b>visual cortex</b>: each layer extracts more information from the one before. Its input is a grid of pixels from 0 to 255, with one channel for black and white and three (R, G, B) for colour. The first step divides every pixel by 255.</li>
+        <li><b>Convolution</b> slides an \(f \times f\) <b>filter</b> (kernel) over the image, multiplies entry by entry and adds. On a 6 × 6 image with a dark left half and a bright right half, the vertical-edge filter outputs 0, −4, −4, 0 in every row, which marks the edge. Filters are learned by backpropagation, and ReLU follows every convolution.</li>
+        <li><b>Padding</b> adds a border (zeros or nearest values) so the image does not shrink; <b>stride</b> is the jump between positions. Output size: \(\lfloor (n + 2p - f)/s \rfloor + 1\), so 6 × 6 with a 3 × 3 filter gives 4 × 4, or 6 × 6 with padding 1.</li>
+        <li><b>Max pooling</b> (2 × 2, stride 2) keeps the largest value of each block, which helps the network find an object wherever it is (location invariance); average and min pooling are alternatives. <b>Flattening</b> turns the last maps into one vector for the fully connected layers.</li>
+        <li>The practical runs TensorFlow's CIFAR-10 tutorial: three <code>Conv2D</code> layers (32, 64, 64 filters) with two <code>MaxPooling2D</code>, then <code>Flatten</code>, <code>Dense(64)</code> and <code>Dense(10)</code>, 122,570 parameters, Adam and sparse categorical cross-entropy. After 10 epochs: about 78% training and 70% test accuracy.</li>
+      </ul>
+    </div>
+
+    <!-- ============ CHAPTER 1 · BLACK BOX VS WHITE BOX ============ -->
+    <section id="black-box">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16248s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:30:48</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16311s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:31:51 XGBoost and linear regression</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16343s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:32:23 explainable AI</a>
+        </div>
+        <h2>Black-box and white-box models</h2>
+      </div>
+      <p>This short chapter closes the session on the ANN practical with a question Krish calls important trivia that everybody should know. For each algorithm, ask whether you can see how it works inside. If you can, it is a <dfn>white-box model</dfn>. If its internal working is too big to check, it is a <dfn>black-box model</dfn>.</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Model</th><th>Kind</th><th>Why, in the video</th></tr></thead>
+          <tbody>
+            <tr><td>Decision tree</td><td>White box</td><td>You can see how it works: follow the splits to the prediction. <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16278s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:31:18</a></td></tr>
+            <tr><td>Linear regression</td><td>White box</td><td>You can see many things about the model directly. <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16311s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:31:51</a></td></tr>
+            <tr><td>Random forest</td><td>Black box</td><td>With, say, 100 decision trees it is very difficult to monitor everything. <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16343s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:32:23</a></td></tr>
+            <tr><td>XGBoost</td><td>Black box</td><td>It also combines many decision trees.</td></tr>
+            <tr><td>ANN</td><td>Black box</td><td>You cannot monitor all the weights or see directly how it works internally.</td></tr>
+            <tr><td>CNN, RNN</td><td>Black box</td><td>You can see inside up to some level, but not everything.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Because so many useful models are black boxes, <dfn>explainable AI</dfn> is becoming popular <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16376s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:32:56</a>. People want tools that monitor a model and show how it performs with respect to each input feature. Krish describes this as ongoing research and expects better explainability tools to appear.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 266" role="img" aria-label="Two boxes. White box: linear regression, where you see how each feature enters the prediction, and a decision tree, where you follow the splits. Black box: random forest with for example 100 trees, XGBoost with many boosted trees, ANN with too many weights to monitor, CNN and RNN visible only up to a point. An arrow from the black box to the white box is labelled explainable AI.">
+            <defs><marker id="kdl07-f1-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="20" y="22">Can you see how the model reaches its prediction?</text>
+            <rect class="d-box" x="20" y="38" width="290" height="164" rx="10"/>
+            <text class="d-t" x="36" y="62">White box</text>
+            <text class="d-s" x="36" y="80">you can follow how a prediction is made</text>
+            <text class="d-t" x="36" y="114">Linear regression</text>
+            <text class="d-s" x="36" y="131">see how each feature enters the prediction</text>
+            <text class="d-t" x="36" y="162">Decision tree</text>
+            <text class="d-s" x="36" y="179">follow the splits from the root to a leaf</text>
+            <rect class="d-box-acc" x="350" y="38" width="290" height="164" rx="10"/>
+            <text class="d-t" x="366" y="62">Black box</text>
+            <text class="d-s" x="366" y="80">too many parts to follow by hand</text>
+            <text class="d-t" x="366" y="110">Random forest</text><text class="d-s" x="478" y="110">e.g. 100 decision trees</text>
+            <text class="d-t" x="366" y="134">XGBoost</text><text class="d-s" x="478" y="134">many boosted trees</text>
+            <text class="d-t" x="366" y="158">ANN</text><text class="d-s" x="478" y="158">too many weights to monitor</text>
+            <text class="d-t" x="366" y="182">CNN, RNN</text><text class="d-s" x="478" y="182">visible only up to a point</text>
+            <path class="d-ln-acc" d="M495 206 C 470 240, 190 240, 165 208" marker-end="url(#kdl07-f1-ah)"/>
+            <text class="d-s" x="330" y="256" text-anchor="middle" style="fill: var(--accent)">explainable AI: research on tools that show how each input feature drives the output</text>
+          </svg>
+        </div>
+        <figcaption><b>White-box and black-box models</b>, sorted as in the video. On the left you can follow how a prediction is made. On the right the model has too many trees or weights to follow by hand. Explainable AI tries to make the right-hand models inspectable.</figcaption>
+      </figure>
+
+      <p class="callout"><b>Not in the video:</b> widely used explainability tools include permutation feature importance, SHAP and LIME for tabular models, and saliency maps and guided backpropagation for CNNs. For the IIT Madras treatment of looking inside a CNN, see Lecture 9 (<a href="lecture-09.html">lecture-09.html</a>).</p>
+      <p>The session ends here <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16407s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:33:27</a>. The next one covers CNNs with a practical example, and RNNs come later with NLP.</p>
+    </section>
+
+    <!-- ============ CHAPTER 2 · CNN ============ -->
+    <section id="cnn-plan">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16437s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:33:57 new session</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16532s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:35:32 agenda</a>
+        </div>
+        <h2>What CNNs are for, and the plan</h2>
+      </div>
+      <p>The ANN is done, in theory and in practice, along with its optimizers and loss functions (<a href="krish-dl-02.html">Parts 2</a> to <a href="krish-dl-06.html">6</a>). This session asks what a <dfn>convolutional neural network</dfn> (CNN) is and how it works. CNNs are mostly used on images and on video frames <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16469s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:34:29</a>, for tasks such as <b>image classification</b> and <b>object detection</b>, where different kinds of CNN detect the objects in an image or a video.</p>
+      <p>The plan for the session <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16532s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:35:32</a>:</p>
+      <ol>
+        <li>CNN versus the human brain: how the brain sees, since a CNN mimics that part.</li>
+        <li>The convolution operation: filters (also called kernels), padding, stride, and how to work out the size of the output.</li>
+        <li>Max pooling, and why it matters.</li>
+        <li>The flattening layer at the end of the CNN.</li>
+        <li>A practical implementation.</li>
+      </ol>
+    </section>
+
+    <section id="visual-cortex">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16660s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:37:40</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16726s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:38:46 visual cortex</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16764s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:39:24 layers V1 to V7</a>
+        </div>
+        <h2>How the brain sees, and what a CNN should copy</h2>
+      </div>
+      <p>Picture an image containing a cat, a dog, a bicycle, a car and a person. Looking at it, you take in many details at once: a person moving, an animal, a bird flying. The processing happens in the <b>cerebral cortex</b>. The part of it at the back of the brain that is responsible for seeing objects in an image or a video is the <dfn>visual cortex</dfn> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16726s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:38:46</a>.</p>
+      <p>Krish pictures the visual cortex as a stack of layers, which he names V1 to V7, adding that he is just making up some layers for the illustration. As the input passes through, each layer does its own job. V1 notices moving objects, V2 recognizes animals such as a cat or a dog, V3 maps the environment, and so on, until at V7 you visualize the whole image <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16834s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:40:34</a>. You see the final result only after many stages of processing.</p>
+      <p>A CNN should be able to do the same kind of staged processing <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16867s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:41:07</a>. The question is how to build layers that do it, and the first step is the convolution.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 222" role="img" aria-label="Top row, the visual cortex as Krish sketches it: the scene with a cat, dog and car goes to V1 for moving objects, V2 for animals, V3 for the environment, more layers, and V7 for the whole image. Bottom row, a CNN: the image as pixels goes to convolution with filters and ReLU, max pooling, repeated convolution and pooling, more layers, and flatten plus dense layers that output cat or dog.">
+            <defs><marker id="kdl07-f2-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-row" x="20" y="22">visual cortex, as sketched in the video</text>
+            <rect class="d-box" x="20" y="32" width="92" height="56" rx="8"/>
+            <text class="d-t" x="66" y="56" text-anchor="middle">the scene</text><text class="d-s" x="66" y="74" text-anchor="middle">cat, dog, car…</text>
+            <rect class="d-box-acc" x="130" y="32" width="100" height="56" rx="8"/>
+            <text class="d-t" x="180" y="56" text-anchor="middle">V1</text><text class="d-s" x="180" y="74" text-anchor="middle">moving objects</text>
+            <rect class="d-box-acc" x="248" y="32" width="100" height="56" rx="8"/>
+            <text class="d-t" x="298" y="56" text-anchor="middle">V2</text><text class="d-s" x="298" y="74" text-anchor="middle">animals</text>
+            <rect class="d-box-acc" x="366" y="32" width="100" height="56" rx="8"/>
+            <text class="d-t" x="416" y="56" text-anchor="middle">V3</text><text class="d-s" x="416" y="74" text-anchor="middle">the environment</text>
+            <rect class="d-box-acc" x="502" y="32" width="138" height="56" rx="8"/>
+            <text class="d-t" x="571" y="56" text-anchor="middle">V7</text><text class="d-s" x="571" y="74" text-anchor="middle">the whole image</text>
+            <line class="d-ln" x1="112" y1="60" x2="126" y2="60" marker-end="url(#kdl07-f2-ah)"/>
+            <line class="d-ln" x1="230" y1="60" x2="244" y2="60" marker-end="url(#kdl07-f2-ah)"/>
+            <line class="d-ln" x1="348" y1="60" x2="362" y2="60" marker-end="url(#kdl07-f2-ah)"/>
+            <line class="d-ln d-dash" x1="466" y1="60" x2="498" y2="60" marker-end="url(#kdl07-f2-ah)"/>
+
+            <text class="d-s" x="330" y="116" text-anchor="middle" style="fill: var(--accent)">each stage works on what the stage before it produced</text>
+
+            <text class="d-row" x="20" y="138">convolutional neural network</text>
+            <rect class="d-box" x="20" y="148" width="92" height="56" rx="8"/>
+            <text class="d-t" x="66" y="172" text-anchor="middle">image</text><text class="d-s" x="66" y="190" text-anchor="middle">pixels, 0–1</text>
+            <rect class="d-box-acc" x="130" y="148" width="100" height="56" rx="8"/>
+            <text class="d-t" x="180" y="172" text-anchor="middle">convolution</text><text class="d-s" x="180" y="190" text-anchor="middle">filters + ReLU</text>
+            <rect class="d-box-acc" x="248" y="148" width="100" height="56" rx="8"/>
+            <text class="d-t" x="298" y="172" text-anchor="middle">max pooling</text><text class="d-s" x="298" y="190" text-anchor="middle">keep the clearest</text>
+            <rect class="d-box-acc" x="366" y="148" width="100" height="56" rx="8"/>
+            <text class="d-t" x="416" y="172" text-anchor="middle">conv + pool</text><text class="d-s" x="416" y="190" text-anchor="middle">repeated</text>
+            <rect class="d-box-acc" x="502" y="148" width="138" height="56" rx="8"/>
+            <text class="d-t" x="571" y="172" text-anchor="middle">flatten + dense</text><text class="d-s" x="571" y="190" text-anchor="middle">output: cat or dog</text>
+            <line class="d-ln" x1="112" y1="176" x2="126" y2="176" marker-end="url(#kdl07-f2-ah)"/>
+            <line class="d-ln" x1="230" y1="176" x2="244" y2="176" marker-end="url(#kdl07-f2-ah)"/>
+            <line class="d-ln" x1="348" y1="176" x2="362" y2="176" marker-end="url(#kdl07-f2-ah)"/>
+            <line class="d-ln d-dash" x1="466" y1="176" x2="498" y2="176" marker-end="url(#kdl07-f2-ah)"/>
+          </svg>
+        </div>
+        <figcaption><b>The analogy behind CNNs.</b> Top: Krish's picture of the visual cortex as a stack of layers, each doing one job; he says the names and roles are only an illustration. Bottom: the CNN this part builds, where each stage also extracts something from the output of the stage before.</figcaption>
+      </figure>
+      <p class="callout"><b>Not in the video:</b> real visual areas do carry names such as V1, V2, V3, V4 and V5 (also called MT), but their roles differ from this sketch. Hubel and Wiesel found that cells in V1 respond to edges and bars at particular orientations, which is close to what the first layer of a trained CNN detects, and motion is handled mainly in V5. Lecture 2 opens with a similar layered picture (<a href="lecture-02.html#biology">lecture-02.html</a>).</p>
+    </section>
+
+    <section id="pixels">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16899s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:41:39</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16964s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:42:44 pixel values</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17034s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:43:54 RGB</a>
+        </div>
+        <h2>Images as grids of pixels and channels</h2>
+      </div>
+      <p>Before the convolution comes some basic information about images. A photo is divided into <dfn>pixels</dfn>, arranged in a grid. There are two kinds of image <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16930s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:42:10</a>:</p>
+      <ul>
+        <li><b>Black and white</b> (grayscale): a single <dfn>channel</dfn>. A 5 × 5 pixel image has 5 pixels across and 5 down. Each pixel holds a value from 0 to 255, where 0 is black and 255 is white <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16964s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:42:44</a>. Different pixels have different values depending on what the image shows, such as 40, 0, 255, 240 or 17.</li>
+        <li><b>RGB</b> (colour) <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17034s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:43:54</a>: what a phone or a DSLR camera produces. It has three channels, red, green and blue, because every colour can be made by combining these three. For a 5 × 5 image each channel is a 5 × 5 grid of values from 0 to 255, and the image is written \(5 \times 5 \times 3\) <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17165s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:46:05</a>.</li>
+      </ul>
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 262" role="img" aria-label="Left: a 5 by 5 grid of pixel values between 0 and 255 for a black-and-white image, one channel. Right: three 5 by 5 grids stacked behind each other, labelled red, green and blue, for a colour image of shape 5 by 5 by 3.">
+            <text class="d-h" x="20" y="24">Black and white: one channel</text>
+            <rect x="60" y="46" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.10; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="76" y="65.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">40</text>
+            <rect x="92" y="46" width="32" height="32" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="108" y="65.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="124" y="46" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.44; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="140" y="65.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">255</text>
+            <rect x="156" y="46" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.42; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="172" y="65.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">240</text>
+            <rect x="188" y="46" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.07; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="204" y="65.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">17</text>
+            <rect x="60" y="78" width="32" height="32" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="76" y="97.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="92" y="78" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.06; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="108" y="97.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">12</text>
+            <rect x="124" y="78" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.35; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="140" y="97.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">200</text>
+            <rect x="156" y="78" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.44; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="172" y="97.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">255</text>
+            <rect x="188" y="78" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.09; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="204" y="97.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">30</text>
+            <rect x="60" y="110" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.05; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="76" y="129.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">8</text>
+            <rect x="92" y="110" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.18; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="108" y="129.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">90</text>
+            <rect x="124" y="110" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.44; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="140" y="129.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">255</text>
+            <rect x="156" y="110" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.32; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="172" y="129.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">180</text>
+            <rect x="188" y="110" width="32" height="32" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="204" y="129.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="60" y="142" width="32" height="32" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="76" y="161.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="92" y="142" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.13; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="108" y="161.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">60</text>
+            <rect x="124" y="142" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.40; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="140" y="161.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">230</text>
+            <rect x="156" y="142" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.23; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="172" y="161.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">120</text>
+            <rect x="188" y="142" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.05; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="204" y="161.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">5</text>
+            <rect x="60" y="174" width="32" height="32" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="76" y="193.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="92" y="174" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.07; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="108" y="193.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">20</text>
+            <rect x="124" y="174" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.37; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="140" y="193.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">210</text>
+            <rect x="156" y="174" width="32" height="32" style="fill: var(--accent); fill-opacity: 0.18; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="172" y="193.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">90</text>
+            <rect x="188" y="174" width="32" height="32" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="204" y="193.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="60" y="46" width="160" height="160" style="fill: none; stroke: var(--ink-2); stroke-width: 1.2"/>
+            <text class="d-s" x="60" y="230">5 × 5 pixels, one channel: 5 × 5 × 1</text>
+            <text class="d-s" x="60" y="246">each value from 0 (black) to 255 (white)</text>
+            <line class="d-rule" x1="350" y1="10" x2="350" y2="252"/>
+            <text class="d-h" x="380" y="24">Colour (RGB): three channels</text>
+            <rect x="446" y="44" width="110" height="110" style="fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.2"/>
+            <line class="d-rule" x1="468" y1="44" x2="468" y2="154"/>
+            <line class="d-rule" x1="446" y1="66" x2="556" y2="66"/>
+            <line class="d-rule" x1="490" y1="44" x2="490" y2="154"/>
+            <line class="d-rule" x1="446" y1="88" x2="556" y2="88"/>
+            <line class="d-rule" x1="512" y1="44" x2="512" y2="154"/>
+            <line class="d-rule" x1="446" y1="110" x2="556" y2="110"/>
+            <line class="d-rule" x1="534" y1="44" x2="534" y2="154"/>
+            <line class="d-rule" x1="446" y1="132" x2="556" y2="132"/>
+            <rect x="424" y="66" width="110" height="110" style="fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.2"/>
+            <line class="d-rule" x1="446" y1="66" x2="446" y2="176"/>
+            <line class="d-rule" x1="424" y1="88" x2="534" y2="88"/>
+            <line class="d-rule" x1="468" y1="66" x2="468" y2="176"/>
+            <line class="d-rule" x1="424" y1="110" x2="534" y2="110"/>
+            <line class="d-rule" x1="490" y1="66" x2="490" y2="176"/>
+            <line class="d-rule" x1="424" y1="132" x2="534" y2="132"/>
+            <line class="d-rule" x1="512" y1="66" x2="512" y2="176"/>
+            <line class="d-rule" x1="424" y1="154" x2="534" y2="154"/>
+            <rect x="402" y="88" width="110" height="110" style="fill: var(--surface)"/>
+            <rect x="402" y="88" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.32; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="413" y="102.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">200</text>
+            <rect x="424" y="88" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.29; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="435" y="102.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">180</text>
+            <rect x="446" y="88" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.10; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="457" y="102.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">40</text>
+            <rect x="468" y="88" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.08; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="479" y="102.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">30</text>
+            <rect x="490" y="88" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.07; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="501" y="102.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">20</text>
+            <rect x="402" y="110" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.34; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="413" y="124.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">210</text>
+            <rect x="424" y="110" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.31; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="435" y="124.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">190</text>
+            <rect x="446" y="110" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.12; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="457" y="124.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">60</text>
+            <rect x="468" y="110" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.08; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="479" y="124.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">25</text>
+            <rect x="490" y="110" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.05; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="501" y="124.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">10</text>
+            <rect x="402" y="132" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.35; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="413" y="146.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">220</text>
+            <rect x="424" y="132" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.25; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="435" y="146.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">150</text>
+            <rect x="446" y="132" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.17; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="457" y="146.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">90</text>
+            <rect x="468" y="132" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.10; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="479" y="146.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">40</text>
+            <rect x="490" y="132" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.06; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="501" y="146.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">15</text>
+            <rect x="402" y="154" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.36; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="413" y="168.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">230</text>
+            <rect x="424" y="154" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.21; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="435" y="168.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">120</text>
+            <rect x="446" y="154" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.18; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="457" y="168.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">100</text>
+            <rect x="468" y="154" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.12; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="479" y="168.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">60</text>
+            <rect x="490" y="154" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.08; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="501" y="168.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">30</text>
+            <rect x="402" y="176" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.38; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="413" y="190.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">240</text>
+            <rect x="424" y="176" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.18; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="435" y="190.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">100</text>
+            <rect x="446" y="176" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.15; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="457" y="190.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">80</text>
+            <rect x="468" y="176" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.14; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="479" y="190.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">70</text>
+            <rect x="490" y="176" width="22" height="22" style="fill: var(--accent); fill-opacity: 0.11; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="501" y="190.42" text-anchor="middle" style="fill: var(--ink); font-size: 9.5px">50</text>
+            <rect x="402" y="88" width="110" height="110" style="fill: none; stroke: var(--ink-2); stroke-width: 1.2"/>
+            <line class="d-ln" x1="558" y1="52" x2="580" y2="52" style="stroke-width:1"/><text class="d-s" x="584" y="56">blue (B)</text>
+            <line class="d-ln" x1="536" y1="166" x2="580" y2="166" style="stroke-width:1"/><text class="d-s" x="584" y="170">green (G)</text>
+            <line class="d-ln" x1="514" y1="190" x2="580" y2="190" style="stroke-width:1"/><text class="d-s" x="584" y="194">red (R)</text>
+            <text class="d-s" x="402" y="230">5 × 5 × 3: three values per pixel,</text>
+            <text class="d-s" x="402" y="246">each from 0 to 255</text>
+          </svg>
+        </div>
+        <figcaption><b>Images are grids of numbers.</b> Left: a 5 × 5 black-and-white image holds one value per pixel, from 0 (black) to 255 (white); here the shading grows with the value. Right: a colour image stacks a red, a green and a blue grid of the same size, so a 5 × 5 RGB image is 5 × 5 × 3. The values are illustrative, apart from the few he names (40, 0, 255, 240, 17).</figcaption>
+      </figure>
+    </section>
+
+    <section id="convolution">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17199s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:46:39</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17357s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:49:17 min-max scaling</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17424s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:50:24 the filter</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17487s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:51:27 multiply and add</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17585s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:53:05 stride</a>
+        </div>
+        <h2>The convolution operation</h2>
+      </div>
+      <p>Convolution is the first step of a CNN. The running example passes a 6 × 6 image through a 3 × 3 <dfn>filter</dfn>, also called a <dfn>kernel</dfn>, and gets a 4 × 4 output <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17262s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:47:42</a>. The reason for 4 × 4 comes in the section on output size.</p>
+      <p><b>Step 1: scale the pixels.</b> The values run from 0 to 255. The first thing to do is bring them all between 0 and 1 by dividing each one by 255, so 255 becomes 1 <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17357s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:49:17</a>. Krish calls this <dfn>min-max scaling</dfn>; the same step appears in the practical. After scaling, his example image has 0s in its left three columns and 1s in its right three, in every row:</p>
+      <div class="eq">\[ X = \begin{bmatrix} 0 & 0 & 0 & 1 & 1 & 1 \\ 0 & 0 & 0 & 1 & 1 & 1 \\ 0 & 0 & 0 & 1 & 1 & 1 \\ 0 & 0 & 0 & 1 & 1 & 1 \\ 0 & 0 & 0 & 1 & 1 & 1 \\ 0 & 0 & 0 & 1 & 1 & 1 \end{bmatrix} \qquad K_{\text{h}} = \begin{bmatrix} 1 & 2 & 1 \\ 0 & 0 & 0 \\ -1 & -2 & -1 \end{bmatrix} \]</div>
+      <p class="note">Dividing by 255 is min-max scaling \((x - x_{\min})/(x_{\max} - x_{\min})\) with the pixel range's minimum 0 and maximum 255.</p>
+      <p><b>Step 2: the filter.</b> His first filter is \(K_{\text{h}}\) above, which he calls a <b>horizontal edge filter</b> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17424s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:50:24</a>. How filter values are chosen comes later; for now it is a given.</p>
+      <ol class="algo">
+        <li class="algo-title">Convolution of an image with a filter</li>
+        <li>Place the filter on the top-left corner of the image, so it covers a 3 × 3 patch <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17487s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:51:27</a>.</li>
+        <li>Multiply each filter value by the pixel under it and add up the 9 products <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17518s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:51:58</a>. The sum is the first output value.</li>
+        <li>Move the filter one step to the right and repeat. The size of the jump is the <dfn>stride</dfn>: stride 1 moves one pixel, stride 2 jumps two <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17585s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:53:05</a>.</li>
+        <li>When the filter reaches the right edge, move one step down, start again from the left, and continue until the bottom-right corner <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17744s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:55:44</a>.</li>
+      </ol>
+      <p class="note">Not in the video: as a formula, the output at row \(i\), column \(j\) is \(y_{ij} = \sum_{u=1}^{f}\sum_{v=1}^{f} k_{uv}\, x_{(i-1)s+u,\;(j-1)s+v}\) for an \(f \times f\) filter with entries \(k_{uv}\) and stride \(s\).</p>
+      <p>He works the first positions out loud. At the top-left every pixel under the filter is 0, so the sum is 0. One step to the right <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17618s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:53:38</a>, the window covers columns 2 to 4, so column 4's 1s are under the filter's right column. The top row contributes \(1 \cdot 1 = 1\), the middle row 0, and the bottom row \(-1 \cdot 1 = -1\), so the sum is again 0.</p>
+      <p class="callout">He first writes −4s into part of this output, then says those values should be 0 as well <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17806s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:56:46</a>. Every position gives 0 with this filter: all rows of the image are identical, so the filter's top row always cancels its bottom row. That is the expected answer. A horizontal-edge filter finds nothing here because the image only changes from left to right. He then switches to a filter that does respond.</p>
+    </section>
+
+    <section id="edge-example">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17899s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:58:19 vertical edge filter</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18029s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:00:29 back to 0–255</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18217s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:03:37 many filters</a>
+        </div>
+        <h2>A vertical-edge filter finds the edge</h2>
+      </div>
+      <p>The new filter is the <b>vertical edge detector</b> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17930s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:58:50</a>:</p>
+      <div class="eq">\[ K_{\text{v}} = \begin{bmatrix} 1 & 0 & -1 \\ 2 & 0 & -2 \\ 1 & 0 & -1 \end{bmatrix} \]</div>
+      <p class="note">The captions catch only part of the values he writes, one column of −1, −2, −1. This standard layout reproduces every number he then computes.</p>
+      <p>Do the calculation along the first row of positions <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=17966s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:59:26</a>:</p>
+      <ul>
+        <li>Columns 1–3: all pixels are 0, so the output is 0.</li>
+        <li>Columns 2–4: the 1s of column 4 sit under the filter's right column, \(-1 - 2 - 1 = -4\).</li>
+        <li>Columns 3–5: the 1s sit under the middle column (0) and the right column (−4), so again −4.</li>
+        <li>Columns 4–6: all pixels are 1, so \(1 + 2 + 1 + 0 - 1 - 2 - 1 = 0\).</li>
+      </ul>
+      <p>Every row of the image is the same, so every row of the 4 × 4 output is 0, −4, −4, 0. To see the output as an image, undo the scaling <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18029s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:00:29</a>: apply min-max scaling back to 0–255, so the lowest value, −4, becomes 0 (black) and the highest, 0, becomes 255 (white). The middle two columns turn black and the outer ones white. The result is a vertical stripe exactly where the input jumps from 0 to 1. The filter has extracted where the vertical edge is <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18153s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:02:33</a>.</p>
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 266" role="img" aria-label="A 6 by 6 input whose left three columns are 0 and right three columns are 1, convolved with the 3 by 3 vertical edge filter 1 0 minus 1, 2 0 minus 2, 1 0 minus 1. The output is 4 by 4 with every row 0, minus 4, minus 4, 0. Rescaled to 0 to 255, every row becomes 255, 0, 0, 255. One window over columns 2 to 4 and its output value minus 4 are highlighted.">
+            <defs><marker id="kdl07-f4-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-t" x="98" y="22" text-anchor="middle">input</text><text class="d-s" x="98" y="38" text-anchor="middle">6 × 6, scaled to 0–1</text>
+            <text class="d-t" x="247" y="22" text-anchor="middle">filter</text><text class="d-s" x="247" y="38" text-anchor="middle">vertical edge, 3 × 3</text>
+            <text class="d-t" x="372" y="22" text-anchor="middle">output</text><text class="d-s" x="372" y="38" text-anchor="middle">4 × 4</text>
+            <text class="d-t" x="552" y="22" text-anchor="middle">as an image</text><text class="d-s" x="552" y="38" text-anchor="middle">rescaled to 0–255</text>
+            <rect x="20" y="52" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="33" y="68.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="46" y="52" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="59" y="68.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="72" y="52" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="85" y="68.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="98" y="52" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.30; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="111" y="68.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="124" y="52" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.30; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="137" y="68.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="150" y="52" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.30; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="163" y="68.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="20" y="78" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="33" y="94.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="46" y="78" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="59" y="94.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="72" y="78" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="85" y="94.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="98" y="78" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.30; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="111" y="94.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="124" y="78" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.30; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="137" y="94.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="150" y="78" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.30; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="163" y="94.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="20" y="104" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="33" y="120.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="46" y="104" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="59" y="120.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="72" y="104" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="85" y="120.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="98" y="104" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.30; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="111" y="120.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="124" y="104" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.30; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="137" y="120.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="150" y="104" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.30; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="163" y="120.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="20" y="130" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="33" y="146.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="46" y="130" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="59" y="146.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="72" y="130" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="85" y="146.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="98" y="130" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.30; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="111" y="146.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="124" y="130" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.30; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="137" y="146.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="150" y="130" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.30; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="163" y="146.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="20" y="156" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="33" y="172.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="46" y="156" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="59" y="172.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="72" y="156" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="85" y="172.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="98" y="156" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.30; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="111" y="172.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="124" y="156" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.30; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="137" y="172.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="150" y="156" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.30; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="163" y="172.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="20" y="182" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="33" y="198.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="46" y="182" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="59" y="198.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="72" y="182" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="85" y="198.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="98" y="182" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.30; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="111" y="198.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="124" y="182" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.30; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="137" y="198.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="150" y="182" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.30; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="163" y="198.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="20" y="52" width="156" height="156" style="fill: none; stroke: var(--ink-2); stroke-width: 1.2"/>
+            <rect x="208" y="91" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.26; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="221" y="107.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="234" y="91" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="247" y="107.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="260" y="91" width="26" height="26" style="fill: var(--ink-2); fill-opacity: 0.26; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="273" y="107.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">−1</text>
+            <rect x="208" y="117" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.38; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="221" y="133.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">2</text>
+            <rect x="234" y="117" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="247" y="133.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="260" y="117" width="26" height="26" style="fill: var(--ink-2); fill-opacity: 0.38; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="273" y="133.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">−2</text>
+            <rect x="208" y="143" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.26; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="221" y="159.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="234" y="143" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="247" y="159.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="260" y="143" width="26" height="26" style="fill: var(--ink-2); fill-opacity: 0.26; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="273" y="159.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">−1</text>
+            <rect x="208" y="91" width="78" height="78" style="fill: none; stroke: var(--ink-2); stroke-width: 1.2"/>
+            <rect x="320" y="78" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="333" y="94.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="346" y="78" width="26" height="26" style="fill: var(--ink-2); fill-opacity: 0.40; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="359" y="94.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">−4</text>
+            <rect x="372" y="78" width="26" height="26" style="fill: var(--ink-2); fill-opacity: 0.40; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="385" y="94.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">−4</text>
+            <rect x="398" y="78" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="411" y="94.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="320" y="104" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="333" y="120.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="346" y="104" width="26" height="26" style="fill: var(--ink-2); fill-opacity: 0.40; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="359" y="120.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">−4</text>
+            <rect x="372" y="104" width="26" height="26" style="fill: var(--ink-2); fill-opacity: 0.40; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="385" y="120.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">−4</text>
+            <rect x="398" y="104" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="411" y="120.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="320" y="130" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="333" y="146.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="346" y="130" width="26" height="26" style="fill: var(--ink-2); fill-opacity: 0.40; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="359" y="146.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">−4</text>
+            <rect x="372" y="130" width="26" height="26" style="fill: var(--ink-2); fill-opacity: 0.40; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="385" y="146.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">−4</text>
+            <rect x="398" y="130" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="411" y="146.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="320" y="156" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="333" y="172.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="346" y="156" width="26" height="26" style="fill: var(--ink-2); fill-opacity: 0.40; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="359" y="172.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">−4</text>
+            <rect x="372" y="156" width="26" height="26" style="fill: var(--ink-2); fill-opacity: 0.40; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="385" y="172.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">−4</text>
+            <rect x="398" y="156" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="411" y="172.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="320" y="78" width="104" height="104" style="fill: none; stroke: var(--ink-2); stroke-width: 1.2"/>
+            <rect x="500" y="78" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.40; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="513" y="94.6" text-anchor="middle" style="fill: var(--ink); font-size: 10px">255</text>
+            <rect x="526" y="78" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="539" y="94.6" text-anchor="middle" style="fill: var(--ink); font-size: 10px">0</text>
+            <rect x="552" y="78" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="565" y="94.6" text-anchor="middle" style="fill: var(--ink); font-size: 10px">0</text>
+            <rect x="578" y="78" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.40; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="591" y="94.6" text-anchor="middle" style="fill: var(--ink); font-size: 10px">255</text>
+            <rect x="500" y="104" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.40; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="513" y="120.6" text-anchor="middle" style="fill: var(--ink); font-size: 10px">255</text>
+            <rect x="526" y="104" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="539" y="120.6" text-anchor="middle" style="fill: var(--ink); font-size: 10px">0</text>
+            <rect x="552" y="104" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="565" y="120.6" text-anchor="middle" style="fill: var(--ink); font-size: 10px">0</text>
+            <rect x="578" y="104" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.40; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="591" y="120.6" text-anchor="middle" style="fill: var(--ink); font-size: 10px">255</text>
+            <rect x="500" y="130" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.40; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="513" y="146.6" text-anchor="middle" style="fill: var(--ink); font-size: 10px">255</text>
+            <rect x="526" y="130" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="539" y="146.6" text-anchor="middle" style="fill: var(--ink); font-size: 10px">0</text>
+            <rect x="552" y="130" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="565" y="146.6" text-anchor="middle" style="fill: var(--ink); font-size: 10px">0</text>
+            <rect x="578" y="130" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.40; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="591" y="146.6" text-anchor="middle" style="fill: var(--ink); font-size: 10px">255</text>
+            <rect x="500" y="156" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.40; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="513" y="172.6" text-anchor="middle" style="fill: var(--ink); font-size: 10px">255</text>
+            <rect x="526" y="156" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="539" y="172.6" text-anchor="middle" style="fill: var(--ink); font-size: 10px">0</text>
+            <rect x="552" y="156" width="26" height="26" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="565" y="172.6" text-anchor="middle" style="fill: var(--ink); font-size: 10px">0</text>
+            <rect x="578" y="156" width="26" height="26" style="fill: var(--accent); fill-opacity: 0.40; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="591" y="172.6" text-anchor="middle" style="fill: var(--ink); font-size: 10px">255</text>
+            <rect x="500" y="78" width="104" height="104" style="fill: none; stroke: var(--ink-2); stroke-width: 1.2"/>
+            <text class="d-t" x="192" y="136" text-anchor="middle" style="font-size:18px">∗</text>
+            <text class="d-t" x="303" y="136" text-anchor="middle" style="font-size:18px">=</text>
+            <line class="d-ln" x1="432" y1="130" x2="488" y2="130" marker-end="url(#kdl07-f4-ah)"/>
+            <text class="d-al" x="460" y="120" text-anchor="middle">min-max</text>
+            <rect x="46" y="52" width="78" height="78" style="fill: none; stroke: var(--accent); stroke-width: 2.6"/>
+            <rect x="346" y="78" width="26" height="26" style="fill: none; stroke: var(--accent); stroke-width: 2.6"/>
+            <text class="d-s" x="20" y="234">highlighted window: 0·1 + 0·0 + 1·(−1) + 0·2 + 0·0 + 1·(−2) + 0·1 + 0·0 + 1·(−1) = −4</text>
+            <text class="d-s" x="20" y="252" style="fill: var(--accent)">every output row is 0, −4, −4, 0: the middle columns sit where the input jumps from 0 to 1</text>
+          </svg>
+        </div>
+        <figcaption><b>The vertical-edge filter on the video's 6 × 6 image</b>, with his numbers. The highlighted window covers columns 2–4 and produces the highlighted output, −4. Every output row is 0, −4, −4, 0. Rescaling the output to 0–255 sends −4 to 0 (black) and 0 to 255 (white), so the two middle columns become a dark vertical stripe where the input changes from 0 to 1. Shading grows with the size of a value, purple for positive and grey for negative.</figcaption>
+      </figure>
+      <p>This is the link to the visual cortex <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18185s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:03:05</a>. Just as each layer V1, V2, … extracts something, a convolution with this filter is a layer that extracts one kind of information, the vertical edges. A CNN uses many filters on the same image <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18217s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:03:37</a>: one for horizontal edges, one for vertical edges, perhaps one that detects round objects <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18247s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:04:07</a>. Each filter produces its own output, so several filters give several outputs.</p>
+      <p class="callout"><b>Not in the video:</b> each filter's output is usually called a <dfn>feature map</dfn>. The −4 is negative because the image goes from dark to bright under a filter whose positive column is on the left; a bright-to-dark edge gives +4. Strictly, sliding a filter without flipping it is cross-correlation, but deep-learning libraries call it convolution, and with learned filters the difference does not matter. For the IIT Madras treatment, see Lecture 8 (<a href="lecture-08.html#feature-maps">lecture-08.html</a>).</p>
+    </section>
+
+    <section id="output-size">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18279s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:04:39 n − f + 1</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18407s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:06:47 padding</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18507s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:08:27 zero or nearest value</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18610s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:10:10 formula with padding</a>
+        </div>
+        <h2>Output size and padding</h2>
+      </div>
+      <p>A 6 × 6 image through a 3 × 3 filter gives a 4 × 4 output. With image size \(n = 6\) and filter size \(f = 3\), the output size is <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18310s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:05:10</a></p>
+      <div class="eq">\[ n - f + 1 = 6 - 3 + 1 = 4. \]</div>
+      <p>He stresses that he chose the filter values by hand only to show what a filter can extract <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18376s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:06:16</a>. In practice they are not hard-coded; that comes in the next section.</p>
+      <p>The image shrank from 6 × 6 to 4 × 4 <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18407s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:06:47</a>. A smaller output means some information has been lost, and that should not happen. The fix is <dfn>padding</dfn>. Padding builds an extra layer around the image, like a compound wall around a building <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18440s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:07:20</a>. One ring of extra pixels turns the 6 × 6 image into an 8 × 8 grid, though the image itself is still 6 × 6.</p>
+      <p>There are two ways to fill the new cells <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18507s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:08:27</a>:</p>
+      <ul>
+        <li><b>Zero padding</b>: fill them with zeros.</li>
+        <li><b>Nearest value</b>: copy the nearest pixel. Next to a 1, put a 1.</li>
+      </ul>
+      <p>Now the convolution starts from the padded corner. The padded size is 8, so the output is \(8 - 3 + 1 = 6\) <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18540s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:09:00</a>: a 6 × 6 output, the same size as the input, which is what we wanted. With \(p\) rings of padding the formula becomes <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18610s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:10:10</a></p>
+      <div class="eq">\[ n + 2p - f + 1 = 6 + 2 - 3 + 1 = 6. \]</div>
+      <p>He flags the importance of padding as an interview question <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18673s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:11:13</a>. Padding is used to prevent the loss of information from the image as it passes through the convolutions.</p>
+      <p class="callout"><b>Not in the video:</b> with stride 1, padding \(p = (f - 1)/2\) keeps the size for an odd filter size (\(p = 1\) for 3 × 3, \(p = 2\) for 5 × 5). Keras calls no padding <code>padding='valid'</code>, its default, and size-preserving zero padding <code>padding='same'</code>. The nearest-value option is usually called replicate or edge padding.</p>
+    </section>
+
+    <section id="learned-filters">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18704s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:11:44 filters are learned</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18769s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:12:49 ReLU</a>
+        </div>
+        <h2>Filters are learned, and ReLU follows the convolution</h2>
+      </div>
+      <p>In a real problem the filter values are not hard-coded <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18704s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:11:44</a>. In an ANN the weights are assigned and then updated by backpropagation. A CNN does the same with its filters. They are initialized randomly and updated through backpropagation, based on the input images <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18735s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:12:15</a>. This matters because every image is different: black and white or RGB, and of many kinds.</p>
+      <p>Backpropagation needs an activation function. After the convolution, a <b>ReLU</b> is applied to every value of the output <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18769s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:12:49</a>:</p>
+      <div class="eq">\[ \operatorname{ReLU}(x) = \max(0, x). \]</div>
+      <p>The reason he gives is that ReLU's derivative can be found, so during backpropagation the derivatives can be computed and the filter values updated <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18802s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:13:22</a>. Other activations, such as PReLU, can also be used here. For ReLU and its variants, see <a href="krish-dl-04.html">Part 4</a>; for backpropagation and the chain rule, <a href="krish-dl-02.html">Part 2</a> and <a href="krish-dl-03.html">Part 3</a>. For the IIT Madras treatment, see Lecture 8 (<a href="lecture-08.html#learned-filters">lecture-08.html</a>) and, on ReLU, Lecture 7 (<a href="lecture-07.html#relu">lecture-07.html</a>).</p>
+    </section>
+
+    <section id="stride">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18836s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:13:56 stride 2</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18901s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:15:01 stacking layers</a>
+        </div>
+        <h2>Stride and the full size formula</h2>
+      </div>
+      <p>The stride does not have to be 1 <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18836s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:13:56</a>. With stride 2 the filter jumps two steps at a time, to the right and down, and that changes the output size. He updates the formula by dividing by the stride \(s\). Written out in full:</p>
+      <div class="result">
+        <span class="lbl">Output size of a convolution</span>
+        \[ n_{\text{out}} = \left\lfloor \frac{n + 2p - f}{s} \right\rfloor + 1 \]
+        <p>\(n\): input width (and height), \(f\): filter size, \(p\): rings of padding on each side, \(s\): stride. With \(p = 0\) and \(s = 1\) this is \(n - f + 1\).</p>
+      </div>
+      <p class="note">The video says only that the formula is divided by \(s\). The division applies to \(n + 2p - f\), the 1 is added afterwards, and the result is rounded down when the division is not whole: a last step that would run past the edge is skipped. For example 6 × 6 with a 3 × 3 filter and stride 2 gives \(\lfloor 3/2 \rfloor + 1 = 2\).</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th class="num">n</th><th class="num">f</th><th class="num">p</th><th class="num">s</th><th>Output</th><th>Where it appears</th></tr></thead>
+          <tbody>
+            <tr><td class="num">6</td><td class="num">3</td><td class="num">0</td><td class="num">1</td><td>\((6 - 3)/1 + 1 = 4\)</td><td>the board example</td></tr>
+            <tr><td class="num">6</td><td class="num">3</td><td class="num">1</td><td class="num">1</td><td>\((6 + 2 - 3)/1 + 1 = 6\)</td><td>with one ring of padding</td></tr>
+            <tr><td class="num">6</td><td class="num">3</td><td class="num">0</td><td class="num">2</td><td>\(\lfloor 3/2 \rfloor + 1 = 2\)</td><td>stride 2</td></tr>
+            <tr><td class="num">32</td><td class="num">3</td><td class="num">0</td><td class="num">1</td><td>\(32 - 3 + 1 = 30\)</td><td>first layer of the practical</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>That completes the convolution operation: convolution, padding, stride, the formula and ReLU <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18868s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:14:28</a>. An image passed through a filter, with ReLU on the result, is one convolution operation, and such operations can be stacked <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18901s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:15:01</a>: one convolution, then another, and so on. Each can have any number of filters <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18963s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:16:03</a>. The aim is to learn the filters, updating them from the input images. For the IIT Madras treatment of the size formula, see Lecture 8 (<a href="lecture-08.html#size-formula">lecture-08.html</a>).</p>
+    </section>
+
+    <section id="pooling">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18993s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:16:33 max pooling</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19062s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:17:42 three cats</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19190s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:19:50 location invariance</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19254s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:20:54 average and min pooling</a>
+        </div>
+        <h2>Max pooling</h2>
+      </div>
+      <p>After a convolution there is often a <dfn>max pooling</dfn> layer <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=18993s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:16:33</a>. First a remark: filters can have different sizes, 3 × 3, 5 × 5 or 7 × 7 <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19029s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:17:09</a>. The size is a hyperparameter to tune. A later session on transfer learning returns to such choices.</p>
+      <p>Take an image with three cats <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19062s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:17:42</a>. The convolution (filters, then ReLU) produces outputs. More convolution layers could follow, and in many transfer-learning models he has seen, the next layer is a max pooling layer <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19126s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:18:46</a>. Suppose one filter picks up the cats' rounded eyes, and other filters pick up vertical and horizontal edges <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19190s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:19:50</a>.</p>
+      <p>The motivation is <dfn>location invariance</dfn>. The objects may be anywhere in the image, and as the data passes through more layers, the network should extract the information more and more clearly <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19222s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:20:22</a>. Max pooling helps with that.</p>
+      <p>Max pooling places a 2 × 2 window on the convolution's output and keeps only the highest number <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19286s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:21:26</a>. The highest value is the clearest signal, for instance the place where one cat's eye is clearly visible. Then jump with a stride of 2 to the next block <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19353s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:22:33</a> and keep its highest value, and so on, to the right and then down. In his example the four blocks give 5, 7, 3 and 5, a 2 × 2 output. If one of the filters has found an object, pooling keeps that strong response wherever the object was, which is how it helps with location invariance <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19418s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:23:38</a>.</p>
+      <p class="note">The captions do not make his grid of numbers clear. The 4 × 4 map in the figure in the next section is illustrative and pools to his four results.</p>
+      <p>There are other kinds of pooling <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19254s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:20:54</a>:</p>
+      <ul>
+        <li><b>Average pooling</b>: the average of the values in each window.</li>
+        <li><b>Min pooling</b>: the minimum of each window <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19449s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:24:09</a>.</li>
+        <li><b>Max pooling</b>: the maximum, used in this example.</li>
+      </ul>
+      <p>Which to use depends on the problem. Each filter's output is pooled separately, so other filters give their own 2 × 2 results, such as 7, 9, 2, 1 and 6, 5, 3, 1. Convolution and max pooling are used as a pair, and the pair can be stacked any number of times <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19480s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:24:40</a>.</p>
+      <p class="callout"><b>Not in the video:</b> pooling has no weights to learn. A 2 × 2 window with stride 2 halves the width and height, rounding down; it is the size formula with \(f = 2\), \(s = 2\), \(p = 0\). Because a small shift of a feature within a block leaves the block's maximum unchanged, max pooling gives some tolerance to where exactly a feature sits. For the IIT Madras treatment, see Lecture 8 (<a href="lecture-08.html#pooling">lecture-08.html</a>).</p>
+
+      <figure id="cp-fig">
+        <div class="controls">
+          <span class="grp"><label for="cp-image">Image</label>
+          <select id="cp-image">
+            <option value="vedge" selected>Vertical edge, 6 × 6 (the video's)</option>
+            <option value="hedge">Horizontal edge, 6 × 6</option>
+            <option value="square">Bright square, 8 × 8</option>
+          </select></span>
+          <span class="grp"><label for="cp-filter">Filter</label>
+          <select id="cp-filter">
+            <option value="v" selected>Vertical edge 3 × 3 (the video's second)</option>
+            <option value="vflip">Vertical edge 3 × 3, sign flipped</option>
+            <option value="h">Horizontal edge 3 × 3 (the video's first)</option>
+            <option value="ones5">All ones 5 × 5</option>
+          </select></span>
+        </div>
+        <div class="controls">
+          <span class="grp"><label for="cp-stride">Stride s</label>
+          <input type="range" id="cp-stride" min="1" max="3" step="1" value="1">
+          <output id="cp-stride-out" for="cp-stride">1</output></span>
+          <span class="grp"><label for="cp-pad">Padding p</label>
+          <input type="range" id="cp-pad" min="0" max="2" step="1" value="0">
+          <output id="cp-pad-out" for="cp-pad">0</output></span>
+          <span class="grp"><label for="cp-padtype">Pad with</label>
+          <select id="cp-padtype">
+            <option value="zero" selected>zeros</option>
+            <option value="nearest">nearest value</option>
+          </select></span>
+        </div>
+        <div class="controls">
+          <span class="check"><input type="checkbox" id="cp-relu"><label for="cp-relu">ReLU after convolution</label></span>
+          <span class="grp"><label for="cp-pool">Pooling</label>
+          <select id="cp-pool">
+            <option value="max" selected>max</option>
+            <option value="avg">average</option>
+            <option value="min">min</option>
+          </select></span>
+          <button class="btn" id="cp-step" type="button">Next position</button>
+          <button class="btn" id="cp-play" type="button">Play</button>
+          <button class="btn" id="cp-reset" type="button">Reset</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">Output size</span><span class="v mine" id="cp-size">–</span></div>
+          <div><span class="k">⌊(n + 2p − f)/s⌋ + 1</span><span class="v" id="cp-formula">–</span></div>
+          <div><span class="k">After 2 × 2 pooling</span><span class="v" id="cp-poolsize">–</span></div>
+          <div><span class="k">Value at the window</span><span class="v" id="cp-cur">–</span></div>
+        </div>
+        <div class="status" id="cp-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="cp-svg" viewBox="0 0 900 312" role="img" aria-label="Four grids side by side: the input with any padding, the filter, the convolution output and the pooled output. The current filter window is outlined on the input and the value it produces is outlined on the output; its 2 by 2 pooling block is outlined with a dashed line and the pooled value is outlined on the last grid."></svg></div>
+        <figcaption><b>Convolution, ReLU and pooling on a small grid.</b> The inputs hold 0s and 1s, as after dividing by 255. Each step places the filter on the next window, multiplies entry by entry and adds, which gives one output value; click an output or pooled cell to jump to it. Dashed cells are padding. Faded cells are never used, either because the stride skips them or because 2 × 2 pooling drops an odd last row and column. Shading grows with the size of a value, purple for positive and grey for negative. Try ReLU with the video's filter, then flip the filter's sign.</figcaption>
+      </figure>
+    </section>
+
+    <section id="flatten">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19515s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:25:15 flattening</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19578s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:26:18 fully connected</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19641s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:27:21 architectures</a>
+        </div>
+        <h2>Flattening and the fully connected layers</h2>
+      </div>
+      <p>After the last max pooling comes the <dfn>flattening</dfn> layer <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19515s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:25:15</a>. Flattening takes all the pooled outputs and lays them out in one straight line, like the input of an ANN <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19545s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:25:45</a>. The first map's 5, 7, 3, 5 become the start of a long vector, the next filter's 7, 9, 2, 1 are attached after them, and so on for every filter's output.</p>
+      <p>This vector is the input to a <dfn>fully connected</dfn> (dense) neural network <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19578s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:26:18</a>, exactly as in an ANN: hidden layers with ReLU, and an output layer with one neuron per class, for example cat and dog in a cat-or-dog image classifier.</p>
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 296" role="img" aria-label="A 4 by 4 map split into four 2 by 2 blocks; max pooling keeps 5, 7, 3 and 5. Three pooled 2 by 2 maps from three filters, 5 7 3 5, 7 9 2 1 and 6 5 3 1, are flattened into one column of 12 values, which connects to every neuron of a dense layer of four neurons, which connects to two output neurons, cat and dog.">
+            <defs><marker id="kdl07-f5-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-t" x="20" y="40">a 4 × 4 output after ReLU</text>
+            <text class="d-s" x="20" y="56">(illustrative values)</text>
+            <rect x="20" y="72" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="34" y="89.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="48" y="72" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="62" y="89.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">2</text>
+            <rect x="76" y="72" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="90" y="89.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">3</text>
+            <rect x="104" y="72" width="28" height="28" style="fill: var(--accent); fill-opacity: 0.38; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="118" y="89.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">7</text>
+            <rect x="20" y="100" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="34" y="117.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">4</text>
+            <rect x="48" y="100" width="28" height="28" style="fill: var(--accent); fill-opacity: 0.38; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="62" y="117.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">5</text>
+            <rect x="76" y="100" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="90" y="117.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="104" y="100" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="118" y="117.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">2</text>
+            <rect x="20" y="128" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="34" y="145.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">0</text>
+            <rect x="48" y="128" width="28" height="28" style="fill: var(--accent); fill-opacity: 0.38; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="62" y="145.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">3</text>
+            <rect x="76" y="128" width="28" height="28" style="fill: var(--accent); fill-opacity: 0.38; stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="90" y="145.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">5</text>
+            <rect x="104" y="128" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="118" y="145.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="20" y="156" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="34" y="173.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="48" y="156" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="62" y="173.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">2</text>
+            <rect x="76" y="156" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="90" y="173.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">4</text>
+            <rect x="104" y="156" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="118" y="173.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">3</text>
+            <rect x="20" y="72" width="112" height="112" style="fill: none; stroke: var(--ink-2); stroke-width: 1.2"/>
+            <line x1="76" y1="72" x2="76" y2="184" style="stroke: var(--ink-2); stroke-width: 2.2"/><line x1="20" y1="128" x2="132" y2="128" style="stroke: var(--ink-2); stroke-width: 2.2"/>
+            <text class="d-s" x="20" y="206">max pooling:</text>
+            <text class="d-s" x="20" y="222">2 × 2 window, stride 2,</text>
+            <text class="d-s" x="20" y="238">keep the largest value</text>
+            <line class="d-ln" x1="138" y1="118" x2="194" y2="76" marker-end="url(#kdl07-f5-ah)"/>
+            <text class="d-s" x="200" y="36">from filter 1</text>
+            <rect x="200" y="42" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="214" y="59.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">5</text>
+            <rect x="228" y="42" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="242" y="59.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">7</text>
+            <rect x="200" y="70" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="214" y="87.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">3</text>
+            <rect x="228" y="70" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="242" y="87.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">5</text>
+            <rect x="200" y="42" width="56" height="56" style="fill: none; stroke: var(--ink-2); stroke-width: 1.2"/>
+            <text class="d-s" x="200" y="124">from filter 2</text>
+            <rect x="200" y="130" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="214" y="147.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">7</text>
+            <rect x="228" y="130" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="242" y="147.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">9</text>
+            <rect x="200" y="158" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="214" y="175.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">2</text>
+            <rect x="228" y="158" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="242" y="175.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="200" y="130" width="56" height="56" style="fill: none; stroke: var(--ink-2); stroke-width: 1.2"/>
+            <text class="d-s" x="200" y="212">from filter 3</text>
+            <rect x="200" y="218" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="214" y="235.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">6</text>
+            <rect x="228" y="218" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="242" y="235.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">5</text>
+            <rect x="200" y="246" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="214" y="263.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">3</text>
+            <rect x="228" y="246" width="28" height="28" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/>
+            <text class="d-al" x="242" y="263.96" text-anchor="middle" style="fill: var(--ink); font-size: 11px">1</text>
+            <rect x="200" y="218" width="56" height="56" style="fill: none; stroke: var(--ink-2); stroke-width: 1.2"/>
+            <text class="d-t" x="347" y="40" text-anchor="middle">flatten</text>
+            <rect x="330" y="50" width="34" height="18" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/><text class="d-al" x="347" y="63" text-anchor="middle" style="fill: var(--ink)">5</text>
+            <rect x="330" y="68" width="34" height="18" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/><text class="d-al" x="347" y="81" text-anchor="middle" style="fill: var(--ink)">7</text>
+            <rect x="330" y="86" width="34" height="18" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/><text class="d-al" x="347" y="99" text-anchor="middle" style="fill: var(--ink)">3</text>
+            <rect x="330" y="104" width="34" height="18" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/><text class="d-al" x="347" y="117" text-anchor="middle" style="fill: var(--ink)">5</text>
+            <rect x="330" y="122" width="34" height="18" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/><text class="d-al" x="347" y="135" text-anchor="middle" style="fill: var(--ink)">7</text>
+            <rect x="330" y="140" width="34" height="18" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/><text class="d-al" x="347" y="153" text-anchor="middle" style="fill: var(--ink)">9</text>
+            <rect x="330" y="158" width="34" height="18" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/><text class="d-al" x="347" y="171" text-anchor="middle" style="fill: var(--ink)">2</text>
+            <rect x="330" y="176" width="34" height="18" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/><text class="d-al" x="347" y="189" text-anchor="middle" style="fill: var(--ink)">1</text>
+            <rect x="330" y="194" width="34" height="18" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/><text class="d-al" x="347" y="207" text-anchor="middle" style="fill: var(--ink)">6</text>
+            <rect x="330" y="212" width="34" height="18" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/><text class="d-al" x="347" y="225" text-anchor="middle" style="fill: var(--ink)">5</text>
+            <rect x="330" y="230" width="34" height="18" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/><text class="d-al" x="347" y="243" text-anchor="middle" style="fill: var(--ink)">3</text>
+            <rect x="330" y="248" width="34" height="18" style="fill: var(--surface); stroke: var(--rule); stroke-width: 1"/><text class="d-al" x="347" y="261" text-anchor="middle" style="fill: var(--ink)">1</text>
+            <rect x="330" y="50" width="34" height="216" style="fill: none; stroke: var(--ink-2); stroke-width: 1.2"/>
+            <line x1="330" y1="122" x2="364" y2="122" style="stroke: var(--ink-2); stroke-width: 2"/><line x1="330" y1="194" x2="364" y2="194" style="stroke: var(--ink-2); stroke-width: 2"/>
+            <line class="d-ln" x1="258" y1="70" x2="324" y2="86" marker-end="url(#kdl07-f5-ah)"/>
+            <line class="d-ln" x1="258" y1="158" x2="324" y2="158" marker-end="url(#kdl07-f5-ah)"/>
+            <line class="d-ln" x1="258" y1="246" x2="324" y2="230" marker-end="url(#kdl07-f5-ah)"/>
+            <line class="d-ln-mut" x1="364" y1="59" x2="448" y2="100" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="59" x2="448" y2="140" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="59" x2="448" y2="180" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="59" x2="448" y2="220" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="77" x2="448" y2="100" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="77" x2="448" y2="140" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="77" x2="448" y2="180" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="77" x2="448" y2="220" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="95" x2="448" y2="100" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="95" x2="448" y2="140" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="95" x2="448" y2="180" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="95" x2="448" y2="220" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="113" x2="448" y2="100" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="113" x2="448" y2="140" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="113" x2="448" y2="180" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="113" x2="448" y2="220" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="131" x2="448" y2="100" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="131" x2="448" y2="140" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="131" x2="448" y2="180" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="131" x2="448" y2="220" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="149" x2="448" y2="100" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="149" x2="448" y2="140" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="149" x2="448" y2="180" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="149" x2="448" y2="220" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="167" x2="448" y2="100" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="167" x2="448" y2="140" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="167" x2="448" y2="180" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="167" x2="448" y2="220" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="185" x2="448" y2="100" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="185" x2="448" y2="140" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="185" x2="448" y2="180" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="185" x2="448" y2="220" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="203" x2="448" y2="100" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="203" x2="448" y2="140" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="203" x2="448" y2="180" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="203" x2="448" y2="220" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="221" x2="448" y2="100" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="221" x2="448" y2="140" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="221" x2="448" y2="180" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="221" x2="448" y2="220" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="239" x2="448" y2="100" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="239" x2="448" y2="140" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="239" x2="448" y2="180" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="239" x2="448" y2="220" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="257" x2="448" y2="100" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="257" x2="448" y2="140" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="257" x2="448" y2="180" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="364" y1="257" x2="448" y2="220" style="stroke-width:1"/>
+            <line class="d-ln" x1="472" y1="100" x2="558" y2="140" style="stroke-width:1"/>
+            <line class="d-ln" x1="472" y1="100" x2="558" y2="180" style="stroke-width:1"/>
+            <line class="d-ln" x1="472" y1="140" x2="558" y2="140" style="stroke-width:1"/>
+            <line class="d-ln" x1="472" y1="140" x2="558" y2="180" style="stroke-width:1"/>
+            <line class="d-ln" x1="472" y1="180" x2="558" y2="140" style="stroke-width:1"/>
+            <line class="d-ln" x1="472" y1="180" x2="558" y2="180" style="stroke-width:1"/>
+            <line class="d-ln" x1="472" y1="220" x2="558" y2="140" style="stroke-width:1"/>
+            <line class="d-ln" x1="472" y1="220" x2="558" y2="180" style="stroke-width:1"/>
+            <circle class="node" cx="460" cy="100" r="12"/>
+            <circle class="node" cx="460" cy="140" r="12"/>
+            <circle class="node" cx="460" cy="180" r="12"/>
+            <circle class="node" cx="460" cy="220" r="12"/>
+            <circle class="node-acc" cx="570" cy="140" r="12"/><text class="d-t" x="590" y="145">cat</text>
+            <circle class="node-acc" cx="570" cy="180" r="12"/><text class="d-t" x="590" y="185">dog</text>
+            <text class="d-t" x="460" y="40" text-anchor="middle">dense layer</text><text class="d-s" x="460" y="56" text-anchor="middle">ReLU</text>
+            <text class="d-t" x="570" y="40" text-anchor="middle">output</text><text class="d-s" x="570" y="56" text-anchor="middle">one per class</text>
+            <text class="d-s" x="400" y="286">every flattened value connects to every neuron</text>
+          </svg>
+        </div>
+        <figcaption><b>From feature maps to a prediction.</b> Max pooling with a 2 × 2 window and stride 2 keeps the largest value of each block (shaded) and halves the map. The pooled maps of three filters are flattened into one vector of 12 values, which feeds a fully connected layer and then the output layer. The 4 × 4 map is illustrative; the pooled values are the ones he writes.</figcaption>
+      </figure>
+      <ol class="algo">
+        <li class="algo-title">A CNN from end to end <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19609s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:26:49</a></li>
+        <li><b>Convolution</b>: filters with their padding and stride, then ReLU on every value.</li>
+        <li><b>Max pooling</b>: keep the clearest value of each 2 × 2 block.</li>
+        <li>Repeat convolution and pooling as many times as the problem needs.</li>
+        <li><b>Flatten</b> the final maps into one vector.</li>
+        <li><b>Fully connected layers</b>, an ANN, produce the output.</li>
+      </ol>
+      <p>He then shows CNN diagrams from a Google image search <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19641s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:27:21</a>. One runs convolution, pooling, convolution, pooling, convolution, pooling, then flattening and a fully connected layer. Another is labelled convolution, non-linearity, max pooling, fully connected, classification. A deeper one stacks two or three convolution layers before each max pooling and ends with three fully connected layers <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19704s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:28:24</a>. In code, the max pooling layer's window defaults to 2 <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19741s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:29:01</a>.</p>
+      <p class="callout"><b>Not in the video:</b> Keras's <code>Flatten</code> lists the values pixel by pixel with the channels interleaved, so its order differs from the board's map-by-map order. The dense layer does not care as long as the order is always the same. Several convolutions before each pooling, with three fully connected layers at the end, is the VGGNet design (<a href="lecture-08.html#vggnet">Lecture 8</a>).</p>
+    </section>
+
+    <!-- ============ CHAPTER 3 · PRACTICAL ============ -->
+    <section id="practical-setup">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19772s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:29:32 TensorFlow tutorial</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19805s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:30:05 how many layers?</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19838s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:30:38 GPU and imports</a>
+        </div>
+        <h2>Setting up: the TensorFlow CNN tutorial in Colab</h2>
+      </div>
+      <p class="note">The code on this page is reconstructed from the video's audio and from the TensorFlow tutorial he runs. Outputs are the ones he reads aloud, or the tutorial's standard ones where marked.</p>
+      <p>The practical uses TensorFlow's own CNN tutorial: search for <code>tensorflow cnn</code>, open the tutorial page, and click <b>Run in Google Colab</b> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19772s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:29:32</a>. In Colab, change the runtime to GPU and connect <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19838s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:30:38</a>.</p>
+      <p>The number of layers a CNN needs cannot be determined in advance <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19805s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:30:05</a>. People learn it from transfer learning, trying different layer combinations, and from the ImageNet competition, where architectures compete on the same large data set.</p>
+      <p>The imports are TensorFlow, three modules from Keras (<code>datasets</code>, <code>layers</code> and <code>models</code>) and matplotlib for plots.</p>
+      <p class="code-cap">Cell 1 · imports</p>
+<pre class="codeblock"><code><span class="kw">import</span> tensorflow <span class="kw">as</span> tf
+<span class="kw">from</span> tensorflow.keras <span class="kw">import</span> datasets, layers, models
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt</code></pre>
+    </section>
+
+    <section id="cifar">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19868s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:31:08 CIFAR-10</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19900s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:31:40 normalize</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19962s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:32:42 first 25 images</a>
+        </div>
+        <h2>The CIFAR-10 data: load, normalize, look</h2>
+      </div>
+      <p>The data set is <dfn>CIFAR-10</dfn> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19868s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:31:08</a>: 60,000 colour images of 32 × 32 pixels in 10 classes (airplane, automobile, bird, cat, deer, dog, frog, horse, ship, truck), 6,000 images per class <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19900s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:31:40</a>. It is split into 50,000 training and 10,000 test images. The classes are mutually exclusive, with no overlap between them. The goal is to classify each image into its class.</p>
+      <p>Loading gives training images and labels and test images and labels. As in the theory, the pixel values are normalized to between 0 and 1 by dividing the training and test images by 255.0 <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19931s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:32:11</a>. Running the cell downloads the data through <code>datasets.cifar10.load_data()</code>.</p>
+      <p class="code-cap">Cell 2 · load and normalize</p>
+<pre class="codeblock"><code>(train_images, train_labels), (test_images, test_labels) = datasets.cifar10.load_data()
+
+<span class="cm"># Normalize pixel values to be between 0 and 1</span>
+train_images, test_images = train_images / 255.0, test_images / 255.0
+
+<span class="cm"># train_images: (50000, 32, 32, 3), train_labels: (50000, 1)</span>
+<span class="cm"># test_images:  (10000, 32, 32, 3), test_labels:  (10000, 1)</span></code></pre>
+      <p>To verify the data, plot the first 25 training images with their class names <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19962s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:32:42</a>. He reads out frog, truck, truck, deer, automobile, automobile, bird, horse, ship, cat, deer, horse, horse and so on <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=19994s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:33:14</a>.</p>
+      <p class="code-cap">Cell 3 · look at the first 25 images</p>
+<pre class="codeblock"><code>class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer',
+               'dog', 'frog', 'horse', 'ship', 'truck']
+
+plt.figure(figsize=(10, 10))
+<span class="kw">for</span> i <span class="kw">in</span> range(25):
+    plt.subplot(5, 5, i + 1)
+    plt.xticks([])
+    plt.yticks([])
+    plt.grid(False)
+    plt.imshow(train_images[i])
+    <span class="cm"># each CIFAR label is an array of one number, hence the extra [0]</span>
+    plt.xlabel(class_names[train_labels[i][0]])
+plt.show()</code></pre>
+    </section>
+
+    <section id="build">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20025s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:33:45 Sequential and Conv2D</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20087s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:34:47 input shape</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20117s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:35:17 pooling and more convolutions</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20148s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:35:48 how many filters?</a>
+        </div>
+        <h2>Building the convolutional base</h2>
+      </div>
+      <p>As with the ANN in <a href="krish-dl-06.html">Part 6</a>, the model starts as <code>models.Sequential()</code>, and layers are added one at a time with <code>model.add</code> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20025s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:33:45</a>. The first layer is a convolution layer:</p>
+      <ul>
+        <li><code>Conv2D(32, (3, 3), ...)</code>: the first argument, 32, is the <b>number of filters</b>, and <code>(3, 3)</code> is the size of each filter <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20056s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:34:16</a>. So the layer learns 32 filters of size 3 × 3.</li>
+        <li><code>activation='relu'</code>: ReLU after the convolution, as in the theory.</li>
+        <li><code>input_shape=(32, 32, 3)</code>: the input image is 32 × 32 pixels with 3 channels, because the images are RGB <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20087s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:34:47</a>.</li>
+      </ul>
+      <p>Next comes <code>MaxPooling2D((2, 2))</code>, max pooling with a 2 × 2 window <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20117s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:35:17</a>. Then another convolution (now with 64 filters) and ReLU, another 2 × 2 max pooling, and a third convolution with 64 filters. That makes three convolution layers and two max pooling layers stacked in sequence.</p>
+      <p class="code-cap">Cell 4 · the convolutional base</p>
+<pre class="codeblock"><code>model = models.Sequential()
+model.add(layers.Conv2D(32, (3, 3), activation='relu', input_shape=(32, 32, 3)))
+model.add(layers.MaxPooling2D((2, 2)))
+model.add(layers.Conv2D(64, (3, 3), activation='relu'))
+model.add(layers.MaxPooling2D((2, 2)))
+model.add(layers.Conv2D(64, (3, 3), activation='relu'))</code></pre>
+      <p>There is no fixed rule for the number of filters either <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20148s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:35:48</a>. It is a matter of research, and the number of filters is a hyperparameter: try 32, 64 or combinations of different values and watch how the performance changes. State-of-the-art CNNs use many different numbers of filters. For real tasks such as image classification or object detection, the usual approach is to start from a state-of-the-art architecture.</p>
+    </section>
+
+    <section id="summary">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20179s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:36:19 model.summary()</a>
+        </div>
+        <h2>Reading model.summary()</h2>
+      </div>
+      <p><code>model.summary()</code> lists every layer with its output shape and number of parameters <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20179s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:36:19</a>. The first convolution layer outputs 30 × 30 with 32 filters, then pooling gives 15 × 15 with 32 channels. The parameter counts include the values inside the filters.</p>
+      <p class="code-cap">Output of model.summary() (the tutorial's standard output, abridged)</p>
+<pre class="codeblock"><code>Layer (type)                     Output Shape            Param #
+=================================================================
+conv2d (Conv2D)                  (None, 30, 30, 32)      896
+max_pooling2d (MaxPooling2D)     (None, 15, 15, 32)      0
+conv2d_1 (Conv2D)                (None, 13, 13, 64)      18496
+max_pooling2d_1 (MaxPooling2D)   (None, 6, 6, 64)        0
+conv2d_2 (Conv2D)                (None, 4, 4, 64)        36928
+=================================================================
+Total params: 56,320</code></pre>
+      <p class="note">He says the first layer "takes an input of 30 × 30". The input is 32 × 32 × 3; 30 × 30 is the first layer's output, \(32 - 3 + 1 = 30\) by the size formula without padding. Not in the video: <code>None</code> in each shape is the batch size, which is not fixed yet.</p>
+      <p>Every shape follows from the formulas of this part. Not in the video: the parameter counts, worked out.</p>
+      <ul>
+        <li><b>conv2d</b>: \(32 - 3 + 1 = 30\), and 32 filters give 32 channels. Each filter spans all 3 input channels, so it has \(3 \cdot 3 \cdot 3 = 27\) weights plus 1 bias: \((27 + 1) \cdot 32 = 896\).</li>
+        <li><b>max_pooling2d</b>: \(30 / 2 = 15\); no parameters.</li>
+        <li><b>conv2d_1</b>: \(15 - 3 + 1 = 13\); \((3 \cdot 3 \cdot 32 + 1) \cdot 64 = 18{,}496\).</li>
+        <li><b>max_pooling2d_1</b>: \(\lfloor 13 / 2 \rfloor = 6\), rounding down.</li>
+        <li><b>conv2d_2</b>: \(6 - 3 + 1 = 4\); \((3 \cdot 3 \cdot 64 + 1) \cdot 64 = 36{,}928\).</li>
+      </ul>
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 266" role="img" aria-label="The tutorial's network as a row of boxes whose height shows the image size and whose width shows the number of channels: input 32 by 32 by 3, convolution to 30 by 30 by 32, pooling to 15 by 15 by 32, convolution to 13 by 13 by 64, pooling to 6 by 6 by 64, convolution to 4 by 4 by 64, flatten to 1024 values, dense to 64, dense to 10 class scores. Parameters below each: 896, 0, 18,496, 0, 36,928, 0, 65,600 and 650.">
+            <defs><marker id="kdl07-f6-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-s" x="73.5" y="24" text-anchor="middle">conv</text><text class="d-al" x="73.5" y="38" text-anchor="middle">32 · 3×3</text>
+            <text class="d-s" x="146" y="24" text-anchor="middle">pool</text><text class="d-al" x="146" y="38" text-anchor="middle">2×2</text>
+            <text class="d-s" x="211" y="24" text-anchor="middle">conv</text><text class="d-al" x="211" y="38" text-anchor="middle">64 · 3×3</text>
+            <text class="d-s" x="276" y="24" text-anchor="middle">pool</text><text class="d-al" x="276" y="38" text-anchor="middle">2×2</text>
+            <text class="d-s" x="335" y="24" text-anchor="middle">conv</text><text class="d-al" x="335" y="38" text-anchor="middle">64 · 3×3</text>
+            <text class="d-s" x="400.5" y="24" text-anchor="middle">flatten</text>
+            <text class="d-s" x="461" y="24" text-anchor="middle">dense</text><text class="d-al" x="461" y="38" text-anchor="middle">64, ReLU</text>
+            <text class="d-s" x="528" y="24" text-anchor="middle">dense</text><text class="d-al" x="528" y="38" text-anchor="middle">10</text>
+            <rect class="d-box" x="36" y="56" width="8" height="128"/>
+            <rect class="d-box-acc" x="103" y="60" width="18" height="120"/>
+            <rect class="d-box" x="171" y="90" width="18" height="60"/>
+            <rect class="d-box-acc" x="233" y="94" width="26" height="52"/>
+            <rect class="d-box" x="293" y="108" width="26" height="24"/>
+            <rect class="d-box-acc" x="351" y="112" width="26" height="16"/>
+            <rect class="d-box" x="424" y="45" width="8" height="150"/>
+            <rect class="d-box-acc" x="490" y="90" width="8" height="60"/>
+            <rect class="d-box-acc" x="558" y="108" width="8" height="24"/>
+            <line class="d-ln" x1="48" y1="120" x2="99" y2="120" marker-end="url(#kdl07-f6-ah)"/>
+            <line class="d-ln" x1="125" y1="120" x2="167" y2="120" marker-end="url(#kdl07-f6-ah)"/>
+            <line class="d-ln" x1="193" y1="120" x2="229" y2="120" marker-end="url(#kdl07-f6-ah)"/>
+            <line class="d-ln" x1="263" y1="120" x2="289" y2="120" marker-end="url(#kdl07-f6-ah)"/>
+            <line class="d-ln" x1="323" y1="120" x2="347" y2="120" marker-end="url(#kdl07-f6-ah)"/>
+            <line class="d-ln" x1="381" y1="120" x2="420" y2="120" marker-end="url(#kdl07-f6-ah)"/>
+            <line class="d-ln" x1="436" y1="120" x2="486" y2="120" marker-end="url(#kdl07-f6-ah)"/>
+            <line class="d-ln" x1="502" y1="120" x2="554" y2="120" marker-end="url(#kdl07-f6-ah)"/>
+            <text class="d-s" x="574" y="116">scores for</text><text class="d-s" x="574" y="130">10 classes</text>
+            <text class="d-al" x="40" y="214" text-anchor="middle" style="fill: var(--ink)">32×32×3</text>
+            <text class="d-al" x="112" y="214" text-anchor="middle" style="fill: var(--ink)">30×30×32</text>
+            <text class="d-al" x="180" y="214" text-anchor="middle" style="fill: var(--ink)">15×15×32</text>
+            <text class="d-al" x="246" y="214" text-anchor="middle" style="fill: var(--ink)">13×13×64</text>
+            <text class="d-al" x="306" y="214" text-anchor="middle" style="fill: var(--ink)">6×6×64</text>
+            <text class="d-al" x="364" y="214" text-anchor="middle" style="fill: var(--ink)">4×4×64</text>
+            <text class="d-al" x="428" y="214" text-anchor="middle" style="fill: var(--ink)">1024</text>
+            <text class="d-al" x="494" y="214" text-anchor="middle" style="fill: var(--ink)">64</text>
+            <text class="d-al" x="562" y="214" text-anchor="middle" style="fill: var(--ink)">10</text>
+            <text class="d-s" x="40" y="234" text-anchor="middle">input</text>
+            <text class="d-s" x="112" y="234" text-anchor="middle">896</text>
+            <text class="d-s" x="180" y="234" text-anchor="middle">0</text>
+            <text class="d-s" x="246" y="234" text-anchor="middle">18,496</text>
+            <text class="d-s" x="306" y="234" text-anchor="middle">0</text>
+            <text class="d-s" x="364" y="234" text-anchor="middle">36,928</text>
+            <text class="d-s" x="428" y="234" text-anchor="middle">0</text>
+            <text class="d-s" x="494" y="234" text-anchor="middle" style="fill: var(--accent)">65,600</text>
+            <text class="d-s" x="562" y="234" text-anchor="middle">650</text>
+            <line class="d-rule" x1="20" y1="244" x2="640" y2="244"/>
+            <text class="d-s" x="20" y="260">top row: output shape · bottom row: parameters · total 122,570, of which 65,600 are in the first dense layer</text>
+          </svg>
+        </div>
+        <figcaption><b>The tutorial's CNN for CIFAR-10, with the shapes model.summary() reports.</b> Box heights are proportional to width and height, and box widths grow with the number of channels. Each 3 × 3 convolution without padding removes 2 pixels (\(n - f + 1\)), and each 2 × 2 pooling halves the size, rounding down (13 → 6). The dense layer after flattening holds more than half of all parameters.</figcaption>
+      </figure>
+    </section>
+
+    <section id="head">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20212s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:36:52 Flatten and Dense</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20274s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:37:54 summary again</a>
+        </div>
+        <h2>Flatten and the dense head</h2>
+      </div>
+      <p>With the convolution and pooling layers in place, the flattening layer comes next, written <code>layers.Flatten()</code> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20212s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:36:52</a>. Whatever comes out of the last convolution layer is flattened into one vector. After it come a fully connected hidden layer of 64 neurons with ReLU, the ANN part, and an output layer <code>Dense(10)</code>, because the data set has 10 classes <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20243s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:37:23</a>.</p>
+      <p class="code-cap">Cell 5 · flatten and the dense layers</p>
+<pre class="codeblock"><code>model.add(layers.Flatten())
+model.add(layers.Dense(64, activation='relu'))
+model.add(layers.Dense(10))
+
+model.summary()</code></pre>
+      <p>The summary now ends with the flatten layer, the dense layer and the final dense layer with its 10 outputs, after the Conv2D and MaxPooling2D layers <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20274s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:37:54</a>.</p>
+      <p class="code-cap">End of the second model.summary() (the tutorial's standard output)</p>
+<pre class="codeblock"><code>flatten (Flatten)                (None, 1024)            0
+dense (Dense)                    (None, 64)              65600
+dense_1 (Dense)                  (None, 10)              650
+=================================================================
+Total params: 122,570</code></pre>
+      <p class="note">Not in the video: flatten gives \(4 \cdot 4 \cdot 64 = 1{,}024\) values. The hidden layer has \((1{,}024 + 1) \cdot 64 = 65{,}600\) parameters and the output layer \((64 + 1) \cdot 10 = 650\). The explorer below rebuilds the summary for other filter sizes and paddings.</p>
+
+      <figure id="ks-fig">
+        <div class="controls">
+          <span class="grp"><label for="ks-k">Filter size</label>
+          <select id="ks-k">
+            <option value="3" selected>3 × 3 (the tutorial's)</option>
+            <option value="5">5 × 5</option>
+          </select></span>
+          <span class="grp"><label for="ks-pad">Padding</label>
+          <select id="ks-pad">
+            <option value="valid" selected>'valid' (none, the default)</option>
+            <option value="same">'same' (keep the size)</option>
+          </select></span>
+        </div>
+        <div class="controls">
+          <span class="grp"><label for="ks-f1">Filters in the first Conv2D</label>
+          <select id="ks-f1">
+            <option value="16">16</option>
+            <option value="32" selected>32</option>
+            <option value="64">64</option>
+          </select></span>
+          <span class="grp"><label for="ks-dense">Neurons in the hidden Dense</label>
+          <select id="ks-dense">
+            <option value="32">32</option>
+            <option value="64" selected>64</option>
+            <option value="128">128</option>
+          </select></span>
+        </div>
+        <div class="readouts">
+          <div><span class="k">Flattened values</span><span class="v" id="ks-flat">–</span></div>
+          <div><span class="k">Total params</span><span class="v mine" id="ks-total">–</span></div>
+          <div><span class="k">Share in dense layers</span><span class="v" id="ks-dshare">–</span></div>
+        </div>
+        <div class="status" id="ks-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="ks-svg" viewBox="0 0 640 362" role="img" aria-label="A table drawn like model.summary(): one row per layer with its name, how its parameters are counted, its output shape and its parameter count, and a bar proportional to the parameter count."></svg></div>
+        <figcaption><b>What model.summary() counts.</b> One row per layer of the tutorial's network, with the output shape and the parameter count; bars are proportional to the count (purple for convolution, grey for dense). A convolution filter has \(f \cdot f \cdot (\text{input channels}) + 1\) parameters, and a dense neuron has one per input plus a bias. With the tutorial's settings the numbers match the summaries above. Change the filter size or the padding and the flattened size, and with it the first dense layer, changes the most.</figcaption>
+      </figure>
+    </section>
+
+    <section id="train">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20274s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:37:54 compile</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20307s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:38:27 fit</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20339s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:38:59 training log</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20370s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:39:30 early stopping</a>
+        </div>
+        <h2>Compile and train</h2>
+      </div>
+      <p>For compiling he uses the same optimizer as for the ANN, <b>Adam</b> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20274s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:37:54</a>, which he calls the best one at present <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20404s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:40:04</a> (optimizers are compared in <a href="krish-dl-05.html">Part 5</a>). Since there are many outputs, 10 classes, the loss is <b>sparse categorical cross-entropy</b> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20307s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:38:27</a>, from the categorical cross-entropy family covered with the loss functions (<a href="krish-dl-04.html">Part 4</a>). The metric is accuracy. Training uses the training images and labels for 10 epochs, with the test images and labels as validation data.</p>
+      <p class="code-cap">Cell 6 · compile and fit</p>
+<pre class="codeblock"><code>model.compile(optimizer='adam',
+              loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+              metrics=['accuracy'])
+
+history = model.fit(train_images, train_labels, epochs=10,
+                    validation_data=(test_images, test_labels))</code></pre>
+      <p class="callout"><b>Not in the video:</b> <i>sparse</i> means the labels are plain class numbers 0 to 9; with one-hot labels you would use <code>CategoricalCrossentropy</code>. <code>from_logits=True</code> is needed because the last layer, <code>Dense(10)</code>, has no softmax: it outputs raw scores (logits), and the loss applies the softmax itself. For the softmax and cross-entropy pair, see Lecture 4 (<a href="lecture-04.html">lecture-04.html</a>).</p>
+      <p>As the epochs run on the GPU <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20339s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:38:59</a>, the accuracy increases and the loss decreases, which means the network is training well. The numbers he reads off the progress bars:</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Point in the run</th><th class="num">Training accuracy</th><th class="num">Validation accuracy</th></tr></thead>
+          <tbody>
+            <tr><td>First epoch</td><td class="num">0.44</td><td class="num">0.53</td></tr>
+            <tr><td>Fifth epoch <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20370s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:39:30</a></td><td class="num">about 0.70</td><td class="num">about 0.68</td></tr>
+            <tr><td>Later epochs <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20404s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:40:04</a></td><td class="num">0.74 to 0.79</td><td class="num">0.70 to 0.71</td></tr>
+            <tr><td>Tenth epoch <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20435s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:40:35</a></td><td class="num">about 0.78</td><td class="num">about 0.70</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Early on the validation accuracy is higher than the training accuracy. By the end the training accuracy is ahead, and he expects it could pass 80% with more epochs. He leaves early stopping on this model as a task <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20370s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:39:30</a>.</p>
+      <p class="note">Not in the video: a new run gives slightly different numbers. Validation can beat training in the first epoch because Keras reports the training accuracy as an average over the epoch, while the weights were still improving, and measures validation accuracy once at the end of the epoch.</p>
+    </section>
+
+    <section id="evaluate">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20466s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:41:06 plot the history</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20497s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:41:37 test accuracy</a>
+        </div>
+        <h2>Evaluate, and how to improve</h2>
+      </div>
+      <p>Finally he plots the training history, accuracy and validation accuracy per epoch, and evaluates the model on the test set <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20466s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:41:06</a>. In the graph the accuracy keeps rising, while the validation accuracy levels off and dips near the end, which is where he stopped. The gap between the two curves should stay small. Early stopping would halt training at that point automatically.</p>
+      <p class="code-cap">Cell 7 · plot and evaluate</p>
+<pre class="codeblock"><code>plt.plot(history.history['accuracy'], label='accuracy')
+plt.plot(history.history['val_accuracy'], label='val_accuracy')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.ylim([0.5, 1])
+plt.legend(loc='lower right')
+
+test_loss, test_acc = model.evaluate(test_images, test_labels, verbose=2)
+print(test_acc)   <span class="cm"># about 0.703 in his run</span></code></pre>
+      <p>The test accuracy is about 70.3% <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20497s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:41:37</a>, which he calls not bad. To do better: add more layers, train with early stopping, and increase the number of epochs.</p>
+      <p class="code-cap">Not in the video · one way to do the early-stopping task</p>
+<pre class="codeblock"><code>early_stop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=3,
+                                              restore_best_weights=True)
+history = model.fit(train_images, train_labels, epochs=50,
+                    validation_split=0.1,      <span class="cm"># hold out 10% of the training set</span>
+                    callbacks=[early_stop])</code></pre>
+      <p class="note">Not in the video: the tutorial validates on the test set. If early stopping watches the test set, the final test score is no longer an unbiased estimate, so the listing above holds out part of the training set instead. For the IIT Madras treatment of early stopping, see Lecture 6 (<a href="lecture-06.html#early-stopping">lecture-06.html</a>).</p>
+      <p>That ends the CNN session and the video <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=20529s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:42:09</a>.</p>
+    </section>
+
+    <!-- ============ REVISION ============ -->
+    <section id="terms">
+      <div class="sec-head"><h2>Key terms</h2></div>
+      <dl class="terms">
+        <div><dt>White-box model</dt><dd>A model whose internal working you can inspect and follow, such as linear regression or a decision tree.</dd></div>
+        <div><dt>Black-box model</dt><dd>A model with too many parts to follow by hand: random forest, XGBoost, ANNs, CNNs, RNNs.</dd></div>
+        <div><dt>Explainable AI</dt><dd>Research on tools that show how a model's output depends on each input feature.</dd></div>
+        <div><dt>Channel</dt><dd>One grid of values per colour component: 1 for black and white, 3 (R, G, B) for colour. An \(n \times n\) RGB image is \(n \times n \times 3\).</dd></div>
+        <div><dt>Min-max scaling (÷ 255)</dt><dd>Dividing every pixel by 255 so the values run from 0 to 1 before the convolution.</dd></div>
+        <div><dt>Filter (kernel)</dt><dd>A small grid of weights, such as 3 × 3, slid over the image. Its values start random and are learned by backpropagation.</dd></div>
+        <div><dt>Convolution</dt><dd>Place the filter on a patch, multiply entry by entry, add, and slide on; one output value per position. Followed by ReLU.</dd></div>
+        <div><dt>Stride \(s\)</dt><dd>How many pixels the filter (or pooling window) jumps at each step.</dd></div>
+        <div><dt>Padding \(p\)</dt><dd>Rings of extra pixels (zeros, or the nearest values) around the image, so the output does not shrink.</dd></div>
+        <div><dt>Output size</dt><dd>\(\lfloor (n + 2p - f)/s \rfloor + 1\) for an \(n \times n\) input and an \(f \times f\) filter; \(n - f + 1\) without padding and with stride 1.</dd></div>
+        <div><dt>Max pooling</dt><dd>Keep the largest value of each window, usually 2 × 2 with stride 2. Average and min pooling keep the mean or the minimum.</dd></div>
+        <div><dt>Location invariance</dt><dd>Finding an object wherever it appears in the image; pooling helps by keeping the strongest response of each region.</dd></div>
+        <div><dt>Flattening</dt><dd>Laying the final pooled maps out as one vector, the input of the fully connected layers.</dd></div>
+        <div><dt>Sparse categorical cross-entropy</dt><dd>The multi-class loss for labels given as class numbers (0 to 9 for CIFAR-10) instead of one-hot vectors.</dd></div>
+      </dl>
+    </section>
+
+    <section id="test">
+      <div class="sec-head"><h2>Test yourself</h2></div>
+      <div class="quiz">
+        <details><summary><span class="q">Q1</span><span>Sort these into white-box and black-box models, with a reason: linear regression, random forest, decision tree, XGBoost, a CNN.</span><span class="tog"></span></summary>
+          <p>White box: linear regression, where you can see directly how the model uses its inputs, and a decision tree, where you can follow the splits to the prediction. Black box: random forest and XGBoost, which combine so many trees (100 in his example) that you cannot monitor them all, and a CNN, which has far too many weights to follow and lets you see inside only up to a point.</p></details>
+        <details><summary><span class="q">Q2</span><span>A colour photo is 28 × 28 pixels. What is its shape, how many numbers is that, and what does the first preprocessing step do to them?</span><span class="tog"></span></summary>
+          <p>It is \(28 \times 28 \times 3\), one 28 × 28 grid for each of the R, G and B channels: \(28 \cdot 28 \cdot 3 = 2{,}352\) values, each from 0 to 255. Dividing by 255 scales them into the range 0 to 1.</p></details>
+        <details><summary><span class="q">Q3</span><span>The vertical-edge filter \(K_{\text{v}}\) is placed on a patch whose three columns are 1, 1, 0 in every row (bright on the left, dark on the right). What does it output? Compare with the video's −4.</span><span class="tog"></span></summary>
+          <p>The left column gives \(1 \cdot (1 + 2 + 1) = 4\), the middle column is multiplied by 0, and the right column holds 0s, so the output is \(4\). The video's edge went from dark to bright and gave \(-4\); this one goes from bright to dark and gives \(+4\). The size of the value says there is an edge, and the sign says which way the brightness changes.</p></details>
+        <details><summary><span class="q">Q4</span><span>Give the output size for: (a) 6 × 6 input, 3 × 3 filter, no padding, stride 1; (b) the same with padding 1; (c) 7 × 7, 3 × 3, no padding, stride 2; (d) 6 × 6, 3 × 3, no padding, stride 2.</span><span class="tog"></span></summary>
+          <p>(a) \(6 - 3 + 1 = 4\). (b) \(6 + 2 - 3 + 1 = 6\), the same as the input. (c) \(\lfloor (7 - 3)/2 \rfloor + 1 = 3\). (d) \(\lfloor 3/2 \rfloor + 1 = 2\): the window fits starting at columns 1 and 3, and a third step would run past the edge, so the last column of the image is never covered.</p></details>
+        <details><summary><span class="q">Q5</span><span>Why pad at all, and how much padding keeps a 32 × 32 input at 32 × 32 with a 5 × 5 filter and stride 1?</span><span class="tog"></span></summary>
+          <p>Without padding each convolution shrinks the image by \(f - 1\) pixels, so information is lost, especially at the borders. Padding prevents that. Solve \(32 + 2p - 5 + 1 = 32\): \(p = 2\). In Keras this is <code>padding='same'</code>.</p></details>
+        <details><summary><span class="q">Q6</span><span>Pool the map with rows (2, 0, 1, 3), (4, 6, 2, 1), (1, 1, 0, 8), (3, 2, 5, 4) using 2 × 2 windows and stride 2: max, average and min pooling.</span><span class="tog"></span></summary>
+          <p>The blocks are {2, 0, 4, 6} (top left), {1, 3, 2, 1} (top right), {1, 1, 3, 2} (bottom left) and {0, 8, 5, 4} (bottom right). Max pooling gives rows (6, 3) and (3, 8). Average pooling gives (3, 1.75) and (1.75, 4.25). Min pooling gives (0, 1) and (1, 0). Each turns the 4 × 4 map into 2 × 2.</p></details>
+        <details><summary><span class="q">Q7</span><span>Why does a CNN not use hand-designed filters like the two edge detectors, and why does every convolution output go through ReLU?</span><span class="tog"></span></summary>
+          <p>The filters play the role of an ANN's weights. They start random and are updated by backpropagation from the training images, so the network learns whatever features help with its task instead of the ones we guess. Backpropagation needs derivatives, and ReLU, \(\max(0, x)\), applied to each value of the convolution output, has an easy derivative, so the gradient can reach the filter values and update them. (It also makes the layer non-linear.)</p></details>
+        <details><summary><span class="q">Q8</span><span>In the Keras model, explain the first layer's output shape (None, 30, 30, 32) and its 896 parameters, and why Flatten produces 1,024 values.</span><span class="tog"></span></summary>
+          <p>The input is 32 × 32 × 3. With no padding and stride 1 the output is \(32 - 3 + 1 = 30\) wide and high, and 32 filters give 32 channels; <code>None</code> is the batch size. Each filter covers 3 × 3 pixels across all 3 channels, so it has 27 weights and 1 bias, and \(28 \cdot 32 = 896\). Then 30 → 15 (pooling) → 13 (convolution) → 6 (pooling, rounding down) → 4 (convolution) with 64 channels, and \(4 \cdot 4 \cdot 64 = 1{,}024\).</p></details>
+      </div>
+    </section>
+
+    <!-- PAGER:START --><nav class="pager" aria-label="Previous and next part"><a href="krish-dl-06.html"><span class="dir">← Part 6</span><span class="nm">Practical: building an ANN</span></a><a class="next" href="index.html#extra"><span class="dir">Finished →</span><span class="nm">Back to all notes</span></a></nav><!-- PAGER:END -->
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the YouTube auto-generated captions of Krish Naik's video “Deep Learning In-depth Tutorials in 5 Hours”. Timestamp links open the video at that moment. Code is reconstructed from the audio. Charts marked synthetic use data generated for these notes. Not affiliated with Krish Naik or IIT Madras.</div>
+</footer>
+
+<script src="notes.js"></script>
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const fmt = v => { const r = Math.round(v * 100) / 100; if (r === 0) return '0'; const s = Number.isInteger(r) ? String(r) : r.toFixed(2).replace(/0+$/, '').replace(/\.$/, ''); return s.replace('-', '−'); };
+  const group = n => n.toLocaleString('en-US');
+  const clear = el => { while (el.firstChild) el.removeChild(el.firstChild); };
+
+  /* ---------- Convolution, ReLU and 2 x 2 pooling on a small grid ---------- */
+  (() => {
+    const svg = document.getElementById('cp-svg'); if (!svg) return;
+    const $ = id => document.getElementById(id);
+    const imgS = $('cp-image'), filS = $('cp-filter'), stS = $('cp-stride'), stO = $('cp-stride-out'), padS = $('cp-pad'), padO = $('cp-pad-out'), ptS = $('cp-padtype'), reluC = $('cp-relu'), poolS = $('cp-pool');
+    const oSize = $('cp-size'), oForm = $('cp-formula'), oPool = $('cp-poolsize'), oCur = $('cp-cur'), status = $('cp-status');
+    const stepB = $('cp-step'), playB = $('cp-play'), resetB = $('cp-reset');
+    const IMG = {
+      vedge: { n: 6, at: (r, c) => (c >= 3 ? 1 : 0) },
+      hedge: { n: 6, at: (r, c) => (r >= 3 ? 1 : 0) },
+      square: { n: 8, at: (r, c) => (r >= 2 && r <= 5 && c >= 2 && c <= 5 ? 1 : 0) }
+    };
+    const FIL = {
+      v: [[1, 0, -1], [2, 0, -2], [1, 0, -1]],
+      vflip: [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
+      h: [[1, 2, 1], [0, 0, 0], [-1, -2, -1]],
+      ones5: [0, 1, 2, 3, 4].map(() => [1, 1, 1, 1, 1])
+    };
+    const POOL = { max: a => Math.max(...a), avg: a => a.reduce((s, v) => s + v, 0) / a.length, min: a => Math.min(...a) };
+    const PNAME = { max: 'max', avg: 'average', min: 'min' };
+    const W = 900, TOP = 52, GAP = 40, MARGIN = 14, HMAX = 250, SLOT = 160;
+    const layer = mk('g', {}, svg);
+    let cur = 1, timer = null, st = null;
+
+    const compute = () => {
+      const im = IMG[imgS.value], n = im.n, K = FIL[filS.value], f = K.length;
+      const s = +stS.value, p = +padS.value, rep = ptS.value === 'nearest', relu = reluC.checked, pool = poolS.value;
+      const N = n + 2 * p, cl = v => Math.max(0, Math.min(n - 1, v));
+      const X = [];
+      for (let r = 0; r < N; r++) {
+        X.push([]);
+        for (let c = 0; c < N; c++) {
+          const ri = r - p, ci = c - p, inside = ri >= 0 && ri < n && ci >= 0 && ci < n;
+          X[r].push(inside ? im.at(ri, ci) : (rep ? im.at(cl(ri), cl(ci)) : 0));
+        }
+      }
+      const No = Math.floor((N - f) / s) + 1, raw = [], out = [];
+      for (let i = 0; i < No; i++) {
+        raw.push([]); out.push([]);
+        for (let j = 0; j < No; j++) {
+          let sum = 0;
+          for (let u = 0; u < f; u++) for (let v = 0; v < f; v++) sum += K[u][v] * X[i * s + u][j * s + v];
+          raw[i].push(sum); out[i].push(relu ? Math.max(0, sum) : sum);
+        }
+      }
+      const Np = Math.floor(No / 2), P = [];
+      for (let i = 0; i < Np; i++) { P.push([]); for (let j = 0; j < Np; j++) P[i].push(POOL[pool]([out[2 * i][2 * j], out[2 * i][2 * j + 1], out[2 * i + 1][2 * j], out[2 * i + 1][2 * j + 1]])); }
+      let borderOnes = false;
+      for (let k = 0; k < n; k++) if (im.at(0, k) || im.at(n - 1, k) || im.at(k, 0) || im.at(k, n - 1)) borderOnes = true;
+      return { n, K, f, s, p, N, X, No, raw, out, Np, P, relu, pool, covered: (No - 1) * s + f, borderOnes };
+    };
+
+    const shade = (v, mx) => {
+      if (!v || !mx) return 'fill: var(--surface)';
+      const a = (0.1 + 0.35 * Math.min(1, Math.abs(v) / mx)).toFixed(2);
+      return (v > 0 ? 'fill: var(--accent)' : 'fill: var(--ink-2)') + '; fill-opacity: ' + a;
+    };
+    const drawGrid = (M, x0, y0, cs, opt) => {
+      const g = mk('g', {}, layer), fs = Math.max(9, Math.min(13, cs * 0.42));
+      M.forEach((row, i) => row.forEach((v, j) => {
+        const x = x0 + j * cs, y = y0 + i * cs, pad = opt.pad ? opt.pad(i, j) : false, faded = opt.faded ? opt.faded(i, j) : false;
+        const r = mk('rect', { x, y, width: cs, height: cs, style: shade(v, opt.mx) + '; stroke: var(' + (pad ? '--muted' : '--rule') + '); stroke-width: 1' + (pad ? '; stroke-dasharray: 3 2' : '') }, g);
+        if (faded) r.setAttribute('opacity', '0.4');
+        const t = mk('text', { x: x + cs / 2, y: y + cs / 2 + fs * 0.36, 'text-anchor': 'middle', style: 'font: 500 ' + fs.toFixed(1) + 'px var(--font-mono); fill: var(' + (pad || faded ? '--muted' : '--ink') + ')' }, g);
+        t.textContent = fmt(v);
+        if (opt.click) {
+          r.classList.add('hit'); t.classList.add('hit');
+          const h = () => opt.click(i, j);
+          r.addEventListener('click', h); t.addEventListener('click', h);
+        }
+      }));
+      mk('rect', { x: x0, y: y0, width: cs * M[0].length, height: cs * M.length, style: 'fill: none; stroke: var(--ink-2); stroke-width: 1.2' }, g);
+    };
+
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } playB.textContent = 'Play'; };
+
+    const draw = () => {
+      st = compute();
+      const { n, K, f, s, p, N, X, No, raw, out, Np, P, relu, pool, covered, borderOnes } = st;
+      stO.textContent = String(s); padO.textContent = String(p);
+      if (cur < 0 || cur >= No * No) cur = 0;
+      clear(layer);
+
+      /* layout: four slots (input, filter, output, pooled) */
+      const slots = cs => [N * cs, Math.max(f * cs, SLOT), Math.max(No * cs, SLOT), Math.max(Math.max(Np, 1) * cs, SLOT)];
+      let cs = Math.min(40, HMAX / N);
+      while (cs > 8 && 2 * MARGIN + 3 * GAP + slots(cs).reduce((a, b) => a + b, 0) > W) cs -= 0.5;
+      const sw = slots(cs), used = 2 * MARGIN + 3 * GAP + sw.reduce((a, b) => a + b, 0);
+      let x = MARGIN + (W - used) / 2;
+      const cx = sw.map(w => { const c = x + w / 2; x += w + GAP; return c; });
+      const yc = TOP + N * cs / 2, leftOf = (k, size) => cx[k] - size * cs / 2, topOf = size => yc - size * cs / 2;
+
+      const lab = (k, a, b) => {
+        mk('text', { x: cx[k], y: 18, 'text-anchor': 'middle', style: 'font: 600 14px var(--font-head); fill: var(--ink-2)' }, layer).textContent = a;
+        mk('text', { x: cx[k], y: 36, 'text-anchor': 'middle', style: 'font: 12px var(--font-mono); fill: var(--muted)' }, layer).textContent = b;
+      };
+      lab(0, 'input', n + ' × ' + n + (p ? ', padded to ' + N + ' × ' + N : ''));
+      lab(1, 'filter', f + ' × ' + f);
+      lab(2, relu ? 'output after ReLU' : 'convolution output', No + ' × ' + No);
+      lab(3, PNAME[pool] + ' pooling', Np ? '2 × 2, stride 2 → ' + Np + ' × ' + Np : 'too small to pool');
+      ['∗', '=', '→'].forEach((sym, k) => {
+        mk('text', { x: cx[k] + sw[k] / 2 + GAP / 2, y: yc + 6, 'text-anchor': 'middle', style: 'font: 600 18px var(--font-head); fill: var(--ink-2)' }, layer).textContent = sym;
+      });
+
+      const i0 = Math.floor(cur / No), j0 = cur % No;
+      const mxO = Math.max(0, ...out.flat().map(Math.abs));
+      const xIn = leftOf(0, N), yIn = topOf(N), xO = leftOf(2, No), yO = topOf(No);
+      drawGrid(X, xIn, yIn, cs, { mx: 1, pad: (r, c) => r < p || c < p || r >= N - p || c >= N - p, faded: (r, c) => r >= covered || c >= covered });
+      drawGrid(K, leftOf(1, f), topOf(f), cs, { mx: Math.max(...K.flat().map(Math.abs)) });
+      drawGrid(out, xO, yO, cs, { mx: mxO, faded: (i, j) => i >= 2 * Np || j >= 2 * Np, click: (i, j) => { stop(); cur = i * No + j; draw(); } });
+      if (Np) drawGrid(P, leftOf(3, Np), topOf(Np), cs, { mx: mxO, click: (i, j) => { stop(); cur = 2 * i * No + 2 * j; draw(); } });
+
+      /* highlights */
+      mk('rect', { x: xIn + j0 * s * cs, y: yIn + i0 * s * cs, width: f * cs, height: f * cs, class: 'c-hl', style: 'stroke-width: 2.6' }, layer);
+      mk('rect', { x: xO + j0 * cs, y: yO + i0 * cs, width: cs, height: cs, class: 'c-hl', style: 'stroke-width: 2.6' }, layer);
+      const inPool = Np > 0 && i0 < 2 * Np && j0 < 2 * Np;
+      if (inPool) {
+        const pi = i0 >> 1, pj = j0 >> 1;
+        mk('rect', { x: xO + 2 * pj * cs, y: yO + 2 * pi * cs, width: 2 * cs, height: 2 * cs, class: 'c-hl', style: 'stroke-dasharray: 5 3' }, layer);
+        mk('rect', { x: leftOf(3, Np) + pj * cs, y: topOf(Np) + pi * cs, width: cs, height: cs, class: 'c-hl', style: 'stroke-width: 2.6' }, layer);
+      }
+
+      /* readouts */
+      oSize.textContent = No + ' × ' + No;
+      oForm.textContent = '⌊(' + n + ' + ' + 2 * p + ' − ' + f + ')/' + s + '⌋ + 1 = ' + No;
+      oPool.textContent = Np ? Np + ' × ' + Np : 'none';
+      oCur.textContent = fmt(out[i0][j0]);
+
+      /* status */
+      const terms = [];
+      for (let u = 0; u < f; u++) for (let v = 0; v < f; v++) {
+        const k = K[u][v], xv = X[i0 * s + u][j0 * s + v];
+        if (k && xv) terms.push(fmt(xv) + '·' + (k < 0 ? '(' + fmt(k) + ')' : fmt(k)));
+      }
+      const rv = raw[i0][j0];
+      let msg = 'Window ' + (cur + 1) + ' of ' + No * No + ' (row ' + (i0 + 1) + ', column ' + (j0 + 1) + '): ';
+      if (!terms.length) msg += 'every product is 0, so the sum is 0.';
+      else if (terms.length <= 6) msg += terms.join(' + ') + ' = ' + fmt(rv) + ', and the other products are 0.';
+      else msg += 'the ' + terms.length + ' nonzero products add up to ' + fmt(rv) + '.';
+      if (relu) msg += ' ReLU gives max(0, ' + fmt(rv) + ') = ' + fmt(out[i0][j0]) + '.';
+      if (inPool) {
+        const pi = i0 >> 1, pj = j0 >> 1;
+        const a = [out[2 * pi][2 * pj], out[2 * pi][2 * pj + 1], out[2 * pi + 1][2 * pj], out[2 * pi + 1][2 * pj + 1]];
+        msg += ' Its 2 × 2 pooling block holds ' + a.map(fmt).join(', ') + ', and ' + PNAME[pool] + ' pooling keeps ' + fmt(P[pi][pj]) + '.';
+      } else if (!Np) msg += ' A 1 × 1 output is too small for a 2 × 2 pool; Keras would stop with an error.';
+      else msg += ' This cell is in the odd last row or column, which 2 × 2 pooling drops.';
+      const all = raw.flat(), hints = [];
+      if (all.every(v => v === 0)) hints.push('This filter gives 0 everywhere: the image has no change in the direction the filter looks for.');
+      else if (all.every(v => v <= 0) && (relu || pool === 'max')) hints.push((relu ? 'Every response here is 0 or negative, and ReLU turns the negative ones into 0, so the edge is lost.' : 'Every response here is 0 or negative, so max pooling keeps the 0s and drops the edge.') + ' A filter of the opposite sign gives the same edge a positive value, which survives; a trained network learns whichever sign it needs.');
+      if ((N - f) % s) hints.push('(n + 2p − f)/s is not whole, so the formula rounds down and the faded input cells are never covered.');
+      if (p && ptS.value === 'zero' && borderOnes && filS.value !== 'ones5') hints.push('The zeros around the image create extra edges at its border; padding with the nearest value avoids them.');
+      status.textContent = msg + (hints.length ? ' ' + hints.join(' ') : '');
+    };
+
+    stepB.addEventListener('click', () => { stop(); cur = (cur + 1) % (st.No * st.No); draw(); });
+    playB.addEventListener('click', () => {
+      if (timer) { stop(); return; }
+      const last = st.No * st.No - 1;
+      if (reduce) { cur = last; draw(); return; }  /* no animation: show the final position */
+      if (cur >= last) { cur = 0; draw(); }
+      playB.textContent = 'Pause';
+      timer = setInterval(() => { if (cur >= st.No * st.No - 1) { stop(); return; } cur++; draw(); }, 450);
+    });
+    resetB.addEventListener('click', () => { stop(); cur = 0; draw(); });
+    [imgS, filS, ptS].forEach(el => el.addEventListener('change', () => { stop(); cur = 0; draw(); }));
+    [reluC, poolS].forEach(el => el.addEventListener('change', () => { stop(); draw(); }));
+    [stS, padS].forEach(el => el.addEventListener('input', () => { stop(); cur = 0; draw(); }));
+    draw();
+  })();
+
+  /* ---------- What model.summary() counts ---------- */
+  (() => {
+    const svg = document.getElementById('ks-svg'); if (!svg) return;
+    const $ = id => document.getElementById(id);
+    const kS = $('ks-k'), padS = $('ks-pad'), f1S = $('ks-f1'), dS = $('ks-dense');
+    const oFlat = $('ks-flat'), oTot = $('ks-total'), oDen = $('ks-dshare'), status = $('ks-status');
+    const layer = mk('g', {}, svg);
+    const draw = () => {
+      const k = +kS.value, same = padS.value === 'same', f1 = +f1S.value, du = +dS.value;
+      let n = 32, c = 3;
+      const sizes = [32], rows = [];
+      const conv = (nm, K) => {
+        const no = same ? n : n - k + 1;
+        rows.push({ nm, kind: 'conv', shape: '(None, ' + no + ', ' + no + ', ' + K + ')', params: (k * k * c + 1) * K, how: '(' + k + '·' + k + '·' + c + ' + 1) · ' + K });
+        n = no; c = K; sizes.push(n);
+      };
+      const pool = nm => {
+        const no = Math.floor(n / 2);
+        rows.push({ nm, kind: 'pool', shape: '(None, ' + no + ', ' + no + ', ' + c + ')', params: 0, how: 'no weights, size halved' });
+        n = no; sizes.push(n);
+      };
+      conv('conv2d · Conv2D(' + f1 + ')', f1); pool('max_pooling2d'); conv('conv2d_1 · Conv2D(64)', 64); pool('max_pooling2d_1'); conv('conv2d_2 · Conv2D(64)', 64);
+      const flat = n * n * c;
+      rows.push({ nm: 'flatten', kind: 'pool', shape: '(None, ' + flat + ')', params: 0, how: n + '·' + n + '·' + c + ' values in one row' });
+      rows.push({ nm: 'dense · Dense(' + du + ')', kind: 'dense', shape: '(None, ' + du + ')', params: (flat + 1) * du, how: '(' + flat + ' + 1) · ' + du });
+      rows.push({ nm: 'dense_1 · Dense(10)', kind: 'dense', shape: '(None, 10)', params: (du + 1) * 10, how: '(' + du + ' + 1) · 10' });
+      const tot = rows.reduce((a, r) => a + r.params, 0);
+      const den = rows.filter(r => r.kind === 'dense').reduce((a, r) => a + r.params, 0);
+      const mx = Math.max(...rows.map(r => r.params));
+
+      clear(layer);
+      [['Layer (type)', 12, 'start'], ['Output shape', 214, 'start'], ['Param #', 400, 'end']].forEach(([t, x, a]) => { mk('text', { x, y: 20, 'text-anchor': a, class: 'c-title' }, layer).textContent = t; });
+      mk('line', { x1: 8, x2: 632, y1: 30, y2: 30, class: 'c-axis' }, layer);
+      rows.forEach((r, i) => {
+        const y = 52 + i * 36;
+        mk('text', { x: 12, y, class: 'c-note' }, layer).textContent = r.nm;
+        mk('text', { x: 12, y: y + 14, class: 'c-tick' }, layer).textContent = r.how;
+        mk('text', { x: 214, y, class: 'c-tick' }, layer).textContent = r.shape;
+        mk('text', { x: 400, y, 'text-anchor': 'end', class: 'c-tick' }, layer).textContent = group(r.params);
+        if (r.params) mk('rect', { x: 414, y: y - 11, width: Math.max(2, 210 * r.params / mx), height: 14, rx: 2, style: r.kind === 'conv' ? 'fill: var(--accent)' : 'fill: var(--ink-2); fill-opacity: .7' }, layer);
+      });
+      mk('line', { x1: 8, x2: 632, y1: 334, y2: 334, class: 'c-axis' }, layer);
+      mk('text', { x: 12, y: 354, class: 'c-title' }, layer).textContent = 'Total params';
+      mk('text', { x: 400, y: 354, 'text-anchor': 'end', class: 'c-lbl' }, layer).textContent = group(tot);
+
+      oFlat.textContent = group(flat); oTot.textContent = group(tot); oDen.textContent = Math.round(100 * den / tot) + '%';
+      const d1 = rows[6].params, isTut = k === 3 && !same && f1 === 32 && du === 64;
+      status.textContent = (isTut ? 'These are the tutorial\'s numbers, as in the summaries above. ' : '') +
+        'Sizes before flattening: ' + sizes.join(' → ') + (same ? ' (with \'same\' padding only pooling shrinks the maps)' : '') + '. ' +
+        'The first dense layer alone holds ' + Math.round(100 * d1 / tot) + '% of the ' + group(tot) + ' parameters, because it connects all ' + group(flat) + ' flattened values to ' + du + ' neurons. ' +
+        'A convolution layer\'s count depends only on the filter size and the channel depths, not on the size of the image.';
+    };
+    [kS, padS, f1S, dS].forEach(el => el.addEventListener('change', draw));
+    draw();
+  })();
+})();
+</script>
+</body>
+</html>
