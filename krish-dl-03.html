@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DL in 5 hours, Part 3 · Chain rule and vanishing gradients · DL Notes</title>
+<meta name="description" content="Notes on Krish Naik's Deep Learning In-depth Tutorials in 5 Hours, Part 3: the chain rule of derivatives through a neural network, path by path for each weight, and the vanishing gradient problem that follows from the sigmoid's derivative being at most 0.25.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<script src="theme.js"></script>
+<style>
+.btn.tog { padding: 8px 12px; font-family: var(--font-mono); font-weight: 500; }
+.btn.tog[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.controls select { font: 500 14px/1.3 var(--font-head); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 10px; }
+</style>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <!-- PARTNAV:START --><nav class="partnav" aria-label="Parts"><a href="index.html#extra">All notes</a><span class="sep">/</span><span>DL in 5 hours · Part 3 of 7</span><span class="sep">·</span><a href="krish-dl-02.html">← Part 2</a><span class="sep">·</span><a href="krish-dl-04.html">Part 4 →</a></nav><!-- PARTNAV:END -->
+    <div class="eyebrow">Krish Naik · Deep Learning In-depth Tutorials in 5 Hours</div>
+    <h1>The chain rule and the vanishing gradient problem</h1>
+    <p class="lede">The chain rule gives the derivative of the loss with respect to any weight as a product of local derivatives along each path from the loss back to that weight, with one product per path added up. In a deep sigmoid network every factor is small, because the sigmoid's derivative never exceeds 0.25, so the first layers get a tiny gradient and their weights barely change.</p>
+    <div class="meta">
+      <span><b>Part 3</b> of 7</span>
+      <span>Teacher <b>Krish Naik</b></span>
+      <span>About <b>26 min</b> of video</span>
+      <span><b>2</b> chapters</span>
+    </div>
+    <div class="watch">
+      <a class="btn solid" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4736s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:18:56 · Chain rule of derivatives</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5623s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:33:43 · Vanishing gradient problem</a>
+    </div>
+  </div>
+</header>
+
+<div class="page gutter">
+  <nav class="toc" aria-label="Contents">
+    <div>
+      <h4>1:18:56 · Chain rule</h4>
+      <ul>
+        <li><a href="#chain-question">What backprop needs</a></li>
+        <li><a href="#chain-w4">The chain for w₄, and biases</a></li>
+        <li><a href="#chain-w1">One layer deeper: w₁, w₂</a></li>
+        <li><a href="#two-paths">Two paths: add them</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>1:33:43 · Vanishing gradient</h4>
+      <ul>
+        <li><a href="#deep-chain">A deep sigmoid network</a></li>
+        <li><a href="#sigmoid-derivative">σ′ is at most 0.25</a></li>
+        <li><a href="#vanishing">Small times small</a></li>
+        <li><a href="#consequence">The weights stop moving</a></li>
+        <li><a href="#remedies">The remedy he gives</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Revision</h4>
+      <ul>
+        <li><a href="#terms">Key terms</a></li>
+        <li><a href="#test">Test yourself</a></li>
+        <li><a href="index.html#extra">All notes</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="glance" id="glance">
+      <h2>At a glance</h2>
+      <ul>
+        <li>Backward propagation updates every weight with \(w_{\text{new}} = w_{\text{old}} - \eta\,\partial L/\partial w_{\text{old}}\), and every bias the same way. The work is in finding \(\partial L/\partial w\), which the <dfn>chain rule of derivatives</dfn> does.</li>
+        <li>Follow the dependencies from the loss back to the weight and multiply one local derivative per step: \(\partial L/\partial w_4\) \(= (\partial L/\partial O_2)\,(\partial O_2/\partial w_4)\), and for a weight one layer further back, \(\partial L/\partial w_1\) \(= (\partial L/\partial O_2)\,(\partial O_2/\partial O_1)\) \(\times\, (\partial O_1/\partial w_1)\).</li>
+        <li>When a weight reaches the loss along several paths, compute the product for each path and <b>add</b> them. Krish calls this combining the paths like an OR.</li>
+        <li>The sigmoid \(\sigma(z) = 1/(1 + e^{-z})\) has a derivative between 0 and 0.25. In a deep sigmoid network the chain for an early weight multiplies one such factor per layer, so the product gets very small.</li>
+        <li>A tiny gradient times a small learning rate gives \(w_{\text{new}} \approx w_{\text{old}}\): the early weights stop changing. This is the <dfn>vanishing gradient problem</dfn>, which he flags as a key interview question.</li>
+        <li>His remedy is to use other activation functions: tanh, ReLU, leaky ReLU, PReLU and others, which Part 4 covers.</li>
+      </ul>
+    </div>
+
+    <!-- ============ CHAPTER: CHAIN RULE ============ -->
+    <section id="chain-question">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4736s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:18:56</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4788s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:19:48 the chain rule</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4819s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:20:19 the network</a>
+        </div>
+        <h2>What backpropagation needs: \(\partial L/\partial w\) for every weight</h2>
+      </div>
+      <p>Part 2 (<a href="krish-dl-02.html">krish-dl-02.html</a>) ended with the weight update formula of backward propagation. For any weight, such as \(w_4\),</p>
+      <div class="eq">\[ w_{4,\text{new}} = w_{4,\text{old}} - \eta\,\frac{\partial L}{\partial w_{4,\text{old}}} \]</div>
+      <p>Everything on the right is easy to get except one piece. \(w_{4,\text{old}}\) is the current weight and the learning rate \(\eta\) is chosen at the start. The open question is how to compute \(\partial L/\partial w_{4,\text{old}}\), the derivative of the loss with respect to that weight. The tool is the <dfn>chain rule of derivatives</dfn> (he also calls it the chain rule of differentiation).</p>
+      <p>The running example is the small network from Part 2 <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4819s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:20:19</a>. Three inputs \(x_1, x_2, x_3\) feed one hidden neuron through the weights \(w_1, w_2, w_3\). The neuron adds its bias \(b_1\) to the weighted sum and applies an activation function; its output is \(O_1\). \(O_1\) times \(w_4\), plus a bias \(b_2\), goes into the output neuron, whose activation gives \(O_2\). That is the prediction \(\hat y\), and the loss \(L\) compares it with the true \(y\).</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 316" role="img" aria-label="Top: inputs x1, x2 and x3 feed a hidden sigmoid neuron with bias b1 through weights w1, w2 and w3. Its output O1 is multiplied by w4 and fed to an output sigmoid neuron with bias b2, whose output O2 is the prediction y hat, compared with y in the loss L. Bottom: two backward chains. For w4: from L to O2 to w4, with factors dL/dO2 and dO2/dw4. For w1: from L to O2 to O1 to w1, with factors dL/dO2, dO2/dO1 and dO1/dw1.">
+            <defs>
+              <marker id="kdl03-f1-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="kdl03-f1-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <text class="d-h" x="20" y="22">Forward: three inputs, a hidden neuron, an output neuron</text>
+            <circle class="node" cx="60" cy="60" r="15"/><text class="d-t" x="60" y="65" text-anchor="middle">x₁</text>
+            <circle class="node" cx="60" cy="110" r="15"/><text class="d-t" x="60" y="115" text-anchor="middle">x₂</text>
+            <circle class="node" cx="60" cy="160" r="15"/><text class="d-t" x="60" y="165" text-anchor="middle">x₃</text>
+            <line class="d-ln" x1="74.5" y1="64" x2="214" y2="102.8" marker-end="url(#kdl03-f1-ah)"/>
+            <line class="d-ln" x1="75" y1="110" x2="213" y2="110" marker-end="url(#kdl03-f1-ah)"/>
+            <line class="d-ln" x1="74.5" y1="156" x2="214" y2="117.2" marker-end="url(#kdl03-f1-ah)"/>
+            <text class="d-s" x="146" y="72" text-anchor="middle">w₁</text>
+            <text class="d-s" x="144" y="103" text-anchor="middle">w₂</text>
+            <text class="d-s" x="146" y="155" text-anchor="middle">w₃</text>
+            <circle class="node-acc" cx="240" cy="110" r="26"/><text class="d-t" x="240" y="115" text-anchor="middle">σ</text>
+            <text class="d-s" x="240" y="74" text-anchor="middle">hidden neuron</text>
+            <text class="d-s" x="240" y="152" text-anchor="middle">+ b₁</text>
+            <line class="d-ln" x1="266" y1="110" x2="392" y2="110" marker-end="url(#kdl03-f1-ah)"/>
+            <text class="d-s" x="329" y="102" text-anchor="middle">w₄</text>
+            <text class="d-s" x="329" y="126" text-anchor="middle">carries O₁</text>
+            <circle class="node-acc" cx="420" cy="110" r="26"/><text class="d-t" x="420" y="115" text-anchor="middle">σ</text>
+            <text class="d-s" x="420" y="74" text-anchor="middle">output neuron</text>
+            <text class="d-s" x="420" y="152" text-anchor="middle">+ b₂</text>
+            <line class="d-ln" x1="446" y1="110" x2="530" y2="110" marker-end="url(#kdl03-f1-ah)"/>
+            <text class="d-s" x="488" y="102" text-anchor="middle">O₂ = ŷ</text>
+            <rect class="d-box" x="533" y="92" width="100" height="36" rx="6"/>
+            <text class="d-t" x="583" y="115" text-anchor="middle">loss L</text>
+
+            <line class="d-rule" x1="20" y1="180" x2="640" y2="180"/>
+            <text class="d-s" x="20" y="202">Backward: follow the dependencies from the loss to the weight, one factor per step</text>
+
+            <text class="d-t" x="20" y="243">for w₄</text>
+            <rect class="pill" x="321" y="224" width="48" height="28" rx="14"/><text class="d-t" x="345" y="243" text-anchor="middle">w₄</text>
+            <rect class="pill" x="436" y="224" width="48" height="28" rx="14"/><text class="d-t" x="460" y="243" text-anchor="middle">O₂</text>
+            <rect class="pill" x="551" y="224" width="48" height="28" rx="14"/><text class="d-t" x="575" y="243" text-anchor="middle">L</text>
+            <line class="d-ln-acc" x1="550" y1="238" x2="487" y2="238" marker-end="url(#kdl03-f1-aha)"/>
+            <line class="d-ln-acc" x1="435" y1="238" x2="372" y2="238" marker-end="url(#kdl03-f1-aha)"/>
+            <text class="d-s" x="518" y="230" text-anchor="middle">∂L/∂O₂</text>
+            <text class="d-s" x="403" y="230" text-anchor="middle">∂O₂/∂w₄</text>
+
+            <text class="d-t" x="20" y="295">for w₁</text>
+            <rect class="pill" x="206" y="276" width="48" height="28" rx="14"/><text class="d-t" x="230" y="295" text-anchor="middle">w₁</text>
+            <rect class="pill" x="321" y="276" width="48" height="28" rx="14"/><text class="d-t" x="345" y="295" text-anchor="middle">O₁</text>
+            <rect class="pill" x="436" y="276" width="48" height="28" rx="14"/><text class="d-t" x="460" y="295" text-anchor="middle">O₂</text>
+            <rect class="pill" x="551" y="276" width="48" height="28" rx="14"/><text class="d-t" x="575" y="295" text-anchor="middle">L</text>
+            <line class="d-ln-acc" x1="550" y1="290" x2="487" y2="290" marker-end="url(#kdl03-f1-aha)"/>
+            <line class="d-ln-acc" x1="435" y1="290" x2="372" y2="290" marker-end="url(#kdl03-f1-aha)"/>
+            <line class="d-ln-acc" x1="320" y1="290" x2="257" y2="290" marker-end="url(#kdl03-f1-aha)"/>
+            <text class="d-s" x="518" y="282" text-anchor="middle">∂L/∂O₂</text>
+            <text class="d-s" x="403" y="282" text-anchor="middle">∂O₂/∂O₁</text>
+            <text class="d-s" x="288" y="282" text-anchor="middle">∂O₁/∂w₁</text>
+          </svg>
+        </div>
+        <figcaption><b>The network of this chapter and its two chains.</b> Top: the forward pass as Krish draws it, with a sigmoid \(\sigma\) in both neurons. Bottom: the backward chains. \(w_4\) is one step from the output, so its chain has two factors; \(w_1\) sits behind the hidden neuron, so its chain passes through \(O_1\) as well and has three.</figcaption>
+      </figure>
+      <p class="note">For the IIT Madras treatment of the same idea on a deep, thin network, see Lecture 4 (<a href="lecture-04.html#thin-chain">lecture-04.html</a>).</p>
+    </section>
+
+    <section id="chain-w4">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4851s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:20:51</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4913s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:21:53 z and the activation</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4975s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:22:55 bias update</a>
+        </div>
+        <h2>The chain for \(w_4\), and the biases</h2>
+      </div>
+      <p>Start from the loss and ask what it depends on. \(L\) depends first on \(O_2\), the output. \(O_2\) in turn depends on \(w_4\). One derivative per link gives</p>
+      <div class="result">
+        <span class="lbl">Chain rule for w₄</span>
+        \[ \frac{\partial L}{\partial w_{4,\text{old}}} = \frac{\partial L}{\partial O_2}\cdot\frac{\partial O_2}{\partial w_{4,\text{old}}} \]
+      </div>
+      <p>Krish checks the shape by cancelling: strike out \(\partial O_2\) above and below and \(\partial L/\partial w_4\) is left <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4881s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:21:21</a>. A chain of derivatives connects the loss to the weight, which is where the name comes from. Each factor is the slope of one step. (Derivatives are not really fractions, so the cancelling is a way to remember the rule and check its shape. The chain rule is the theorem behind it.)</p>
+      <p>What is \(O_2\)? Call the input of the output neuron \(z\) (he calls it the "z input"). It is \(O_1\) times \(w_4\) plus the bias, and the activation is applied to it:</p>
+      <div class="eq">\[ z_2 = O_1\,w_4 + b_2, \qquad O_2 = \sigma(z_2) \]</div>
+      <p>A bias is added in every neuron: \(b_1\) in the hidden one and \(b_2\) in the output one. Biases are learned with the same update formula as the weights <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=4975s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:22:55</a>:</p>
+      <div class="result">
+        <span class="lbl">Bias update formula</span>
+        \[ b_{2,\text{new}} = b_{2,\text{old}} - \eta\,\frac{\partial L}{\partial b_{2,\text{old}}} \]
+      </div>
+      <p class="note"><b>Not in the video:</b> the local derivatives written out. With \(z_2 = O_1 w_4 + b_2\), the factor \(\partial O_2/\partial w_4\) is \(\sigma'(z_2)\,O_1\), and the chain for the bias is \(\partial L/\partial b_2 = \frac{\partial L}{\partial O_2}\,\sigma'(z_2)\), because \(\partial z_2/\partial b_2 = 1\). The \(\sigma'\) factor that appears here matters a great deal in the second chapter.</p>
+    </section>
+
+    <section id="chain-w1">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5010s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:23:30</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5072s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:24:32 three dependencies</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5172s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:26:12 try w₂</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5204s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:26:44 where is w₄?</a>
+        </div>
+        <h2>One layer deeper: the chains for \(w_1\) and \(w_2\)</h2>
+      </div>
+      <p>Now update \(w_1\), the weight from \(x_1\) to the hidden neuron. The update formula has the same form, \(w_{1,\text{new}} = w_{1,\text{old}} - \eta\,\partial L/\partial w_{1,\text{old}}\), and he suggests pausing the video to write the chain yourself before he does.</p>
+      <p>The dependencies are one longer: \(L\) depends on \(O_2\), \(O_2\) depends on \(O_1\), and \(O_1\) depends on \(w_1\). So</p>
+      <div class="result">
+        <span class="lbl">Chain rule for w₁</span>
+        \[ \frac{\partial L}{\partial w_{1,\text{old}}} = \frac{\partial L}{\partial O_2}\cdot\frac{\partial O_2}{\partial O_1}\cdot\frac{\partial O_1}{\partial w_{1,\text{old}}} \]
+      </div>
+      <p>He then sets \(w_2\) as the next exercise and writes its update formula, \(w_{2,\text{new}} = w_{2,\text{old}} - \eta\,\partial L/\partial w_{2,\text{old}}\). The video moves on before writing its chain, which is the same as for \(w_1\) with the last factor changed, because \(w_2\) also enters through the hidden neuron:</p>
+      <div class="eq">\[ \frac{\partial L}{\partial w_{2,\text{old}}} = \frac{\partial L}{\partial O_2}\cdot\frac{\partial O_2}{\partial O_1}\cdot\frac{\partial O_1}{\partial w_{2,\text{old}}} \]</div>
+      <p>A natural question is where \(w_4\) went, since it sits between \(O_1\) and \(O_2\). His answer is that any factor can be split further with the chain rule, as finely as you like, and the result is always the same derivative.</p>
+      <p class="note"><b>Correction.</b> The particular split written in the video, \(\partial O_2/\partial O_1\) as \((\partial O_2/\partial w_4)\cdot(\partial w_4/\partial O_1)\), is not a valid chain-rule step, because \(w_4\) does not depend on \(O_1\). \(w_4\) is already inside the middle factor. Since \(O_2 = \sigma(O_1 w_4 + b_2)\), differentiating with respect to \(O_1\) gives \(\partial O_2/\partial O_1 = \sigma'(z_2)\,w_4\). With \(z_1 = w_1x_1 + w_2x_2 + w_3x_3 + b_1\) the whole chain is</p>
+      <div class="eq">\[ \frac{\partial L}{\partial w_1} = \frac{\partial L}{\partial O_2}\cdot\underbrace{\sigma'(z_2)\,w_4}_{\partial O_2/\partial O_1}\cdot\underbrace{\sigma'(z_1)\,x_1}_{\partial O_1/\partial w_1} \]</div>
+      <p class="note">So the gradient of an early weight is scaled by the weights in front of it and by one \(\sigma'\) for each neuron it passes through.</p>
+    </section>
+
+    <section id="two-paths">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5237s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:27:17</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5302s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:28:22 the outputs</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5333s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:28:53 two routes</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5402s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:30:02 add the paths</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5528s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:32:08 chain rule of derivatives</a>
+        </div>
+        <h2>Two paths to the loss: add the products</h2>
+      </div>
+      <p>The second example is a network with a branch. One input \(x_1\) feeds one neuron in the first hidden layer, which feeds two neurons in the second hidden layer, which both feed one output neuron. The weights are \(w_1\) (input to first hidden), \(w_2\) and \(w_3\) (first hidden to the two second-layer neurons), and \(w_4\) and \(w_5\) (those two to the output). The outputs are named by layer and neuron: \(O_{11}\) for the first hidden neuron, \(O_{21}\) and \(O_{22}\) for the second layer, \(O_{31}\) for the output neuron, which gives \(\hat y\) and then the loss.</p>
+      <p>To update \(w_1\) we need \(\partial L/\partial w_1\), and now there are two routes from \(w_1\) to the loss <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5333s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:28:53</a>:</p>
+      <ul>
+        <li><b>Upper path:</b> \(L\) depends on \(O_{31}\), \(O_{31}\) on \(O_{21}\), \(O_{21}\) on \(O_{11}\), and \(O_{11}\) on \(w_1\).</li>
+        <li><b>Lower path:</b> \(L\) depends on \(O_{31}\), \(O_{31}\) on \(O_{22}\), \(O_{22}\) on \(O_{11}\), and \(O_{11}\) on \(w_1\).</li>
+      </ul>
+      <p>He works out the chain along the top path first, then the bottom path, and combines them "just like an OR operation": \(w_1\) influences the loss through either route, so both contributions count, and they are added.</p>
+      <div class="result">
+        <span class="lbl">Chain rule with two paths</span>
+        \[ \frac{\partial L}{\partial w_{1,\text{old}}} = \underbrace{\frac{\partial L}{\partial O_{31}}\cdot\frac{\partial O_{31}}{\partial O_{21}}\cdot\frac{\partial O_{21}}{\partial O_{11}}\cdot\frac{\partial O_{11}}{\partial w_{1,\text{old}}}}_{\text{upper path}} \;+\; \underbrace{\frac{\partial L}{\partial O_{31}}\cdot\frac{\partial O_{31}}{\partial O_{22}}\cdot\frac{\partial O_{22}}{\partial O_{11}}\cdot\frac{\partial O_{11}}{\partial w_{1,\text{old}}}}_{\text{lower path}} \]
+        <p>One product per path, then the sum over paths.</p>
+      </div>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 340" role="img" aria-label="Top: x1 feeds neuron O11 through w1. O11 feeds O21 through w2 and O22 through w3. O21 and O22 feed the output neuron O31 through w4 and w5, and O31 gives y hat and the loss. The upper path through O21 is drawn solid, the lower path through O22 dashed. Bottom: path 1 is the chain L, O31, O21, O11, w1 with factors dL/dO31, dO31/dO21, dO21/dO11, dO11/dw1. Path 2 is L, O31, O22, O11, w1 with factors dL/dO31, dO31/dO22, dO22/dO11, dO11/dw1. The two products are added.">
+            <defs>
+              <marker id="kdl03-f2-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <text class="d-h" x="20" y="22">Two routes from w₁ to the loss</text>
+            <circle class="node" cx="50" cy="120" r="15"/><text class="d-t" x="50" y="125" text-anchor="middle">x₁</text>
+            <line class="d-ln-acc" x1="65" y1="120" x2="147" y2="120" marker-end="url(#kdl03-f2-aha)" style="stroke-width:2.4"/>
+            <text class="d-s" x="106" y="111" text-anchor="middle">w₁</text>
+            <circle class="node-acc" cx="170" cy="120" r="22"/><text class="d-t" x="170" y="125" text-anchor="middle">O₁₁</text>
+            <line class="d-ln-acc" x1="190.2" y1="111.3" x2="288.9" y2="69.1" marker-end="url(#kdl03-f2-aha)"/>
+            <line class="d-ln-acc d-dash" x1="190.2" y1="128.7" x2="288.9" y2="170.9" marker-end="url(#kdl03-f2-aha)"/>
+            <text class="d-s" x="232" y="80" text-anchor="middle">w₂</text>
+            <text class="d-s" x="232" y="168" text-anchor="middle">w₃</text>
+            <circle class="node-acc" cx="310" cy="60" r="22"/><text class="d-t" x="310" y="65" text-anchor="middle">O₂₁</text>
+            <circle class="node-acc" cx="310" cy="180" r="22"/><text class="d-t" x="310" y="185" text-anchor="middle">O₂₂</text>
+            <text class="d-s" x="310" y="30" text-anchor="middle" style="fill: var(--accent)">upper path</text>
+            <text class="d-s" x="310" y="220" text-anchor="middle" style="fill: var(--accent)">lower path</text>
+            <line class="d-ln-acc" x1="330.2" y1="68.7" x2="428.9" y2="110.9" marker-end="url(#kdl03-f2-aha)"/>
+            <line class="d-ln-acc d-dash" x1="330.2" y1="171.3" x2="428.9" y2="129.1" marker-end="url(#kdl03-f2-aha)"/>
+            <text class="d-s" x="388" y="80" text-anchor="middle">w₄</text>
+            <text class="d-s" x="388" y="168" text-anchor="middle">w₅</text>
+            <circle class="node-acc" cx="450" cy="120" r="22"/><text class="d-t" x="450" y="125" text-anchor="middle">O₃₁</text>
+            <line class="d-ln-acc" x1="472" y1="120" x2="537" y2="120" marker-end="url(#kdl03-f2-aha)" style="stroke-width:2.4"/>
+            <text class="d-s" x="505" y="111" text-anchor="middle">ŷ</text>
+            <rect class="d-box" x="540" y="103" width="96" height="34" rx="6"/>
+            <text class="d-t" x="588" y="125" text-anchor="middle">loss L</text>
+
+            <line class="d-rule" x1="20" y1="240" x2="640" y2="240"/>
+            <text class="d-t" x="20" y="273">path 1</text>
+            <rect class="pill" x="96" y="254" width="48" height="28" rx="14"/><text class="d-t" x="120" y="273" text-anchor="middle">w₁</text>
+            <rect class="pill" x="211" y="254" width="48" height="28" rx="14"/><text class="d-t" x="235" y="273" text-anchor="middle">O₁₁</text>
+            <rect class="pill" x="326" y="254" width="48" height="28" rx="14"/><text class="d-t" x="350" y="273" text-anchor="middle">O₂₁</text>
+            <rect class="pill" x="441" y="254" width="48" height="28" rx="14"/><text class="d-t" x="465" y="273" text-anchor="middle">O₃₁</text>
+            <rect class="pill" x="556" y="254" width="48" height="28" rx="14"/><text class="d-t" x="580" y="273" text-anchor="middle">L</text>
+            <line class="d-ln-acc" x1="555" y1="268" x2="492" y2="268" marker-end="url(#kdl03-f2-aha)"/>
+            <line class="d-ln-acc" x1="440" y1="268" x2="377" y2="268" marker-end="url(#kdl03-f2-aha)"/>
+            <line class="d-ln-acc" x1="325" y1="268" x2="262" y2="268" marker-end="url(#kdl03-f2-aha)"/>
+            <line class="d-ln-acc" x1="210" y1="268" x2="147" y2="268" marker-end="url(#kdl03-f2-aha)"/>
+            <text class="d-s" x="522" y="260" text-anchor="middle">∂L/∂O₃₁</text>
+            <text class="d-s" x="408" y="260" text-anchor="middle">∂O₃₁/∂O₂₁</text>
+            <text class="d-s" x="293" y="260" text-anchor="middle">∂O₂₁/∂O₁₁</text>
+            <text class="d-s" x="178" y="260" text-anchor="middle">∂O₁₁/∂w₁</text>
+
+            <text class="d-t" x="20" y="323">+ path 2</text>
+            <rect class="pill" x="96" y="304" width="48" height="28" rx="14"/><text class="d-t" x="120" y="323" text-anchor="middle">w₁</text>
+            <rect class="pill" x="211" y="304" width="48" height="28" rx="14"/><text class="d-t" x="235" y="323" text-anchor="middle">O₁₁</text>
+            <rect class="pill" x="326" y="304" width="48" height="28" rx="14"/><text class="d-t" x="350" y="323" text-anchor="middle">O₂₂</text>
+            <rect class="pill" x="441" y="304" width="48" height="28" rx="14"/><text class="d-t" x="465" y="323" text-anchor="middle">O₃₁</text>
+            <rect class="pill" x="556" y="304" width="48" height="28" rx="14"/><text class="d-t" x="580" y="323" text-anchor="middle">L</text>
+            <line class="d-ln-acc d-dash" x1="555" y1="318" x2="492" y2="318" marker-end="url(#kdl03-f2-aha)"/>
+            <line class="d-ln-acc d-dash" x1="440" y1="318" x2="377" y2="318" marker-end="url(#kdl03-f2-aha)"/>
+            <line class="d-ln-acc d-dash" x1="325" y1="318" x2="262" y2="318" marker-end="url(#kdl03-f2-aha)"/>
+            <line class="d-ln-acc d-dash" x1="210" y1="318" x2="147" y2="318" marker-end="url(#kdl03-f2-aha)"/>
+            <text class="d-s" x="522" y="310" text-anchor="middle">∂L/∂O₃₁</text>
+            <text class="d-s" x="408" y="310" text-anchor="middle">∂O₃₁/∂O₂₂</text>
+            <text class="d-s" x="293" y="310" text-anchor="middle">∂O₂₂/∂O₁₁</text>
+            <text class="d-s" x="178" y="310" text-anchor="middle">∂O₁₁/∂w₁</text>
+          </svg>
+        </div>
+        <figcaption><b>A weight with two paths to the loss.</b> Krish's 1–1–2–1 network. \(w_1\) reaches the loss through \(O_{21}\) (solid) and through \(O_{22}\) (dashed). Each path gives a product of four factors, and \(\partial L/\partial w_1\) is their sum. The first factor \(\partial L/\partial O_{31}\) and the last factor \(\partial O_{11}/\partial w_1\) are shared by both paths.</figcaption>
+      </figure>
+
+      <p>All of this happens in backward propagation <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5528s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:32:08</a>. He says the task is done by the <b>optimizers</b>, which get their own chapter later (Part 5, <a href="krish-dl-05.html">krish-dl-05.html</a>). More precisely, backpropagation computes the derivatives with the chain rule and the optimizer uses them in the update formula.</p>
+      <p class="note"><b>Not in the video:</b> why the paths add. \(O_{31} = \sigma(w_4 O_{21} + w_5 O_{22} + b)\) depends on \(O_{11}\) through two inputs at once, and the multivariable chain rule sums the contribution of each input. Lecture 4 states this as the chain rule along several paths (<a href="lecture-04.html#multipath">lecture-04.html</a>).</p>
+
+      <figure id="cr-fig">
+        <div class="controls">
+          <span>Weight</span>
+          <button class="btn tog" id="cr-w1" type="button" aria-pressed="true">w₁</button>
+          <button class="btn tog" id="cr-w2" type="button" aria-pressed="false">w₂</button>
+          <button class="btn tog" id="cr-w3" type="button" aria-pressed="false">w₃</button>
+          <button class="btn tog" id="cr-w4" type="button" aria-pressed="false">w₄</button>
+          <button class="btn tog" id="cr-w5" type="button" aria-pressed="false">w₅</button>
+        </div>
+        <div class="controls">
+          <label for="cr-val" id="cr-val-lbl">Value of w₁</label>
+          <input type="range" id="cr-val" min="-3" max="3" step="0.1" value="1">
+          <output id="cr-val-out" for="cr-val">1.0</output>
+          <button class="btn" id="cr-reset" type="button">Reset weights</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">Paths to the loss</span><span class="v" id="cr-paths">–</span></div>
+          <div><span class="k">∂L/∂w by the chain rule</span><span class="v mine" id="cr-grad">–</span></div>
+          <div><span class="k">Check: nudge w by ±0.00001</span><span class="v" id="cr-num">–</span></div>
+          <div><span class="k">Loss L</span><span class="v" id="cr-loss">–</span></div>
+        </div>
+        <div class="status" id="cr-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="cr-svg" viewBox="0 0 640 370" role="img" aria-label="The 1-1-2-1 network with every neuron's output value. The edges on the selected weight's path or paths to the loss are highlighted. Below, each path's chain-rule product is written out with the value of every factor, followed by the total gradient."></svg></div>
+        <figcaption><b>Chain-rule explorer for the 1–1–2–1 network.</b> Pick a weight to see its path or paths to the loss and the value of every factor. Every neuron is a sigmoid with bias 0, the input is \(x_1 = 1\), the target is \(y = 1\) and the loss is \(\tfrac12(y - \hat y)^2\); these values are illustrative, chosen for these notes. Each factor is a sigmoid derivative times the weight or input that enters that step, so \(\partial O_{31}/\partial O_{21} = \sigma'(z_{31})\,w_4\). The check readout nudges the weight up and down and measures the change in the loss; it always agrees with the chain rule. Try \(w_1\) with \(w_3\) negative: the two paths then have opposite signs and partly cancel.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ============ CHAPTER: VANISHING GRADIENT ============ -->
+    <section id="deep-chain">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5594s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:33:14 the next topic</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5630s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:33:50 a deep network</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5663s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:34:23 MSE and sigmoid</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5795s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:36:35 the chain for w₁</a>
+        </div>
+        <h2>A deep network of sigmoid neurons</h2>
+      </div>
+      <p>The second chapter is the <dfn>vanishing gradient problem</dfn>. Krish calls it a major problem and a very common interview question, so it is worth knowing well.</p>
+      <p>Take a very deep network with one neuron per layer: input \(x_1\), weights \(w_1, w_2, w_3, w_4\) in turn, and finally the output \(\hat y\) and the loss. The loss is the <dfn>mean squared error</dfn> in the form he writes here,</p>
+      <div class="eq">\[ L = \tfrac12\,(y - \hat y)^2 \]</div>
+      <p>(loss functions get a full treatment in Part 4, <a href="krish-dl-04.html">krish-dl-04.html</a>). Every neuron uses the <b>sigmoid</b> activation, and every layer adds its own bias. The outputs of the four neurons are \(O_{21}, O_{31}, O_{41}, O_{51}\) <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5728s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:35:28</a>, and \(O_{51}\) is \(\hat y\).</p>
+      <p>The update for the first weight is again \(w_{1,\text{new}} = w_{1,\text{old}} - \eta\,\partial L/\partial w_{1,\text{old}}\). There is one path, and it passes through every layer:</p>
+      <div class="result">
+        <span class="lbl">Chain rule for the first weight of a deep chain</span>
+        \[ \frac{\partial L}{\partial w_1} = \frac{\partial L}{\partial O_{51}}\cdot\frac{\partial O_{51}}{\partial O_{41}}\cdot\frac{\partial O_{41}}{\partial O_{31}}\cdot\frac{\partial O_{31}}{\partial O_{21}}\cdot\frac{\partial O_{21}}{\partial w_1} \]
+      </div>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 262" role="img" aria-label="Top: x1 feeds four sigmoid neurons in a row through w1, w2, w3 and w4. Their outputs are O21, O31, O41 and O51, which is y hat, followed by the loss L. Bottom: the backward chain from L to O51, O41, O31, O21 and w1. The four factors that pass through a sigmoid neuron are each marked sigma prime at most 0.25; the factor dL/dO51 equals y hat minus y.">
+            <defs>
+              <marker id="kdl03-f3-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="kdl03-f3-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <text class="d-h" x="20" y="22">One neuron per layer, a sigmoid in each</text>
+            <circle class="node" cx="40" cy="70" r="15"/><text class="d-t" x="40" y="75" text-anchor="middle">x₁</text>
+            <line class="d-ln" x1="55" y1="70" x2="146" y2="70" marker-end="url(#kdl03-f3-ah)"/>
+            <text class="d-s" x="100" y="62" text-anchor="middle">w₁</text>
+            <circle class="node-acc" cx="170" cy="70" r="22"/><text class="d-t" x="170" y="75" text-anchor="middle">O₂₁</text>
+            <line class="d-ln" x1="192" y1="70" x2="256" y2="70" marker-end="url(#kdl03-f3-ah)"/>
+            <text class="d-s" x="224" y="62" text-anchor="middle">w₂</text>
+            <circle class="node-acc" cx="280" cy="70" r="22"/><text class="d-t" x="280" y="75" text-anchor="middle">O₃₁</text>
+            <line class="d-ln" x1="302" y1="70" x2="366" y2="70" marker-end="url(#kdl03-f3-ah)"/>
+            <text class="d-s" x="334" y="62" text-anchor="middle">w₃</text>
+            <circle class="node-acc" cx="390" cy="70" r="22"/><text class="d-t" x="390" y="75" text-anchor="middle">O₄₁</text>
+            <line class="d-ln" x1="412" y1="70" x2="476" y2="70" marker-end="url(#kdl03-f3-ah)"/>
+            <text class="d-s" x="444" y="62" text-anchor="middle">w₄</text>
+            <circle class="node-acc" cx="500" cy="70" r="22"/><text class="d-t" x="500" y="75" text-anchor="middle">O₅₁</text>
+            <line class="d-ln" x1="522" y1="70" x2="562" y2="70" marker-end="url(#kdl03-f3-ah)"/>
+            <text class="d-s" x="542" y="62" text-anchor="middle">ŷ</text>
+            <rect class="d-box" x="565" y="53" width="76" height="34" rx="6"/>
+            <text class="d-t" x="603" y="75" text-anchor="middle">loss L</text>
+            <text class="d-s" x="170" y="110" text-anchor="middle">σ, + b</text>
+            <text class="d-s" x="280" y="110" text-anchor="middle">σ, + b</text>
+            <text class="d-s" x="390" y="110" text-anchor="middle">σ, + b</text>
+            <text class="d-s" x="500" y="110" text-anchor="middle">σ, + b</text>
+
+            <line class="d-rule" x1="20" y1="130" x2="640" y2="130"/>
+            <rect class="pill" x="36" y="158" width="48" height="28" rx="14"/><text class="d-t" x="60" y="177" text-anchor="middle">w₁</text>
+            <rect class="pill" x="146" y="158" width="48" height="28" rx="14"/><text class="d-t" x="170" y="177" text-anchor="middle">O₂₁</text>
+            <rect class="pill" x="256" y="158" width="48" height="28" rx="14"/><text class="d-t" x="280" y="177" text-anchor="middle">O₃₁</text>
+            <rect class="pill" x="366" y="158" width="48" height="28" rx="14"/><text class="d-t" x="390" y="177" text-anchor="middle">O₄₁</text>
+            <rect class="pill" x="476" y="158" width="48" height="28" rx="14"/><text class="d-t" x="500" y="177" text-anchor="middle">O₅₁</text>
+            <rect class="pill" x="586" y="158" width="48" height="28" rx="14"/><text class="d-t" x="610" y="177" text-anchor="middle">L</text>
+            <line class="d-ln-acc" x1="585" y1="172" x2="527" y2="172" marker-end="url(#kdl03-f3-aha)"/>
+            <line class="d-ln-acc" x1="475" y1="172" x2="417" y2="172" marker-end="url(#kdl03-f3-aha)"/>
+            <line class="d-ln-acc" x1="365" y1="172" x2="307" y2="172" marker-end="url(#kdl03-f3-aha)"/>
+            <line class="d-ln-acc" x1="255" y1="172" x2="197" y2="172" marker-end="url(#kdl03-f3-aha)"/>
+            <line class="d-ln-acc" x1="145" y1="172" x2="87" y2="172" marker-end="url(#kdl03-f3-aha)"/>
+            <text class="d-s" x="555" y="152" text-anchor="middle">∂L/∂O₅₁</text>
+            <text class="d-s" x="445" y="152" text-anchor="middle">∂O₅₁/∂O₄₁</text>
+            <text class="d-s" x="335" y="152" text-anchor="middle">∂O₄₁/∂O₃₁</text>
+            <text class="d-s" x="225" y="152" text-anchor="middle">∂O₃₁/∂O₂₁</text>
+            <text class="d-s" x="115" y="152" text-anchor="middle">∂O₂₁/∂w₁</text>
+            <text class="d-s" x="555" y="202" text-anchor="middle">= ŷ − y</text>
+            <text class="d-s" x="445" y="202" text-anchor="middle" style="fill: var(--accent)">σ′ ≤ 0.25</text>
+            <text class="d-s" x="335" y="202" text-anchor="middle" style="fill: var(--accent)">σ′ ≤ 0.25</text>
+            <text class="d-s" x="225" y="202" text-anchor="middle" style="fill: var(--accent)">σ′ ≤ 0.25</text>
+            <text class="d-s" x="115" y="202" text-anchor="middle" style="fill: var(--accent)">σ′ ≤ 0.25</text>
+            <text class="d-s" x="20" y="230">∂L/∂w₁ multiplies all five factors. Four of them pass through a sigmoid neuron and carry</text>
+            <text class="d-s" x="20" y="248">its derivative σ′, which lies between 0 and 0.25. Each extra layer adds one more such factor.</text>
+          </svg>
+        </div>
+        <figcaption><b>The chain for \(w_1\) in a deep sigmoid network.</b> The network of the video, with his output names. Every step back through a neuron goes through that neuron's sigmoid, so its factor contains \(\sigma'\). The last factor follows from \(L = \tfrac12(y - \hat y)^2\), whose derivative with respect to \(\hat y = O_{51}\) is \(\hat y - y\).</figcaption>
+      </figure>
+    </section>
+
+    <section id="sigmoid-derivative">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5858s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:37:38</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5889s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:38:09 the S-curve</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5923s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:38:43 derivative 0 to 0.25</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5955s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:39:15 the derivative condition</a>
+        </div>
+        <h2>The sigmoid's derivative is at most 0.25</h2>
+      </div>
+      <p>The sigmoid activation is</p>
+      <div class="eq">\[ \sigma(z) = \frac{1}{1 + e^{-z}} \]</div>
+      <p>Its output lies between 0 and 1. For a class label, an output above 0.5 is read as 1 and below 0.5 as 0. Drawn against its input \(z\) (here \(z = w^\top x + b\)), it is an S-shaped curve through 0.5 at \(z = 0\), with negative inputs on the left giving outputs below 0.5 and positive inputs on the right giving outputs above 0.5.</p>
+      <p>The property that matters is the size of its derivative. Whatever the input, the derivative of the sigmoid lies between 0 and 0.25. Krish writes this as a "derivative condition":</p>
+      <div class="result">
+        <span class="lbl">Derivative condition for the sigmoid</span>
+        \[ 0 \le \sigma'(z) \le 0.25 \quad \text{for every } z \]
+      </div>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 290" role="img" aria-label="The sigmoid rising from near 0 at z = -6 through 0.5 at z = 0 to near 1 at z = 6, and its derivative, a bump that peaks at 0.25 at z = 0 and falls toward 0 on both sides. The band from 0 to 0.25 is shaded to show where the derivative always lies.">
+            <rect x="70" y="197.5" width="550" height="52.5" style="fill: var(--accent-soft); fill-opacity: .8"/>
+            <line class="d-rule" x1="70" y1="40" x2="620" y2="40"/>
+            <line class="d-rule" x1="70" y1="92.5" x2="620" y2="92.5"/>
+            <line class="d-ln-mut d-dash" x1="70" y1="145" x2="620" y2="145"/>
+            <line class="d-ln-mut d-dash" x1="70" y1="197.5" x2="620" y2="197.5"/>
+            <line class="d-rule" x1="161.7" y1="40" x2="161.7" y2="250"/>
+            <line class="d-rule" x1="253.3" y1="40" x2="253.3" y2="250"/>
+            <line class="d-rule" x1="436.7" y1="40" x2="436.7" y2="250"/>
+            <line class="d-rule" x1="528.3" y1="40" x2="528.3" y2="250"/>
+            <line class="d-ln" x1="70" y1="250" x2="620" y2="250" style="stroke-width:1"/>
+            <line class="d-ln" x1="345" y1="40" x2="345" y2="250" style="stroke-width:1"/>
+            <path class="d-ln-acc" style="stroke-width:2.4" d="M70.0 249.5 L74.6 249.4 L79.2 249.4 L83.8 249.3 L88.3 249.2 L92.9 249.1 L97.5 249.1 L102.1 249.0 L106.7 248.8 L111.3 248.7 L115.8 248.6 L120.4 248.4 L125.0 248.3 L129.6 248.1 L134.2 247.9 L138.8 247.7 L143.3 247.5 L147.9 247.2 L152.5 246.9 L157.1 246.6 L161.7 246.2 L166.2 245.8 L170.8 245.4 L175.4 244.9 L180.0 244.4 L184.6 243.8 L189.2 243.2 L193.8 242.5 L198.3 241.8 L202.9 240.9 L207.5 240.0 L212.1 239.0 L216.7 238.0 L221.2 236.8 L225.8 235.5 L230.4 234.1 L235.0 232.5 L239.6 230.9 L244.2 229.1 L248.8 227.1 L253.3 225.0 L257.9 222.7 L262.5 220.2 L267.1 217.6 L271.7 214.7 L276.2 211.7 L280.8 208.5 L285.4 205.0 L290.0 201.4 L294.6 197.6 L299.2 193.5 L303.8 189.3 L308.3 184.9 L312.9 180.3 L317.5 175.6 L322.1 170.7 L326.7 165.7 L331.2 160.6 L335.8 155.5 L340.4 150.2 L345.0 145.0 L349.6 139.8 L354.2 134.5 L358.8 129.4 L363.3 124.3 L367.9 119.3 L372.5 114.4 L377.1 109.7 L381.7 105.1 L386.2 100.7 L390.8 96.5 L395.4 92.4 L400.0 88.6 L404.6 85.0 L409.2 81.5 L413.8 78.3 L418.3 75.3 L422.9 72.4 L427.5 69.8 L432.1 67.3 L436.7 65.0 L441.2 62.9 L445.8 60.9 L450.4 59.1 L455.0 57.5 L459.6 55.9 L464.2 54.5 L468.8 53.2 L473.3 52.0 L477.9 51.0 L482.5 50.0 L487.1 49.1 L491.7 48.2 L496.2 47.5 L500.8 46.8 L505.4 46.2 L510.0 45.6 L514.6 45.1 L519.2 44.6 L523.8 44.2 L528.3 43.8 L532.9 43.4 L537.5 43.1 L542.1 42.8 L546.7 42.5 L551.2 42.3 L555.8 42.1 L560.4 41.9 L565.0 41.7 L569.6 41.6 L574.2 41.4 L578.8 41.3 L583.3 41.2 L587.9 41.0 L592.5 40.9 L597.1 40.9 L601.7 40.8 L606.2 40.7 L610.8 40.6 L615.4 40.6 L620.0 40.5"/>
+            <path class="d-ln" style="stroke-width:2.2" d="M70.0 249.5 L74.6 249.4 L79.2 249.4 L83.8 249.3 L88.3 249.2 L92.9 249.1 L97.5 249.1 L102.1 249.0 L106.7 248.9 L111.3 248.7 L115.8 248.6 L120.4 248.5 L125.0 248.3 L129.6 248.1 L134.2 247.9 L138.8 247.7 L143.3 247.5 L147.9 247.2 L152.5 246.9 L157.1 246.6 L161.7 246.3 L166.2 245.9 L170.8 245.5 L175.4 245.1 L180.0 244.6 L184.6 244.0 L189.2 243.4 L193.8 242.8 L198.3 242.1 L202.9 241.3 L207.5 240.5 L212.1 239.6 L216.7 238.7 L221.2 237.6 L225.8 236.5 L230.4 235.3 L235.0 234.0 L239.6 232.6 L244.2 231.1 L248.8 229.6 L253.3 228.0 L257.9 226.2 L262.5 224.4 L267.1 222.6 L271.7 220.6 L276.2 218.7 L280.8 216.7 L285.4 214.7 L290.0 212.6 L294.6 210.7 L299.2 208.7 L303.8 206.8 L308.3 205.1 L312.9 203.4 L317.5 202.0 L322.1 200.6 L326.7 199.5 L331.2 198.7 L335.8 198.0 L340.4 197.6 L345.0 197.5 L349.6 197.6 L354.2 198.0 L358.8 198.7 L363.3 199.5 L367.9 200.6 L372.5 202.0 L377.1 203.4 L381.7 205.1 L386.2 206.8 L390.8 208.7 L395.4 210.7 L400.0 212.6 L404.6 214.7 L409.2 216.7 L413.8 218.7 L418.3 220.6 L422.9 222.6 L427.5 224.4 L432.1 226.2 L436.7 228.0 L441.2 229.6 L445.8 231.1 L450.4 232.6 L455.0 234.0 L459.6 235.3 L464.2 236.5 L468.8 237.6 L473.3 238.7 L477.9 239.6 L482.5 240.5 L487.1 241.3 L491.7 242.1 L496.2 242.8 L500.8 243.4 L505.4 244.0 L510.0 244.6 L514.6 245.1 L519.2 245.5 L523.8 245.9 L528.3 246.3 L532.9 246.6 L537.5 246.9 L542.1 247.2 L546.7 247.5 L551.2 247.7 L555.8 247.9 L560.4 248.1 L565.0 248.3 L569.6 248.5 L574.2 248.6 L578.8 248.7 L583.3 248.9 L587.9 249.0 L592.5 249.1 L597.1 249.1 L601.7 249.2 L606.2 249.3 L610.8 249.4 L615.4 249.4 L620.0 249.5"/>
+            <circle class="pt-tree" cx="345" cy="145" r="5"/>
+            <circle class="pt-new" cx="345" cy="197.5" r="5"/>
+            <text class="d-al" x="70" y="268" text-anchor="middle">−6</text>
+            <text class="d-al" x="161.7" y="268" text-anchor="middle">−4</text>
+            <text class="d-al" x="253.3" y="268" text-anchor="middle">−2</text>
+            <text class="d-al" x="345" y="268" text-anchor="middle">0</text>
+            <text class="d-al" x="436.7" y="268" text-anchor="middle">2</text>
+            <text class="d-al" x="528.3" y="268" text-anchor="middle">4</text>
+            <text class="d-al" x="620" y="268" text-anchor="middle">6</text>
+            <text class="d-al" x="616" y="284" text-anchor="end">z</text>
+            <text class="d-al" x="62" y="254" text-anchor="end">0</text>
+            <text class="d-al" x="62" y="201.5" text-anchor="end">0.25</text>
+            <text class="d-al" x="62" y="149" text-anchor="end">0.5</text>
+            <text class="d-al" x="62" y="96.5" text-anchor="end">0.75</text>
+            <text class="d-al" x="62" y="44" text-anchor="end">1</text>
+            <text class="d-t" x="470" y="78" style="fill: var(--accent)">σ(z) = 1 / (1 + e⁻ᶻ)</text>
+            <text class="d-t" x="380" y="186">σ′(z) = σ(z)(1 − σ(z))</text>
+            <text class="d-s" x="335" y="139" text-anchor="end">σ(0) = 0.5</text>
+            <text class="d-s" x="335" y="191" text-anchor="end">σ′(0) = 0.25, its maximum</text>
+            <text class="d-s" x="80" y="120">z &lt; 0: σ(z) &lt; 0.5, read as class 0</text>
+            <text class="d-s" x="612" y="163" text-anchor="end">z &gt; 0: σ(z) &gt; 0.5, read as class 1</text>
+            <text class="d-s" x="70" y="284" style="fill: var(--accent)">shaded band: σ′ always lies in [0, 0.25]</text>
+          </svg>
+        </div>
+        <figcaption><b>The sigmoid and its derivative</b>, drawn to scale on the same axes, as on Krish's whiteboard. The derivative is a low bump: its peak is a quarter of the sigmoid's range, at \(z = 0\), and it falls toward 0 as \(|z|\) grows, where the sigmoid flattens out.</figcaption>
+      </figure>
+
+      <p class="note"><b>Not in the video:</b> why the bound is 0.25. Differentiating gives \(\sigma'(z) = e^{-z}/(1 + e^{-z})^2 = \sigma(z)\,\big(1 - \sigma(z)\big)\). This is a product of two positive numbers that add up to 1, and such a product is largest when both equal 0.5, which happens at \(z = 0\). So \(\sigma'(z) \le 0.5 \times 0.5 = 0.25\). As \(z \to \pm\infty\), one of the two numbers goes to 0 and so does \(\sigma'\). Lecture 4 plots this derivative next to tanh's (<a href="lecture-04.html#g-prime">lecture-04.html</a>), and Lecture 7 explains how saturated sigmoid neurons kill the gradient (<a href="lecture-07.html#sigmoid">lecture-07.html</a>).</p>
+    </section>
+
+    <section id="vanishing">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=5985s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:39:45</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6049s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:40:49 an example value</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6080s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:41:20 smaller and smaller</a>
+        </div>
+        <h2>Small times small: the gradient vanishes</h2>
+      </div>
+      <p>Every \(O\) in the chain is the output of a sigmoid neuron. For example \(O_{51}\) is the sigmoid applied to \(O_{41} w_4\) plus a bias. So when backpropagation takes the derivatives with respect to \(O_{51}\), \(O_{41}\), \(O_{31}\) and the rest, each one goes through a sigmoid, and by the derivative condition each lies between 0 and 0.25.</p>
+      <p>Say one of the derivatives comes out at 0.25, the largest it can be <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6049s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:40:49</a>. Further along the chain he names values such as 0.10, then 0.05, then 0.02: the value keeps decreasing until the end of the chain. A product of small numbers is a very small number.</p>
+      <ul>
+        <li>If the four factors were 0.25, 0.10, 0.05 and 0.02, the product would be \(0.25 \times 0.10 \times 0.05 \times 0.02 = 2.5 \times 10^{-5}\).</li>
+        <li>Even in the best case, with every \(\sigma'\) at its maximum 0.25, \(n\) factors give \(0.25^n\): about 0.0039 for 4 layers, \(9.5 \times 10^{-7}\) for 10 layers and \(9.1 \times 10^{-13}\) for 20.</li>
+      </ul>
+      <p class="note"><b>Not in the video:</b> the weights are in the factors too. Each step between layers is \(\sigma'\) times the weight that enters it, for instance \(\partial O_{51}/\partial O_{41} = \sigma'(z_{51})\,w_4\). The bound 0.25 is on \(\sigma'\), so a factor is at most \(0.25\,|w|\). With weights of ordinary size every factor is below 1 and the product shrinks layer by layer. Very large weights can push the factors above 1, and then the product grows instead, which is the related exploding gradient problem. For the IIT Madras version of this argument, see Lecture 7 (<a href="lecture-07.html#recap">lecture-07.html</a>) and, for recurrent networks with the same \(\tfrac14\), Lecture 11 (<a href="lecture-11.html#bound">lecture-11.html</a>).</p>
+
+      <figure id="vg-fig">
+        <div class="controls">
+          <label for="vg-n">Layers n</label>
+          <input type="range" id="vg-n" min="2" max="20" step="1" value="8">
+          <output id="vg-n-out" for="vg-n">8</output>
+        </div>
+        <div class="controls">
+          <label for="vg-w">Weight w (every layer)</label>
+          <input type="range" id="vg-w" min="0.1" max="8" step="0.1" value="1">
+          <output id="vg-w-out" for="vg-w">1.0</output>
+          <label for="vg-act">Activation</label>
+          <select id="vg-act">
+            <option value="sigmoid" selected>sigmoid</option>
+            <option value="tanh">tanh</option>
+            <option value="relu">ReLU</option>
+          </select>
+        </div>
+        <div class="readouts">
+          <div><span class="k">reaching layer 1</span><span class="v mine" id="vg-first">–</span></div>
+          <div><span class="k">reaching layer n</span><span class="v" id="vg-last">–</span></div>
+          <div><span class="k">first ÷ last</span><span class="v" id="vg-ratio">–</span></div>
+          <div><span class="k">factor per layer, g′(z)·w</span><span class="v" id="vg-fac">–</span></div>
+        </div>
+        <div class="status" id="vg-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="vg-svg" viewBox="0 0 640 336" role="img" aria-label="Log-scale chart of the gradient that reaches each layer, from layer 1 next to the input to layer n at the output. With sigmoid neurons the points fall steadily from the last layer toward the first. A dashed reference line shows a factor of 0.25 per layer."></svg></div>
+        <figcaption><b>The gradient reaching each layer of a chain of \(n\) neurons</b>, on a log scale. The chain is the one above, extended to \(n\) layers: input \(x = 1\), the same weight \(w\) in every layer, biases 0. Each point is \(|\partial\hat y/\partial z_k|\), the chain-rule product from the output back to \(z_k\), the input of the activation in layer \(k\). It is the gradient that reaches layer \(k\). Layer \(k\)'s weight gradient is this times the layer's input, \(\partial\hat y/\partial w_k = (\partial\hat y/\partial z_k)\,h_{k-1}\), and for layer 1 the input is \(x = 1\), so the first point is exactly \(\partial\hat y/\partial w_1\). The loss adds one common factor, \(\partial L/\partial z_k = (\hat y - y)\,\partial\hat y/\partial z_k\), which does not change how the layers compare. With the sigmoid no positive weight on the slider keeps the factor per layer above about 0.28, so the first layer's gradient falls off by orders of magnitude as you add layers. Tanh and ReLU preview the remedy; Part 4 explains them.</figcaption>
+      </figure>
+    </section>
+
+    <section id="consequence">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6111s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:41:51</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6143s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:42:23 w new ≈ w old</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6178s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:42:58 the name</a>
+        </div>
+        <h2>Why the weights stop changing</h2>
+      </div>
+      <p>Now put that tiny derivative into the update formula:</p>
+      <div class="eq">\[ w_{\text{new}} = w_{\text{old}} - \underbrace{\eta}_{\text{small}} \times \underbrace{\frac{\partial L}{\partial w_{\text{old}}}}_{\text{very small}} \]</div>
+      <p>The learning rate is itself a small number (Part 2 suggested values such as 0.001 or 0.01), so the change is a small number times a very small number. At some point \(w_{\text{new}} \approx w_{\text{old}}\): the weight hardly changes, or changes by a tiny amount. The weights are effectively not being updated.</p>
+      <div class="result">
+        <span class="lbl">The vanishing gradient problem</span>
+        <p>In a deep network with sigmoid activations, the chain-rule product for a weight near the input multiplies many derivatives that are each at most 0.25. Its gradient becomes very small, so \(w_{\text{new}} \approx w_{\text{old}}\) and that weight barely learns.</p>
+      </div>
+      <p>A worked example, with numbers chosen for these notes: take the four-layer chain drawn in the deep-network figure, with every weight 1, \(x_1 = 1\), biases 0 and target \(y = 1\). The forward pass gives \(\hat y = 0.660\) and \(L = 0.058\). The chain rule then gives \(\partial L/\partial w_4 = -0.051\) for the last weight but only \(\partial L/\partial w_1 = -0.00074\) for the first, about 69 times smaller after just three extra layers. With \(\eta = 0.01\), one update moves \(w_4\) from 1 to 1.00051 and \(w_1\) from 1 to 1.0000074.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 290" role="img" aria-label="Loss plotted against one weight while the other three stay at 1. Varying w4, the last weight, the loss falls steeply from about 0.44 at w4 = -4 to almost 0 at w4 = 4. Varying w1, the first weight, the loss is almost flat near 0.058 over the whole range. At w = 1 the tangent to the w4 curve is clearly sloped and the tangent to the w1 curve is flat.">
+            <line class="d-rule" x1="70" y1="63.3" x2="420" y2="63.3"/>
+            <line class="d-rule" x1="70" y1="110" x2="420" y2="110"/>
+            <line class="d-rule" x1="70" y1="156.7" x2="420" y2="156.7"/>
+            <line class="d-rule" x1="70" y1="203.3" x2="420" y2="203.3"/>
+            <line class="d-rule" x1="157.5" y1="40" x2="157.5" y2="250"/>
+            <line class="d-rule" x1="332.5" y1="40" x2="332.5" y2="250"/>
+            <line class="d-ln" x1="70" y1="250" x2="420" y2="250" style="stroke-width:1"/>
+            <line class="d-ln" x1="245" y1="40" x2="245" y2="250" style="stroke-width:1"/>
+            <path class="d-ln-acc" style="stroke-width:2.4" d="M70.0 46.4 L72.2 47.3 L74.4 48.3 L76.6 49.2 L78.8 50.2 L80.9 51.2 L83.1 52.2 L85.3 53.3 L87.5 54.3 L89.7 55.4 L91.9 56.6 L94.1 57.7 L96.2 58.9 L98.4 60.2 L100.6 61.4 L102.8 62.7 L105.0 64.0 L107.2 65.3 L109.4 66.7 L111.6 68.1 L113.8 69.5 L115.9 71.0 L118.1 72.4 L120.3 74.0 L122.5 75.5 L124.7 77.1 L126.9 78.7 L129.1 80.3 L131.2 82.0 L133.4 83.7 L135.6 85.4 L137.8 87.2 L140.0 89.0 L142.2 90.8 L144.4 92.7 L146.6 94.6 L148.8 96.5 L150.9 98.4 L153.1 100.4 L155.3 102.3 L157.5 104.4 L159.7 106.4 L161.9 108.5 L164.1 110.5 L166.2 112.7 L168.4 114.8 L170.6 116.9 L172.8 119.1 L175.0 121.3 L177.2 123.5 L179.4 125.7 L181.6 127.9 L183.8 130.2 L185.9 132.4 L188.1 134.7 L190.3 137.0 L192.5 139.3 L194.7 141.5 L196.9 143.8 L199.1 146.1 L201.2 148.4 L203.4 150.7 L205.6 153.0 L207.8 155.3 L210.0 157.5 L212.2 159.8 L214.4 162.1 L216.6 164.3 L218.8 166.5 L220.9 168.7 L223.1 170.9 L225.3 173.1 L227.5 175.3 L229.7 177.4 L231.9 179.5 L234.1 181.6 L236.2 183.7 L238.4 185.7 L240.6 187.7 L242.8 189.7 L245.0 191.7 L247.2 193.6 L249.4 195.5 L251.6 197.3 L253.8 199.1 L255.9 200.9 L258.1 202.7 L260.3 204.4 L262.5 206.0 L264.7 207.7 L266.9 209.2 L269.1 210.8 L271.2 212.3 L273.4 213.8 L275.6 215.2 L277.8 216.6 L280.0 218.0 L282.2 219.3 L284.4 220.6 L286.6 221.8 L288.8 223.0 L290.9 224.2 L293.1 225.3 L295.3 226.4 L297.5 227.4 L299.7 228.4 L301.9 229.4 L304.1 230.4 L306.2 231.3 L308.4 232.1 L310.6 233.0 L312.8 233.8 L315.0 234.6 L317.2 235.3 L319.4 236.0 L321.6 236.7 L323.8 237.4 L325.9 238.0 L328.1 238.6 L330.3 239.2 L332.5 239.7 L334.7 240.2 L336.9 240.7 L339.1 241.2 L341.2 241.7 L343.4 242.1 L345.6 242.5 L347.8 242.9 L350.0 243.3 L352.2 243.7 L354.4 244.0 L356.6 244.3 L358.8 244.6 L360.9 244.9 L363.1 245.2 L365.3 245.5 L367.5 245.7 L369.7 246.0 L371.9 246.2 L374.1 246.4 L376.2 246.6 L378.4 246.8 L380.6 247.0 L382.8 247.2 L385.0 247.3 L387.2 247.5 L389.4 247.6 L391.6 247.8 L393.8 247.9 L395.9 248.0 L398.1 248.1 L400.3 248.2 L402.5 248.3 L404.7 248.4 L406.9 248.5 L409.1 248.6 L411.3 248.7 L413.4 248.8 L415.6 248.9 L417.8 248.9 L420.0 249.0"/>
+            <path class="d-ln d-dash" style="stroke-width:2.2" d="M70.0 221.6 L72.2 221.6 L74.4 221.6 L76.6 221.6 L78.8 221.6 L80.9 221.6 L83.1 221.6 L85.3 221.6 L87.5 221.6 L89.7 221.6 L91.9 221.6 L94.1 221.6 L96.2 221.6 L98.4 221.6 L100.6 221.6 L102.8 221.6 L105.0 221.6 L107.2 221.6 L109.4 221.6 L111.6 221.6 L113.8 221.6 L115.9 221.7 L118.1 221.7 L120.3 221.7 L122.5 221.7 L124.7 221.7 L126.9 221.7 L129.1 221.7 L131.2 221.7 L133.4 221.7 L135.6 221.7 L137.8 221.7 L140.0 221.7 L142.2 221.7 L144.4 221.7 L146.6 221.7 L148.8 221.8 L150.9 221.8 L153.1 221.8 L155.3 221.8 L157.5 221.8 L159.7 221.8 L161.9 221.8 L164.1 221.8 L166.2 221.8 L168.4 221.9 L170.6 221.9 L172.8 221.9 L175.0 221.9 L177.2 221.9 L179.4 221.9 L181.6 222.0 L183.8 222.0 L185.9 222.0 L188.1 222.0 L190.3 222.0 L192.5 222.0 L194.7 222.1 L196.9 222.1 L199.1 222.1 L201.2 222.1 L203.4 222.1 L205.6 222.2 L207.8 222.2 L210.0 222.2 L212.2 222.2 L214.4 222.2 L216.6 222.3 L218.8 222.3 L220.9 222.3 L223.1 222.3 L225.3 222.4 L227.5 222.4 L229.7 222.4 L231.9 222.4 L234.1 222.5 L236.2 222.5 L238.4 222.5 L240.6 222.5 L242.8 222.6 L245.0 222.6 L247.2 222.6 L249.4 222.6 L251.6 222.6 L253.8 222.7 L255.9 222.7 L258.1 222.7 L260.3 222.7 L262.5 222.8 L264.7 222.8 L266.9 222.8 L269.1 222.8 L271.2 222.9 L273.4 222.9 L275.6 222.9 L277.8 222.9 L280.0 222.9 L282.2 222.9 L284.4 223.0 L286.6 223.0 L288.8 223.0 L290.9 223.0 L293.1 223.0 L295.3 223.1 L297.5 223.1 L299.7 223.1 L301.9 223.1 L304.1 223.1 L306.2 223.1 L308.4 223.1 L310.6 223.2 L312.8 223.2 L315.0 223.2 L317.2 223.2 L319.4 223.2 L321.6 223.2 L323.8 223.2 L325.9 223.2 L328.1 223.2 L330.3 223.2 L332.5 223.3 L334.7 223.3 L336.9 223.3 L339.1 223.3 L341.2 223.3 L343.4 223.3 L345.6 223.3 L347.8 223.3 L350.0 223.3 L352.2 223.3 L354.4 223.3 L356.6 223.3 L358.8 223.3 L360.9 223.3 L363.1 223.3 L365.3 223.3 L367.5 223.4 L369.7 223.4 L371.9 223.4 L374.1 223.4 L376.2 223.4 L378.4 223.4 L380.6 223.4 L382.8 223.4 L385.0 223.4 L387.2 223.4 L389.4 223.4 L391.6 223.4 L393.8 223.4 L395.9 223.4 L398.1 223.4 L400.3 223.4 L402.5 223.4 L404.7 223.4 L406.9 223.4 L409.1 223.4 L411.3 223.4 L413.4 223.4 L415.6 223.4 L417.8 223.4 L420.0 223.4"/>
+            <line x1="245" y1="199.4" x2="332.5" y2="246.6" style="stroke: var(--accent); stroke-width: 1.2"/>
+            <line x1="200" y1="222.6" x2="377.5" y2="223.4" style="stroke: var(--ink); stroke-width: 1.2"/>
+            <circle class="pt-new" cx="288.75" cy="223" r="5"/>
+            <text class="d-al" x="70" y="268" text-anchor="middle">−4</text>
+            <text class="d-al" x="157.5" y="268" text-anchor="middle">−2</text>
+            <text class="d-al" x="245" y="268" text-anchor="middle">0</text>
+            <text class="d-al" x="332.5" y="268" text-anchor="middle">2</text>
+            <text class="d-al" x="420" y="268" text-anchor="middle">4</text>
+            <text class="d-al" x="420" y="284" text-anchor="end">value of the varied weight</text>
+            <text class="d-al" x="62" y="254" text-anchor="end">0</text>
+            <text class="d-al" x="62" y="207.3" text-anchor="end">0.1</text>
+            <text class="d-al" x="62" y="160.7" text-anchor="end">0.2</text>
+            <text class="d-al" x="62" y="114" text-anchor="end">0.3</text>
+            <text class="d-al" x="62" y="67.3" text-anchor="end">0.4</text>
+            <text class="d-al" x="70" y="30">loss L</text>
+            <text class="d-t" x="256" y="98" style="fill: var(--accent)">vary w₄ (last layer)</text>
+            <text class="d-t" x="80" y="214">vary w₁: almost flat</text>
+
+            <line class="d-rule" x1="440" y1="40" x2="440" y2="250"/>
+            <text class="d-t" x="456" y="52">At w = 1 (marked point)</text>
+            <text class="d-s" x="456" y="74">slope for w₄: ∂L/∂w₄ = −0.051</text>
+            <text class="d-s" x="456" y="92">slope for w₁: ∂L/∂w₁ = −0.00074</text>
+            <text class="d-s" x="456" y="110">about 69 times smaller for w₁</text>
+            <text class="d-t" x="456" y="144">One update with η = 0.01</text>
+            <text class="d-s" x="456" y="166">w₄: 1 → 1.00051</text>
+            <text class="d-s" x="456" y="184">w₁: 1 → 1.0000074</text>
+            <text class="d-s" x="456" y="202" style="fill: var(--accent)">w₁ barely moves: new ≈ old</text>
+            <line class="d-ln-acc" x1="456" y1="230" x2="482" y2="230" style="stroke-width:2.4"/><text class="d-s" x="488" y="234">loss as w₄ varies</text>
+            <line class="d-ln d-dash" x1="456" y1="248" x2="482" y2="248" style="stroke-width:2.2"/><text class="d-s" x="488" y="252">loss as w₁ varies</text>
+          </svg>
+        </div>
+        <figcaption><b>The loss barely depends on the first weight</b> (computed for these notes, not from the video). The four-layer sigmoid chain drawn earlier, with \(x_1 = 1\), \(y = 1\), biases 0 and every other weight fixed at 1. The slope of each curve at the marked point is the gradient that backpropagation hands to that weight. For \(w_4\) it is clearly negative, so gradient descent raises \(w_4\); for \(w_1\) the curve is nearly flat, so the step on \(w_1\) is almost nothing.</figcaption>
+      </figure>
+      <p class="note"><b>Not in the video:</b> where the damage falls. The weights near the output have short chains and keep learning normally. The weights near the input have the longest chains, so they learn far more slowly and can stay close to their random starting values. Training a deep sigmoid network then becomes very slow, even though the loss is nowhere near its minimum.</p>
+    </section>
+
+    <section id="remedies">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6178s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:42:58 how to solve it</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6209s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:43:29 the list</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6239s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:43:59 which is best</a>
+        </div>
+        <h2>The remedy he gives: other activation functions</h2>
+      </div>
+      <p>To solve the vanishing gradient problem, use another activation function. Krish says this is why other activation functions were developed, and lists the ones the next chapter covers:</p>
+      <ol>
+        <li><b>Sigmoid</b>, the one already known.</li>
+        <li><b>tanh</b>.</li>
+        <li><b>ReLU</b>.</li>
+        <li><b>Leaky ReLU</b>.</li>
+        <li><b>PReLU</b> (parametric ReLU), and several others.</li>
+      </ol>
+      <p>He closes by saying the next step is to see each of these and decide which is the best one to use, which is where Part 4 (<a href="krish-dl-04.html">krish-dl-04.html</a>) starts.</p>
+      <p class="note"><b>Not in the video:</b> the derivatives of these functions, as a preview of Part 4.</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Activation</th><th>Derivative</th><th>Range of the derivative</th></tr></thead>
+          <tbody>
+            <tr><td>sigmoid</td><td>\(\sigma(z)\,(1 - \sigma(z))\)</td><td>0 to 0.25</td></tr>
+            <tr><td>tanh</td><td>\(1 - \tanh^2(z)\)</td><td>0 to 1</td></tr>
+            <tr><td>ReLU, \(\max(0, z)\)</td><td>0 for \(z &lt; 0\), 1 for \(z &gt; 0\)</td><td>0 or 1</td></tr>
+            <tr><td>leaky ReLU</td><td>a small slope such as 0.01 for \(z &lt; 0\), 1 for \(z &gt; 0\)</td><td>0.01 or 1</td></tr>
+            <tr><td>PReLU</td><td>a learned slope \(\alpha\) for \(z &lt; 0\), 1 for \(z &gt; 0\)</td><td>\(\alpha\) or 1</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>None of the alternatives caps its derivative at 0.25. tanh's derivative reaches 1 at \(z = 0\), and the ReLU family passes a derivative of exactly 1 for positive inputs, so a factor in the chain need not shrink. Switch the explorer above to tanh or ReLU to see the difference. The IIT Madras course adds better weight initialization and batch normalization as further remedies (<a href="lecture-07.html">Lecture 7, lecture-07.html</a>).</p>
+    </section>
+
+    <!-- ============ REVISION ============ -->
+    <section id="terms">
+      <div class="sec-head"><h2>Key terms</h2></div>
+      <dl class="terms">
+        <div><dt>Weight update formula</dt><dd>\(w_{\text{new}} = w_{\text{old}} - \eta\,\partial L/\partial w_{\text{old}}\), applied to every weight in backward propagation.</dd></div>
+        <div><dt>Bias update</dt><dd>\(b_{\text{new}} = b_{\text{old}} - \eta\,\partial L/\partial b_{\text{old}}\). Each neuron has a bias, learned the same way as the weights.</dd></div>
+        <div><dt>Chain rule of derivatives</dt><dd>The derivative of the loss with respect to a weight is the product of one local derivative per step on the way from the loss back to the weight.</dd></div>
+        <div><dt>Local derivative</dt><dd>The derivative of one step, such as \(\partial O_2/\partial O_1\) or \(\partial O_1/\partial w_1\). For a sigmoid neuron it is \(\sigma'(z)\) times the weight or input of that step.</dd></div>
+        <div><dt>Path</dt><dd>A route of dependencies from a weight to the loss. With several paths, compute each path's product and add them.</dd></div>
+        <div><dt>Backward propagation</dt><dd>Computing these derivatives from the loss back toward the input, then updating weights and biases with them.</dd></div>
+        <div><dt>Optimizer</dt><dd>The method that applies the gradients to update the weights; Krish gives optimizers their own chapter (Part 5).</dd></div>
+        <div><dt>Sigmoid</dt><dd>\(\sigma(z) = 1/(1 + e^{-z})\). Output between 0 and 1, equal to 0.5 at \(z = 0\).</dd></div>
+        <div><dt>Derivative condition</dt><dd>\(0 \le \sigma'(z) \le 0.25\), with \(\sigma'(z) = \sigma(z)(1 - \sigma(z))\) largest at \(z = 0\).</dd></div>
+        <div><dt>Mean squared error</dt><dd>The loss used here, \(L = \tfrac12(y - \hat y)^2\). Its derivative with respect to \(\hat y\) is \(\hat y - y\).</dd></div>
+        <div><dt>Deep neural network</dt><dd>A network with many hidden layers. The chain for a weight near the input has one factor per layer.</dd></div>
+        <div><dt>Vanishing gradient problem</dt><dd>In a deep sigmoid network the gradient for early weights is a product of many small derivatives, so it is tiny and \(w_{\text{new}} \approx w_{\text{old}}\).</dd></div>
+        <div><dt>tanh, ReLU, leaky ReLU, PReLU</dt><dd>The alternative activation functions Krish lists as the remedy; they are the topic of Part 4.</dd></div>
+      </dl>
+    </section>
+
+    <section id="test">
+      <div class="sec-head"><h2>Test yourself</h2></div>
+      <div class="quiz">
+        <details><summary><span class="q">Q1</span><span>In the 3–1–1 network, write \(\partial L/\partial w_4\) and \(\partial L/\partial w_1\) as chain-rule products. Why does the second have one more factor?</span><span class="tog"></span></summary>
+          <p>\(\frac{\partial L}{\partial w_4} = \frac{\partial L}{\partial O_2}\cdot\frac{\partial O_2}{\partial w_4}\) and \(\frac{\partial L}{\partial w_1} = \frac{\partial L}{\partial O_2}\cdot\frac{\partial O_2}{\partial O_1}\cdot\frac{\partial O_1}{\partial w_1}\). \(w_4\) feeds the output neuron directly, so the loss depends on it in two steps. \(w_1\) feeds the hidden neuron, whose output \(O_1\) then feeds the output neuron, so there is one more step and one more factor.</p></details>
+        <details><summary><span class="q">Q2</span><span>Finish the exercise from the video: write \(\partial L/\partial w_2\). Then write the update for the bias \(b_2\) and its chain.</span><span class="tog"></span></summary>
+          <p>\(w_2\) also enters through the hidden neuron, so only the last factor changes: \(\frac{\partial L}{\partial w_2} = \frac{\partial L}{\partial O_2}\cdot\frac{\partial O_2}{\partial O_1}\cdot\frac{\partial O_1}{\partial w_2}\). The bias update is \(b_{2,\text{new}} = b_{2,\text{old}} - \eta\,\partial L/\partial b_{2,\text{old}}\), with \(\frac{\partial L}{\partial b_2} = \frac{\partial L}{\partial O_2}\cdot\frac{\partial O_2}{\partial b_2} = \frac{\partial L}{\partial O_2}\,\sigma'(z_2)\), since \(z_2 = O_1w_4 + b_2\) changes one for one with \(b_2\).</p></details>
+        <details><summary><span class="q">Q3</span><span>In the 1–1–2–1 network, how many products make up \(\partial L/\partial w_1\), \(\partial L/\partial w_2\) and \(\partial L/\partial w_5\)? Write \(\partial L/\partial w_2\).</span><span class="tog"></span></summary>
+          <p>\(w_1\): two products, one through \(O_{21}\) and one through \(O_{22}\), added. \(w_2\): one, because \(w_2\) only feeds \(O_{21}\): \(\frac{\partial L}{\partial w_2} = \frac{\partial L}{\partial O_{31}}\cdot\frac{\partial O_{31}}{\partial O_{21}}\cdot\frac{\partial O_{21}}{\partial w_2}\). \(w_5\): one, with two factors, \(\frac{\partial L}{\partial O_{31}}\cdot\frac{\partial O_{31}}{\partial w_5}\). A weight has as many products as there are routes from it to the loss.</p></details>
+        <details><summary><span class="q">Q4</span><span>In the 3–1–1 network, where does \(w_4\) appear in \(\partial L/\partial w_1\)?</span><span class="tog"></span></summary>
+          <p>Inside the middle factor. \(O_2 = \sigma(O_1w_4 + b_2)\), so \(\frac{\partial O_2}{\partial O_1} = \sigma'(z_2)\,w_4\), and \(\frac{\partial L}{\partial w_1} = \frac{\partial L}{\partial O_2}\,\sigma'(z_2)\,w_4\,\sigma'(z_1)\,x_1\). It does not need a separate factor such as \(\partial w_4/\partial O_1\); that derivative is 0, since \(w_4\) does not depend on \(O_1\).</p></details>
+        <details><summary><span class="q">Q5</span><span>Show that \(\sigma'(z) = \sigma(z)(1 - \sigma(z))\) and that \(0 \le \sigma'(z) \le 0.25\). Where is the maximum?</span><span class="tog"></span></summary>
+          <p>\(\sigma(z) = (1 + e^{-z})^{-1}\), so \(\sigma'(z) = e^{-z}(1 + e^{-z})^{-2}\) \(= \frac{1}{1 + e^{-z}}\cdot\frac{e^{-z}}{1 + e^{-z}}\) \(= \sigma(z)(1 - \sigma(z))\). Both factors lie in \((0, 1)\) and add to 1, so the product is positive and at most \(0.5 \times 0.5 = 0.25\), reached when \(\sigma(z) = 0.5\), that is at \(z = 0\).</p></details>
+        <details><summary><span class="q">Q6</span><span>Suppose \(\partial L/\partial w_1\) \(= 0.25 \times 0.10 \times 0.05 \times 0.02\), \(\eta = 0.01\) and \(w_{1,\text{old}} = 0.5\). What is \(w_{1,\text{new}}\)? What is the largest product of ten sigmoid derivatives?</span><span class="tog"></span></summary>
+          <p>The product is \(2.5 \times 10^{-5}\), so the step is \(0.01 \times 2.5 \times 10^{-5} = 2.5 \times 10^{-7}\) and \(w_{1,\text{new}} = 0.49999975\), practically \(w_{1,\text{old}}\). Ten sigmoid derivatives give at most \(0.25^{10} \approx 9.5 \times 10^{-7}\), and in practice less, since \(\sigma'\) is only 0.25 at \(z = 0\).</p></details>
+        <details><summary><span class="q">Q7</span><span>Why does the vanishing gradient hit the first layers and not the last?</span><span class="tog"></span></summary>
+          <p>The number of factors in the chain grows with the distance from the loss. The last weight's gradient has one sigmoid derivative in it; the first weight's has one per layer. In the four-layer example with all weights 1, \(\partial L/\partial w_4 = -0.051\) but \(\partial L/\partial w_1 = -0.00074\), about 69 times smaller. Each added sigmoid layer multiplies the gap again, here by about \(1/0.22 \approx 4.5\).</p></details>
+        <details><summary><span class="q">Q8</span><span>What remedy does Krish give, and why should it help?</span><span class="tog"></span></summary>
+          <p>Use another activation function: tanh, ReLU, leaky ReLU, PReLU and others, covered in Part 4. The reason (beyond what this part of the video says) is that their derivatives are not capped at 0.25. tanh's reaches 1, and ReLU's is exactly 1 for positive inputs, so a factor in the chain does not have to shrink the gradient.</p></details>
+      </div>
+    </section>
+
+    <!-- PAGER:START --><nav class="pager" aria-label="Previous and next part"><a href="krish-dl-02.html"><span class="dir">← Part 2</span><span class="nm">Weights and bias, forward and backward propagation</span></a><a class="next" href="krish-dl-04.html"><span class="dir">Part 4 →</span><span class="nm">Activation functions and loss functions</span></a></nav><!-- PAGER:END -->
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the YouTube auto-generated captions of Krish Naik's video «Deep Learning In-depth Tutorials in 5 Hours». Timestamp links open the video at that moment. Code is reconstructed from the audio. Charts marked synthetic use data generated for these notes. Not affiliated with Krish Naik or IIT Madras.</div>
+</footer>
+
+<script src="notes.js"></script>
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const setLine = (el, p, q) => { el.setAttribute('x1', p[0]); el.setAttribute('y1', p[1]); el.setAttribute('x2', q[0]); el.setAttribute('y2', q[1]); };
+  const arrowHead = (defs, id, token) => { const m = mk('marker', { id, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse' }, defs); mk('path', { d: 'M0,0 L10,5 L0,10 z', style: 'fill: var(' + token + ')' }, m); };
+  const SUP = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '-': '⁻' };
+  const pow10 = e => '10' + String(e).split('').map(c => SUP[c]).join('');
+  const minus = s => s.replace(/-/g, '−');
+  /* a number from its log10 and sign, e.g. 3.1 × 10⁻⁹ */
+  const fromLog = (lg, sign) => {
+    if (!isFinite(lg)) return '0';
+    let e = Math.floor(lg), m = Math.pow(10, lg - e);
+    if (m >= 9.995) { m = 1; e += 1; }
+    const sg = sign < 0 ? '−' : '';
+    if (e >= -3 && e <= 2) { const v = m * Math.pow(10, e); return sg + String(Number(v.toPrecision(3))); }
+    return sg + m.toFixed(2) + ' × ' + pow10(e);
+  };
+  const fmt = v => (v === 0 ? '0' : fromLog(Math.log10(Math.abs(v)), v));
+
+  /* ---------- Chain rule on every path of the 1-1-2-1 network ---------- */
+  (() => {
+    const svg = document.getElementById('cr-svg'); if (!svg) return;
+    const btns = [1, 2, 3, 4, 5].map(i => document.getElementById('cr-w' + i));
+    const slider = document.getElementById('cr-val'), sOut = document.getElementById('cr-val-out'), sLbl = document.getElementById('cr-val-lbl');
+    const oP = document.getElementById('cr-paths'), oG = document.getElementById('cr-grad'), oN = document.getElementById('cr-num'), oL = document.getElementById('cr-loss');
+    const status = document.getElementById('cr-status');
+    const SUBW = ['₁', '₂', '₃', '₄', '₅'];
+    const DEF = [1, 0.5, 0.8, 1.5, 1], X = 1, Y = 1;
+    let W = DEF.slice(), sel = 0;
+    const sg = z => 1 / (1 + Math.exp(-z)), ds = z => { const s = sg(z); return s * (1 - s); };
+    const fwd = w => {
+      const z11 = w[0] * X, o11 = sg(z11), z21 = w[1] * o11, o21 = sg(z21), z22 = w[2] * o11, o22 = sg(z22);
+      const z31 = w[3] * o21 + w[4] * o22, o31 = sg(z31);
+      return { z11, o11, z21, o21, z22, o22, z31, o31, L: 0.5 * (Y - o31) * (Y - o31) };
+    };
+    const FAC = {
+      L31: ['∂L/∂O₃₁', f => f.o31 - Y],
+      a3121: ['∂O₃₁/∂O₂₁', (f, w) => ds(f.z31) * w[3]],
+      a3122: ['∂O₃₁/∂O₂₂', (f, w) => ds(f.z31) * w[4]],
+      a2111: ['∂O₂₁/∂O₁₁', (f, w) => ds(f.z21) * w[1]],
+      a2211: ['∂O₂₂/∂O₁₁', (f, w) => ds(f.z22) * w[2]],
+      w1: ['∂O₁₁/∂w₁', f => ds(f.z11) * X],
+      w2: ['∂O₂₁/∂w₂', f => ds(f.z21) * f.o11],
+      w3: ['∂O₂₂/∂w₃', f => ds(f.z22) * f.o11],
+      w4: ['∂O₃₁/∂w₄', f => ds(f.z31) * f.o21],
+      w5: ['∂O₃₁/∂w₅', f => ds(f.z31) * f.o22]
+    };
+    /* edges: 0 x1→O11 (w1), 1 O11→O21 (w2), 2 O11→O22 (w3), 3 O21→O31 (w4), 4 O22→O31 (w5), 5 O31→L */
+    const PATHS = [
+      [{ f: ['L31', 'a3121', 'a2111', 'w1'], e: [5, 3, 1, 0], via: 'O₂₁' }, { f: ['L31', 'a3122', 'a2211', 'w1'], e: [5, 4, 2, 0], via: 'O₂₂' }],
+      [{ f: ['L31', 'a3121', 'w2'], e: [5, 3, 1] }],
+      [{ f: ['L31', 'a3122', 'w3'], e: [5, 4, 2] }],
+      [{ f: ['L31', 'w4'], e: [5, 3] }],
+      [{ f: ['L31', 'w5'], e: [5, 4] }]
+    ];
+    const NODE = { x1: [45, 115, 16], o11: [165, 115, 24], o21: [305, 50, 24], o22: [305, 180, 24], o31: [445, 115, 24] };
+    const LB = { x: 530, y: 98, w: 94, h: 34 };
+    const EDGES = [['x1', 'o11'], ['o11', 'o21'], ['o11', 'o22'], ['o21', 'o31'], ['o22', 'o31'], ['o31', null]];
+    const NODE_OF_PATH = { 0: ['x1', 'o11'], 1: ['o11', 'o21'], 2: ['o11', 'o22'], 3: ['o21', 'o31'], 4: ['o22', 'o31'], 5: ['o31'] };
+    const defs = mk('defs', {}, svg);
+    arrowHead(defs, 'kdl03-cr-ah', '--muted'); arrowHead(defs, 'kdl03-cr-aha', '--accent');
+    const geo = EDGES.map(([a, b]) => {
+      const A = NODE[a], B = b ? NODE[b] : [LB.x, A[1], 0];
+      const dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy), u = [dx / L, dy / L];
+      const p = [A[0] + A[2] * u[0], A[1] + A[2] * u[1]], q = [B[0] - (b ? B[2] + 1 : 2) * u[0], B[1] - (b ? B[2] + 1 : 2) * u[1]];
+      return { p, q };
+    });
+    const lines = geo.map(g => { const l = mk('line', {}, svg); setLine(l, g.p, g.q); return l; });
+    const LBL = [[105, 104, 'middle'], [228, 77, 'end'], [226, 164, 'end'], [381, 76, 'start'], [372, 166, 'start'], [498, 107, 'middle']];
+    const wl = LBL.map(([x, y, a]) => mk('text', { x, y, 'text-anchor': a, class: 'c-note' }, svg));
+    const circ = {}, vals = {};
+    Object.keys(NODE).forEach(k => {
+      const [cx, cy, r] = NODE[k];
+      circ[k] = mk('circle', { cx, cy, r }, svg);
+      mk('text', { x: cx, y: cy + 4, 'text-anchor': 'middle', class: 'c-note' }, svg).textContent = { x1: 'x₁', o11: 'O₁₁', o21: 'O₂₁', o22: 'O₂₂', o31: 'O₃₁' }[k];
+      vals[k] = mk('text', { x: cx, y: cy + r + 14, 'text-anchor': 'middle', class: 'c-tick' }, svg);
+    });
+    const lbox = mk('rect', { x: LB.x, y: LB.y, width: LB.w, height: LB.h, rx: 6 }, svg);
+    mk('text', { x: LB.x + LB.w / 2, y: LB.y + 22, 'text-anchor': 'middle', class: 'c-note' }, svg).textContent = 'loss L';
+    const lval = mk('text', { x: LB.x + LB.w / 2, y: LB.y + LB.h + 16, 'text-anchor': 'middle', class: 'c-tick' }, svg);
+    mk('line', { x1: 20, y1: 226, x2: 620, y2: 226, style: 'stroke: var(--rule); stroke-width: 1' }, svg);
+    const tx = [0, 1, 2, 3, 4].map(i => mk('text', { x: 20, y: 250, class: i % 2 === 0 && i < 4 ? 'c-note' : (i === 4 ? 'c-lbl' : 'c-tick') }, svg));
+
+    const draw = () => {
+      const f = fwd(W), paths = PATHS[sel];
+      sLbl.textContent = 'Value of w' + SUBW[sel];
+      slider.value = W[sel]; sOut.textContent = minus(W[sel].toFixed(1));
+      btns.forEach((b, i) => b.setAttribute('aria-pressed', i === sel ? 'true' : 'false'));
+      /* edges */
+      const onSolid = new Set(), onDash = new Set();
+      paths.forEach((p, i) => p.e.forEach(e => (i === 1 ? onDash : onSolid).add(e)));
+      lines.forEach((l, i) => {
+        const solid = onSolid.has(i), dash = onDash.has(i) && !solid, on = solid || dash, own = i === sel;
+        l.setAttribute('style', on ? 'stroke: var(--accent); stroke-width: ' + (own ? 3.4 : 2.4) + (dash ? '; stroke-dasharray: 6 4' : '') : 'stroke: var(--muted); stroke-width: 1.3');
+        l.setAttribute('marker-end', on ? 'url(#kdl03-cr-aha)' : 'url(#kdl03-cr-ah)');
+        wl[i].textContent = i < 5 ? 'w' + SUBW[i] + ' = ' + minus(W[i].toFixed(1)) : 'ŷ';
+        wl[i].setAttribute('class', own ? 'c-lbl' : 'c-note');
+      });
+      const onNode = new Set(); [...onSolid, ...onDash].forEach(e => NODE_OF_PATH[e].forEach(k => onNode.add(k)));
+      Object.keys(NODE).forEach(k => {
+        circ[k].setAttribute('style', onNode.has(k) ? 'fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2' : 'fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.4');
+        vals[k].textContent = k === 'x1' ? 'x₁ = 1' : minus(f[k].toFixed(3));
+      });
+      lbox.setAttribute('style', 'fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.6');
+      lval.textContent = 'L = ' + f.L.toFixed(4) + ', y = 1';
+      /* formula lines */
+      const prods = paths.map(p => {
+        const v = p.f.map(k => FAC[k][1](f, W));
+        return { v, prod: v.reduce((a, b) => a * b, 1), sym: p.f.map(k => FAC[k][0]).join(' · '), via: p.via };
+      });
+      const g = prods.reduce((a, p) => a + p.prod, 0);
+      tx.forEach(t => t.setAttribute('visibility', 'hidden'));
+      prods.forEach((p, i) => {
+        const y = 250 + i * 46;
+        tx[2 * i].setAttribute('y', y); tx[2 * i].setAttribute('visibility', 'visible');
+        tx[2 * i].textContent = (prods.length > 1 ? 'path ' + (i + 1) + ', via ' + p.via + ':  ' : 'the one path:  ') + p.sym;
+        tx[2 * i + 1].setAttribute('y', y + 18); tx[2 * i + 1].setAttribute('visibility', 'visible');
+        tx[2 * i + 1].textContent = '= ' + p.v.map(v => '(' + fmt(v) + ')').join(' × ') + ' = ' + fmt(p.prod);
+      });
+      const ty = 250 + prods.length * 46 + 6;
+      tx[4].setAttribute('y', ty); tx[4].setAttribute('visibility', 'visible');
+      tx[4].textContent = '∂L/∂w' + SUBW[sel] + ' = ' + (prods.length > 1 ? fmt(prods[0].prod) + ' + (' + fmt(prods[1].prod) + ') = ' : '') + fmt(g);
+      /* numerical check */
+      const h = 1e-5, wp = W.slice(), wm = W.slice(); wp[sel] += h; wm[sel] -= h;
+      const nd = (fwd(wp).L - fwd(wm).L) / (2 * h);
+      oP.textContent = String(prods.length); oG.textContent = fmt(g); oN.textContent = fmt(nd); oL.textContent = f.L.toFixed(4);
+      const wn = 'w' + SUBW[sel];
+      let s = prods.length > 1
+        ? wn + ' reaches the loss through O₂₁ and through O₂₂, so its gradient is the sum of two products of four factors.'
+        : wn + ' reaches the loss along one path, so its gradient is a single product of ' + prods[0].v.length + ' factors.';
+      if (prods.length > 1 && prods[0].prod * prods[1].prod < 0) s += ' Here the two paths have opposite signs and partly cancel.';
+      if (Math.abs(g) < 1e-12) s += ' The gradient is zero, so the update leaves ' + wn + ' where it is.';
+      else s += g < 0 ? ' It is negative: raising ' + wn + ' a little lowers the loss, so the update increases ' + wn + '.' : ' It is positive: raising ' + wn + ' raises the loss, so the update decreases ' + wn + '.';
+      status.textContent = s;
+    };
+    btns.forEach((b, i) => b.addEventListener('click', () => { sel = i; draw(); }));
+    slider.addEventListener('input', () => { W[sel] = Math.round(parseFloat(slider.value) * 10) / 10; draw(); });
+    document.getElementById('cr-reset').addEventListener('click', () => { W = DEF.slice(); draw(); });
+    draw();
+  })();
+
+  /* ---------- Vanishing gradient along a chain of n neurons ---------- */
+  (() => {
+    const svg = document.getElementById('vg-svg'); if (!svg) return;
+    const nS = document.getElementById('vg-n'), nO = document.getElementById('vg-n-out');
+    const wS = document.getElementById('vg-w'), wO = document.getElementById('vg-w-out');
+    const aS = document.getElementById('vg-act');
+    const oF = document.getElementById('vg-first'), oLs = document.getElementById('vg-last'), oR = document.getElementById('vg-ratio'), oFac = document.getElementById('vg-fac');
+    const status = document.getElementById('vg-status');
+    const sigm = z => 1 / (1 + Math.exp(-z));
+    const ACT = {
+      sigmoid: { f: sigm, d: z => { const s = sigm(z); return s * (1 - s); }, nm: 'σ′' },
+      tanh: { f: Math.tanh, d: z => { const t = Math.tanh(z); return 1 - t * t; }, nm: 'tanh′' },
+      relu: { f: z => Math.max(0, z), d: z => (z > 0 ? 1 : 0), nm: 'ReLU′' }
+    };
+    const PL = 80, PR = 616, PT = 34, PB = 262;
+    mk('text', { x: PL, y: 22, class: 'c-title' }, svg).textContent = '|∂ŷ/∂zₖ|, the gradient reaching layer k (log scale)';
+    const grid = mk('g', { class: 'c-grid' }, svg), yt = mk('g', {}, svg), xt = mk('g', {}, svg);
+    mk('line', { x1: PL, y1: PB, x2: PR, y2: PB, class: 'c-axis' }, svg);
+    mk('line', { x1: PL, y1: PT, x2: PL, y2: PB, class: 'c-axis' }, svg);
+    mk('text', { x: (PL + PR) / 2, y: PB + 34, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = 'layer k   (1 is next to the input, n is the output)';
+    const ref = mk('polyline', { style: 'fill: none; stroke: var(--ink-2); stroke-width: 1.4; stroke-dasharray: 5 4' }, svg);
+    const main = mk('polyline', { style: 'fill: none; stroke: var(--accent); stroke-width: 2.2' }, svg);
+    const dots = mk('g', {}, svg);
+    const lFirst = mk('text', { class: 'c-lbl' }, svg), lLast = mk('text', { class: 'c-note', 'text-anchor': 'end' }, svg);
+    /* legend */
+    mk('line', { x1: PL, y1: 322, x2: PL + 26, y2: 322, style: 'stroke: var(--accent); stroke-width: 2.2' }, svg);
+    mk('circle', { cx: PL + 13, cy: 322, r: 4, style: 'fill: var(--accent)' }, svg);
+    mk('text', { x: PL + 34, y: 326, class: 'c-tick' }, svg).textContent = 'this chain';
+    const legRefL = mk('line', { x1: PL + 140, y1: 322, x2: PL + 166, y2: 322, style: 'stroke: var(--ink-2); stroke-width: 1.4; stroke-dasharray: 5 4' }, svg);
+    const legRefT = mk('text', { x: PL + 174, y: 326, class: 'c-tick' }, svg); legRefT.textContent = '0.25 per layer (σ′ at its maximum, w = 1)';
+
+    const draw = () => {
+      const n = parseInt(nS.value, 10), w = parseFloat(wS.value), key = aS.value, A = ACT[key];
+      nO.textContent = String(n); wO.textContent = w.toFixed(1);
+      const h = [1], z = [0];
+      for (let k = 1; k <= n; k++) { z[k] = w * h[k - 1]; h[k] = A.f(z[k]); }
+      const L10 = v => (v > 0 ? Math.log10(v) : -400);
+      /* lg[k] = log10 |∂ŷ/∂z_k|; one step back multiplies by g'(z_k)·w */
+      const lg = []; let acc = L10(Math.abs(A.d(z[n]))), facSum = 0;
+      lg[n] = acc;
+      for (let k = n - 1; k >= 1; k--) { const f = L10(Math.abs(A.d(z[k]) * w)); acc += f; facSum += f; lg[k] = acc; }
+      const refs = []; for (let k = 1; k <= n; k++) refs[k] = (n - k + 1) * Math.log10(0.25);
+      const showRef = key === 'sigmoid';
+      const all = lg.slice(1).concat(showRef ? refs.slice(1) : []).filter(v => v > -399);
+      let hi = Math.max(0, Math.ceil(Math.max(...all))), lo = Math.min(-3, Math.floor(Math.min(...all)));
+      const step = [1, 2, 5, 10, 20, 50, 100].find(s => (hi - lo) / s <= 7) || 200;
+      lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+      const mx = Math.max(...all), mn = Math.min(...all);
+      if (hi - mx < 0.12 * (hi - lo)) hi += step;
+      if (mn - lo < 0.08 * (hi - lo)) lo -= step;
+      const sy = v => PB - (Math.max(v, lo) - lo) / (hi - lo) * (PB - PT);
+      const sx = k => PL + 24 + (k - 1) * (PR - PL - 48) / (n - 1);
+      grid.textContent = ''; yt.textContent = ''; xt.textContent = '';
+      for (let t = lo; t <= hi; t += step) {
+        mk('line', { x1: PL, x2: PR, y1: sy(t), y2: sy(t) }, grid);
+        mk('text', { x: PL - 8, y: sy(t) + 4, 'text-anchor': 'end', class: 'c-tick' }, yt).textContent = t === 0 ? '1' : pow10(t);
+      }
+      for (let k = 1; k <= n; k++) {
+        if (n > 12 && (k % 2 === 0 || k === n - 1) && k !== n) continue;
+        mk('text', { x: sx(k), y: PB + 16, 'text-anchor': 'middle', class: 'c-tick' }, xt).textContent = String(k);
+      }
+      const pts = []; for (let k = 1; k <= n; k++) pts.push(sx(k).toFixed(1) + ',' + sy(lg[k]).toFixed(1));
+      main.setAttribute('points', pts.join(' '));
+      const rp = []; for (let k = 1; k <= n; k++) rp.push(sx(k).toFixed(1) + ',' + sy(refs[k]).toFixed(1));
+      ref.setAttribute('points', rp.join(' ')); ref.setAttribute('visibility', showRef ? 'visible' : 'hidden');
+      legRefL.setAttribute('visibility', showRef ? 'visible' : 'hidden'); legRefT.setAttribute('visibility', showRef ? 'visible' : 'hidden');
+      dots.textContent = '';
+      for (let k = 1; k <= n; k++) mk('circle', { cx: sx(k), cy: sy(lg[k]), r: k === 1 ? 6.5 : 4, class: k === 1 ? 'c-pt-hi' : '', style: k === 1 ? '' : 'fill: var(--accent); stroke: var(--surface); stroke-width: 1.2' }, dots);
+      const yF = sy(lg[1]), yL = sy(lg[n]);
+      const up = lg[1] > lg[n];
+      lFirst.setAttribute('x', sx(1) + 12); lFirst.setAttribute('y', Math.max(PT + 12, Math.min(PB - 6, yF + (up ? -12 : 18))));
+      lFirst.textContent = 'layer 1: ' + fromLog(lg[1], 1);
+      lLast.setAttribute('x', sx(n) - 10); lLast.setAttribute('y', Math.max(PT + 12, Math.min(PB - 6, yL + (up ? 18 : -12))));
+      lLast.textContent = 'layer ' + n + ': ' + fromLog(lg[n], 1);
+      const facLg = facSum / (n - 1), ratioLg = lg[1] - lg[n];
+      oF.textContent = fromLog(lg[1], 1); oLs.textContent = fromLog(lg[n], 1); oR.textContent = fromLog(ratioLg, 1); oFac.textContent = fromLog(facLg, 1);
+      let s;
+      if (ratioLg < -1) s = 'Each step back through a layer multiplies the gradient by about ' + fromLog(facLg, 1) + ' (' + A.nm + ' times w), so over ' + (n - 1) + ' steps the first layer gets ' + fromLog(ratioLg, 1) + ' of the last layer\'s gradient. The gradient vanishes on its way back.';
+      else if (ratioLg <= 1) s = 'The factor per layer is close to 1, so the gradient keeps roughly its size from the last layer back to the first.';
+      else s = 'Each factor is above 1, so the gradient grows on its way back: the first layer\'s is ' + fromLog(ratioLg, 1) + ' times the last layer\'s. That is the opposite trouble, an exploding gradient (not covered in this part).';
+      if (key === 'sigmoid') s += ' With the sigmoid, ' + A.nm + ' never exceeds 0.25, and no positive weight on this slider gets the factor above about 0.28.';
+      if (key === 'relu') s += ' ReLU\'s derivative is exactly 1 for positive inputs, so only the weight sets the factor: below 1 it shrinks, at 1 it holds, above 1 it grows.';
+      status.textContent = s;
+    };
+    nS.addEventListener('input', draw); wS.addEventListener('input', draw); aS.addEventListener('change', draw);
+    draw();
+  })();
+})();
+</script>
+</body>
+</html>
