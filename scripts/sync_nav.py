@@ -129,6 +129,12 @@ def main() -> None:
         done.append(n)
     print("ready lectures:", done)
 
+    try:  # extra series (notes on single long videos)
+        import sync_extra
+        sync_extra.run(sys.argv[1:])
+    except ImportError:
+        pass
+
 
 if __name__ == "__main__":
     main()
