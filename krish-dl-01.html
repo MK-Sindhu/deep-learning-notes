@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DL in 5 hours, Part 1 · Why deep learning, and the perceptron · DL Notes</title>
+<meta name="description" content="Notes on Krish Naik's Deep Learning In-depth Tutorials in 5 Hours, Part 1 (0:00–30:27): the agenda, AI vs ML vs DL vs data science, why deep learning became popular (data and GPUs), and an introduction to the perceptron with a student pass/fail example and a brain analogy.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<script src="theme.js"></script>
+<style>
+#neuron-svg .plane-hit { cursor: crosshair; }
+.controls .ctl { display: inline-flex; align-items: center; gap: 10px; }
+.controls .ctl input[type="range"] { width: min(170px, 46vw); }
+.controls .ctl output { min-width: 5ch; }
+.data-table { min-width: 460px; }
+</style>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <!-- PARTNAV:START --><nav class="partnav" aria-label="Parts"><a href="index.html#extra">All notes</a><span class="sep">/</span><span>DL in 5 hours · Part 1 of 7</span></nav><!-- PARTNAV:END -->
+    <div class="eyebrow">Krish Naik · Deep Learning In-depth Tutorials in 5 Hours</div>
+    <h1>Deep learning: what it is, why it took off, and the perceptron</h1>
+    <p class="lede">Day one places deep learning inside machine learning and AI, and gives two reasons it took off only recently, exponentially growing data and faster, cheaper GPUs. It then draws the simplest neural network, the perceptron, using a student pass/fail data set and an analogy with how the brain learns to see.</p>
+    <div class="meta">
+      <span>Part <b>1</b> of <b>7</b></span>
+      <span>Teacher <b>Krish Naik</b></span>
+      <span>About <b>30 min</b> of video</span>
+      <span><b>4</b> chapters</span>
+    </div>
+    <div class="watch">
+      <a class="btn solid" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=0s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>0:00 · Introduction</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=230s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:50 · AI vs ML vs DL vs DS</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=869s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>14:29 · Why deep learning</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1337s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>22:17 · The perceptron</a>
+    </div>
+  </div>
+</header>
+
+<div class="page gutter">
+  <nav class="toc" aria-label="Contents">
+    <div>
+      <h4>Introduction</h4>
+      <ul>
+        <li><a href="#intro">Agenda and prerequisites</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>AI vs ML vs DL vs DS</h4>
+      <ul>
+        <li><a href="#ai">Artificial intelligence</a></li>
+        <li><a href="#ml">Machine learning</a></li>
+        <li><a href="#dl">Deep learning</a></li>
+        <li><a href="#ds">Data science and the full picture</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Why deep learning is popular</h4>
+      <ul>
+        <li><a href="#why-data">Reason 1: data</a></li>
+        <li><a href="#why-hardware">Reason 2: hardware</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Introduction to the perceptron</h4>
+      <ul>
+        <li><a href="#perceptron">Input, hidden and output layers</a></li>
+        <li><a href="#pass-fail">Example: pass or fail</a></li>
+        <li><a href="#brain">The brain analogy</a></li>
+        <li><a href="#training">Training, and more layers</a></li>
+        <li><a href="#neuron-preview">Preview: one neuron</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Revision</h4>
+      <ul>
+        <li><a href="#terms">Key terms</a></li>
+        <li><a href="#test">Test yourself</a></li>
+        <li><a href="index.html#extra">All notes</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="glance" id="glance">
+      <h2>At a glance</h2>
+      <ul>
+        <li>The video opens day one of a live series. The agenda covers AI vs ML vs DL vs data science, the perceptron, forward and backward propagation, loss functions, activation functions and optimizers. The prerequisites are Python, one machine learning algorithm (linear regression is enough) and some statistics.</li>
+        <li><b>AI</b> is the outer universe: applications that do their task without human intervention, such as Netflix and Amazon recommendations, self-driving cars and chatbots. <b>ML</b> is a subset of AI that gives statistical tools to analyze and visualize data, predict, forecast and cluster. <b>DL</b> is a subset of ML built on multi-layered neural networks, whose aim is to mimic the human brain. <b>Data science</b> can work at any of these levels, and the goal is always an AI application.</li>
+        <li>Deep learning research goes back to 1958. It became popular recently for two reasons. Data grew exponentially (social networks on web 2.0, then big data storage, then companies wanting to use their data), and GPU hardware now trains large networks fast and keeps getting cheaper.</li>
+        <li>The <dfn>perceptron</dfn> is the first and simplest neural network: an input layer, a hidden layer with one neuron and an output layer. In the pass/fail example, study, play and sleep hours are the inputs \(x_1, x_2, x_3\), fed in one record at a time, and the output is pass (1) or fail (0), a binary classification.</li>
+        <li>The eyes, the neurons and the visual area at the back of the brain play the roles of the input, hidden and output layers. Like a newborn baby, a new network recognizes nothing until it is trained on many labelled examples. Real networks stack many hidden layers.</li>
+      </ul>
+    </div>
+
+    <!-- ============ CHAPTER 1 · INTRODUCTION ============ -->
+    <section id="intro">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=0s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>0:00</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=72s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:12 agenda</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=173s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:53 prerequisites</a>
+        </div>
+        <h2>What day one covers</h2>
+      </div>
+      <p>The five-hour video is a recording of a live series, and this first session starts deep learning from the basics. Krish sets three aims: make the basics clear, cover the maths properly, and prepare for interviews. The questions he works through are the kind asked of anyone moving into deep learning or computer vision. He also promises implementation, with projects on the second or third day.</p>
+      <p>The agenda for the opening sessions <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=72s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:12</a>, with the part of these notes that covers each item:</p>
+      <ol>
+        <li>What deep learning is, starting with AI vs ML vs DL vs data science and why deep learning matters. This part.</li>
+        <li>The perceptron, the first neural network. This part introduces it and <a href="krish-dl-02.html">Part 2</a> adds weights and a bias.</li>
+        <li>A brief idea of forward propagation and backward propagation (<a href="krish-dl-02.html">Part 2</a>).</li>
+        <li>Loss functions, at first only briefly (<a href="krish-dl-04.html">Part 4</a>).</li>
+        <li>Activation functions (<a href="krish-dl-04.html">Part 4</a>).</li>
+        <li>Optimizers (<a href="krish-dl-05.html">Part 5</a>).</li>
+      </ol>
+      <p>He calls this a view from a thousand feet up: what deep learning is and why these terms keep coming up, before the details.</p>
+      <p><b>Prerequisites</b> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=173s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:53</a>. Python; some idea of at least one machine learning algorithm, where knowing linear regression is more than enough; and some statistics, which he covered in an earlier session.</p>
+    </section>
+
+    <!-- ============ CHAPTER 2 · AI vs ML vs DL vs DS ============ -->
+    <section id="ai">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=230s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:50</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=302s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>5:02 examples</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=395s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>6:35 chatbots, Twitter</a>
+        </div>
+        <h2>Artificial intelligence: applications that act on their own</h2>
+      </div>
+      <p>Krish pictures artificial intelligence as a whole universe, the outermost circle. Working in AI means creating applications that can do their task <b>without any human intervention</b>. Nobody has to tell the application what to do. It watches the behaviour of the person using it and takes its own decisions.</p>
+      <ul>
+        <li><b>Netflix</b> recommends movies automatically.</li>
+        <li><b>Self-driving cars</b> (autopilot) drive without a human at the controls.</li>
+        <li><b>Amazon</b> recommends products while you shop.</li>
+        <li><b>Chatbots</b>, and robots such as the humanoid Sophia <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=395s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>6:35</a>.</li>
+      </ul>
+      <p>An AI application is usually an <dfn>AI module integrated with software that already exists</dfn>. The Netflix app exists so that people can watch movies. To make the experience better, an AI model is added that recommends titles based on your behaviour. This is what everyone in the field ends up building. Whether you work as a computer vision developer, a data scientist or a deep learning developer, the end product is an AI application.</p>
+      <p>As a topical aside, when Elon Musk agreed to buy Twitter for about 44 billion dollars, one of the reasons he gave was to make its content-recommendation algorithm open source. Krish thinks that would be great for learners, who could then see how a real recommender works, and from it how YouTube or Instagram recommendations might work.</p>
+    </section>
+
+    <section id="ml">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=457s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>7:37</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=524s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>8:44 tasks, Power BI</a>
+        </div>
+        <h2>Machine learning: statistical tools for data</h2>
+      </div>
+      <p><dfn>Machine learning</dfn> is a subset of AI, a smaller circle inside it. It provides <b>statistical tools</b> to:</p>
+      <ul>
+        <li>analyze the data,</li>
+        <li>visualize the data,</li>
+        <li>and do machine learning tasks: prediction and forecasting in supervised learning, and clustering in unsupervised learning.</li>
+      </ul>
+      <p>When a viewer mentions Power BI, Krish agrees that it also helps analyze data. Internally it uses machine learning algorithms and integrated visualization tools, but the product itself is, again, an AI application. He adds that other areas, such as natural language processing (NLP), are integrated parts of this picture, as are Python and statistics. The session sticks to the major chunk.</p>
+      <p class="rule-of-thumb">To explain machine learning in one sentence, say that it provides statistical tools to analyze and visualize data, make predictions and forecasts, and find clusters.</p>
+    </section>
+
+    <section id="dl">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=623s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>10:23</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=654s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>10:54 data and GPUs</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=687s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>11:27 mimic the brain</a>
+        </div>
+        <h2>Deep learning: multi-layered networks that mimic the brain</h2>
+      </div>
+      <p><dfn>Deep learning</dfn> is a subset of machine learning, and it is the subject of the whole series. It is not a recent idea. Researchers have worked on it since 1958. It has become really powerful now because of two things: the amount of data being created, and GPU hardware, for which Krish thanks NVIDIA. He trains on an RTX 3090 and says such a GPU lets you train remarkable models. The next chapter turns these two points into the answer to why deep learning is popular.</p>
+      <p>The research focused on <b>multi-layered neural networks</b>. The first neural network is the <b>perceptron</b>, which the last chapter of this part introduces <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=687s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>11:27</a>.</p>
+      <div class="result">
+        <span class="lbl">The aim of deep learning</span>
+        <p>To mimic the human brain. We want machines to learn things the way human beings learn them.</p>
+      </div>
+      <p class="note">Not in the video: 1958 is the year Frank Rosenblatt proposed the perceptron. For the IIT Madras treatment of the perceptron and its history, see Lecture 2 (<a href="lecture-02.html">lecture-02.html</a>).</p>
+    </section>
+
+    <section id="ds">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=775s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>12:55</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=819s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>13:39 computer vision</a>
+        </div>
+        <h2>Data science, computer vision and the full picture</h2>
+      </div>
+      <p>Where does <dfn>data science</dfn> fall? Krish's answer is that it can be part of everything. A data scientist may work on machine learning algorithms, may work as a data analyst, or may work as a deep learning developer. In every case the final goal is to create an AI application.</p>
+      <p>A common follow-up question is where <b>computer vision</b> fits. It can be part of deep learning, and computer vision can also use machine learning. Once more, the end product is an AI application. These nested fields are the major chunk that people around the world mean when they talk about AI, ML, DL and data science.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 300" role="img" aria-label="Nested boxes: artificial intelligence contains machine learning, which contains deep learning. Deep learning is described as multi-layer neural networks, the first being the perceptron, with the aim of mimicking the human brain. A dashed box labelled data science cuts across all three levels. On the right, one-line descriptions of AI, ML, DL and data science.">
+            <rect class="d-box" x="20" y="20" width="360" height="262" rx="14"/>
+            <rect class="d-box" x="40" y="62" width="320" height="200" rx="12"/>
+            <rect class="d-box-acc" x="60" y="104" width="280" height="138" rx="10"/>
+            <text class="d-t" x="36" y="44">Artificial intelligence (AI)</text>
+            <text class="d-t" x="56" y="86">Machine learning (ML)</text>
+            <text class="d-t" x="76" y="128">Deep learning (DL)</text>
+            <text class="d-s" x="76" y="150">multi-layer neural networks</text>
+            <text class="d-s" x="76" y="166">the first one: the perceptron</text>
+            <text class="d-s" x="76" y="182">aim: mimic the human brain</text>
+            <path class="d-ln" style="stroke-width:1" d="M80 202 L114 210 M80 202 L114 226 M80 218 L114 210 M80 218 L114 226 M80 234 L114 210 M80 234 L114 226 M114 210 L148 218 M114 226 L148 218"/>
+            <circle class="node" cx="80" cy="202" r="4"/><circle class="node" cx="80" cy="218" r="4"/><circle class="node" cx="80" cy="234" r="4"/>
+            <circle class="node-acc" cx="114" cy="210" r="4"/><circle class="node-acc" cx="114" cy="226" r="4"/>
+            <circle class="node" cx="148" cy="218" r="4"/>
+            <rect x="252" y="30" width="116" height="242" rx="10" style="fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 4"/>
+            <text class="d-t" x="310" y="50" text-anchor="middle" style="fill: var(--accent)">Data science</text>
+            <text class="d-s" x="310" y="256" text-anchor="middle" style="fill: var(--accent)">any level</text>
+
+            <text class="d-t" x="400" y="46">AI: acts without human intervention</text>
+            <text class="d-s" x="400" y="62">Netflix and Amazon recommendations,</text>
+            <text class="d-s" x="400" y="76">self-driving cars, chatbots</text>
+            <text class="d-t" x="400" y="106">ML: a subset of AI</text>
+            <text class="d-s" x="400" y="122">stats tools to analyze and visualize</text>
+            <text class="d-s" x="400" y="136">data; prediction, forecasting, clustering</text>
+            <text class="d-t" x="400" y="166">DL: a subset of ML</text>
+            <text class="d-s" x="400" y="182">multi-layer neural networks; studied</text>
+            <text class="d-s" x="400" y="196">since 1958, popular only recently</text>
+            <text class="d-t" x="400" y="226">Data science: across all three</text>
+            <text class="d-s" x="400" y="242">ML models, data analysis or DL; the</text>
+            <text class="d-s" x="400" y="256">final goal is an AI application</text>
+          </svg>
+        </div>
+        <figcaption><b>AI vs ML vs DL vs data science</b>, as Krish describes it, with his circles drawn as boxes. Each field is a subset of the one around it. Data science is drawn as a dashed box across all three because, in his words, it can be part of everything. Computer vision can sit at the ML or the DL level in the same way.</figcaption>
+      </figure>
+
+      <div class="result">
+        <span class="lbl">The hierarchy in one line</span>
+        <p>ML is a subset of AI, and DL is a subset of ML. Data science draws on all three, and every one of these roles ends in an AI application.</p>
+      </div>
+      <p>For convolutional networks, the deep learning workhorse of computer vision, see Part 7 (<a href="krish-dl-07.html">krish-dl-07.html</a>). For the IIT Madras treatment, see Lecture 8 (<a href="lecture-08.html">lecture-08.html</a>).</p>
+    </section>
+
+    <!-- ============ CHAPTER 3 · WHY DL IS POPULAR ============ -->
+    <section id="why-data">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=869s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>14:29</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=979s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>16:19 big data</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1010s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>16:50 companies use data</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1140s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>19:00 Panasonic</a>
+        </div>
+        <h2>Reason 1: an explosion of data</h2>
+      </div>
+      <p>Why is deep learning becoming so popular, even more popular than machine learning? Krish treats this as an interview question and gives two reasons. The first is the amount of data, and he explains it with a short history <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=881s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>14:41</a>.</p>
+      <ul>
+        <li><b>Around 2005: social networks.</b> Before then the main social network was Orkut. Then came Facebook, which is built on <dfn>web 2.0</dfn>: web applications where you log in, store your data and interact with other people, and can post images. Instagram, WhatsApp, LinkedIn and Twitter followed. On all of them people interact and post, so the data generated grew exponentially.</li>
+        <li><b>Around 2008: big data.</b> Companies wanted to store this data efficiently, so big data engineering became a sought-after skill. When Krish was studying engineering, around 2010 and 2011, there were many big data openings. Big data engineers store the information so that it can be read and used wherever it is needed.</li>
+        <li><b>Around 2013: using the data</b> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1010s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>16:50</a>. Companies now had huge amounts of data. They would not just store it and keep it. They wanted to use it to bring a seamless experience into their products and make the products better, and that is only possible by using the data they already have. So AI and data science became very popular.</li>
+      </ul>
+      <p class="note">The captions write the pre-2005 network as "oracle". From the context (a social networking site before Facebook) it is Orkut.</p>
+      <p>Krish started learning AI in 2013–14 and made his career transition then, because data was being generated everywhere. Companies hold petabytes of data, it grows every day, and he expects it to keep growing exponentially. To make their products better, companies will want to use it. Netflix is his standard example: it uses what you watch in the app, along with your profile information, to recommend what to watch next.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 250" role="img" aria-label="A timeline. 1958: research on neural networks starts with the perceptron. After a break in the axis, around 2005: social networks on web 2.0, Orkut, then Facebook, Instagram, WhatsApp, LinkedIn and Twitter. 2008 to 2011: big data, storing the data efficiently. Around 2013: companies hold huge data and want to use it, and AI takes off. Today: petabytes per company, still growing.">
+            <defs><marker id="kdl01-f2-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="20" y="24">Reason 1: more and more data (years as given in the video)</text>
+            <line class="d-ln" x1="40" y1="150" x2="118" y2="150"/>
+            <line class="d-ln" x1="126" y1="150" x2="638" y2="150" marker-end="url(#kdl01-f2-ah)"/>
+            <path class="d-ln" d="M112 158 L120 142 M120 158 L128 142"/>
+            <line class="d-rule" x1="218.4" y1="145" x2="218.4" y2="155"/>
+            <line class="d-rule" x1="339.5" y1="145" x2="339.5" y2="155"/>
+            <line class="d-rule" x1="460.5" y1="145" x2="460.5" y2="155"/>
+            <line class="d-rule" x1="581.6" y1="145" x2="581.6" y2="155"/>
+            <text class="d-al" x="70" y="170" text-anchor="middle">1958</text>
+            <text class="d-al" x="218.4" y="170" text-anchor="middle">2005</text>
+            <text class="d-al" x="339.5" y="170" text-anchor="middle">2010</text>
+            <text class="d-al" x="460.5" y="170" text-anchor="middle">2015</text>
+            <text class="d-al" x="581.6" y="170" text-anchor="middle">2020</text>
+            <text class="d-al" x="636" y="138" text-anchor="end">today</text>
+
+            <line class="d-ln" x1="70" y1="128" x2="70" y2="144" style="stroke-width:1"/>
+            <circle class="pt-plain" cx="70" cy="150" r="4.5"/>
+            <text class="d-t" x="76" y="78" text-anchor="middle">1958</text>
+            <text class="d-s" x="76" y="94" text-anchor="middle">research on neural</text>
+            <text class="d-s" x="76" y="108" text-anchor="middle">networks starts</text>
+            <text class="d-s" x="76" y="122" text-anchor="middle">(the perceptron)</text>
+
+            <line class="d-ln" x1="218.4" y1="114" x2="218.4" y2="144" style="stroke-width:1"/>
+            <circle class="pt-tree" cx="218.4" cy="150" r="5"/>
+            <text class="d-t" x="232" y="60" text-anchor="middle">Around 2005</text>
+            <text class="d-s" x="232" y="76" text-anchor="middle">social networks on web 2.0:</text>
+            <text class="d-s" x="232" y="90" text-anchor="middle">Orkut, then Facebook,</text>
+            <text class="d-s" x="232" y="104" text-anchor="middle">Instagram, WhatsApp, …</text>
+
+            <line x1="291.1" y1="150" x2="363.7" y2="150" style="stroke: var(--accent); stroke-width: 6; stroke-linecap: round"/>
+            <text class="d-t" x="327.4" y="196" text-anchor="middle">2008–2011</text>
+            <text class="d-s" x="327.4" y="212" text-anchor="middle">big data: engineers</text>
+            <text class="d-s" x="327.4" y="226" text-anchor="middle">store it efficiently</text>
+
+            <line class="d-ln" x1="412.1" y1="114" x2="412.1" y2="144" style="stroke-width:1"/>
+            <circle class="pt-tree" cx="412.1" cy="150" r="5"/>
+            <text class="d-t" x="420" y="60" text-anchor="middle">Around 2013</text>
+            <text class="d-s" x="420" y="76" text-anchor="middle">companies hold huge</text>
+            <text class="d-s" x="420" y="90" text-anchor="middle">data and want to use it;</text>
+            <text class="d-s" x="420" y="104" text-anchor="middle">AI becomes popular</text>
+
+            <text class="d-t" x="636" y="196" text-anchor="end">Today</text>
+            <text class="d-s" x="636" y="212" text-anchor="end">petabytes per company,</text>
+            <text class="d-s" x="636" y="226" text-anchor="end">still growing</text>
+          </svg>
+        </div>
+        <figcaption><b>Why data piled up.</b> The axis is to scale from 2003 onwards; the break hides 1958–2003. Years are the approximate ones Krish gives. Exponential growth in data came first, storage technology followed, and only then did companies start using the data, which is when AI took off.</figcaption>
+      </figure>
+
+      <p><b>An example from Krish's own work</b> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1140s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>19:00</a>. Panasonic sells many products, such as air conditioners, televisions and refrigerators, and these products were already generating data. When he joined Panasonic, two or three years before the video, he got the chance to make them smarter. For air conditioners he built a model that could reduce the electricity bill. People use ACs wastefully: they set a high temperature for a while and then jump straight to a low one. Given the outside temperature, the model suggests a usage profile that runs the AC efficiently and so lowers the bill.</p>
+      <p>A feature like this gives customers a seamless experience, and it can be sold on a <b>subscription</b> basis. So the company generates revenue and is able to make better decisions <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1206s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>20:06</a>.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 206" role="img" aria-label="Four boxes in a row joined by arrows. 1, data: ACs, TVs and fridges already produce usage data. 2, model: learns how people use the AC and the outside temperature. 3, seamless use: suggests a profile that lowers the electricity bill. 4, business value: subscription sales, more revenue and better decisions.">
+            <defs><marker id="kdl01-f3-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="16" y="26">From stored data to a better product: the Panasonic AC model</text>
+            <rect class="d-box" x="16" y="48" width="140" height="104" rx="8"/>
+            <rect class="d-box-acc" x="180" y="48" width="140" height="104" rx="8"/>
+            <rect class="d-box" x="344" y="48" width="140" height="104" rx="8"/>
+            <rect class="d-box" x="508" y="48" width="140" height="104" rx="8"/>
+            <line class="d-ln" x1="158" y1="100" x2="177" y2="100" marker-end="url(#kdl01-f3-ah)"/>
+            <line class="d-ln" x1="322" y1="100" x2="341" y2="100" marker-end="url(#kdl01-f3-ah)"/>
+            <line class="d-ln" x1="486" y1="100" x2="505" y2="100" marker-end="url(#kdl01-f3-ah)"/>
+            <text class="d-t" x="86" y="72" text-anchor="middle">1 · Data</text>
+            <text class="d-s" x="86" y="94" text-anchor="middle">ACs, TVs, fridges</text>
+            <text class="d-s" x="86" y="108" text-anchor="middle">already produce</text>
+            <text class="d-s" x="86" y="122" text-anchor="middle">usage data</text>
+            <text class="d-t" x="250" y="72" text-anchor="middle">2 · Model</text>
+            <text class="d-s" x="250" y="94" text-anchor="middle">learns how people</text>
+            <text class="d-s" x="250" y="108" text-anchor="middle">use the AC, given the</text>
+            <text class="d-s" x="250" y="122" text-anchor="middle">outside temperature</text>
+            <text class="d-t" x="414" y="72" text-anchor="middle">3 · Seamless use</text>
+            <text class="d-s" x="414" y="94" text-anchor="middle">suggests a profile</text>
+            <text class="d-s" x="414" y="108" text-anchor="middle">that lowers the</text>
+            <text class="d-s" x="414" y="122" text-anchor="middle">electricity bill</text>
+            <text class="d-t" x="578" y="72" text-anchor="middle">4 · Business value</text>
+            <text class="d-s" x="578" y="94" text-anchor="middle">subscription sales,</text>
+            <text class="d-s" x="578" y="108" text-anchor="middle">more revenue and</text>
+            <text class="d-s" x="578" y="122" text-anchor="middle">better decisions</text>
+            <text class="d-s" x="16" y="182">The general pattern: data → model → seamless experience in the product → revenue and better decisions.</text>
+          </svg>
+        </div>
+        <figcaption><b>Why companies want to use their data</b>, following Krish's Panasonic example. Storing data creates no value by itself. A model built on it improves the product, and the improved product earns money.</figcaption>
+      </figure>
+    </section>
+
+    <section id="why-hardware">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1258s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>20:58</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1300s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>21:40 GPU costs</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1330s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>22:10 Titan RTX to RTX 3090</a>
+        </div>
+        <h2>Reason 2: hardware advancement</h2>
+      </div>
+      <p>The second reason is hardware, and above all NVIDIA's <dfn>GPUs</dfn> (graphics processing units). A multi-layered neural network has many parameters. Training it means going over the data for many <b>epochs</b>, and that takes a lot of time. GPUs train these models very fast.</p>
+      <p>GPUs are also getting cheaper day by day thanks to technological advancement <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1300s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>21:40</a>. Krish's first GPU was a Titan RTX, a gift from NVIDIA; today he uses an RTX 3090, which is more efficient. NVIDIA keeps doing better work and also builds its own libraries, so that deep learning models can be trained efficiently.</p>
+      <p class="note">Not in the video: the libraries are NVIDIA's CUDA platform and its cuDNN library for neural networks, which frameworks such as TensorFlow and PyTorch use. Most of the work in training is large matrix multiplications, which a GPU runs in parallel on thousands of cores. Training itself, forward and backward propagation, is the subject of <a href="krish-dl-02.html">Part 2</a>.</p>
+      <div class="result">
+        <span class="lbl">Interview answer: why is deep learning becoming popular?</span>
+        <ol>
+          <li><b>Huge amounts of data.</b> Social networks made data grow exponentially, big data made it storable, and companies now want to use it to make their products better.</li>
+          <li><b>Hardware advancement.</b> GPUs train multi-layered networks, with their many parameters and many epochs, fast, and they keep getting cheaper and more efficient.</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ============ CHAPTER 4 · THE PERCEPTRON ============ -->
+    <section id="perceptron">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1337s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>22:17</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1401s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>23:21 drawing it</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1434s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>23:54 the three layers</a>
+        </div>
+        <h2>The perceptron: input, hidden and output layers</h2>
+      </div>
+      <p>Krish starts with a <b>single-layer neural network</b>, using the perceptron as his example, and leaves multi-layered networks for later. He draws its basic structure as circles in three columns <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1434s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>23:54</a>:</p>
+      <ul>
+        <li>the <dfn>input layer</dfn>, three circles that receive the inputs;</li>
+        <li><dfn>hidden layer 1</dfn>, the network's single layer, which here has one neuron;</li>
+        <li>the <dfn>output layer</dfn>, where the final output comes out.</li>
+      </ul>
+      <p>Then he connects every dot: each input connects to the hidden neuron, and the hidden neuron connects to the output.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 300" role="img" aria-label="Left: the network as drawn in the video. Three input nodes, study, play and sleep, hold the first record's values 7, 3 and 7. All three connect to one neuron in hidden layer 1, which connects to one output node that gives pass or fail, coded 1 or 0. Right: a deeper network with 3 inputs, a first hidden layer of 5 neurons, a second hidden layer of 4 neurons and 1 output, every node connected to every node in the next layer.">
+            <defs><marker id="kdl01-f4-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="20" y="26">As drawn in the video</text>
+            <text class="d-s" x="20" y="46">record 1 goes in: study 7 h, play 3 h, sleep 7 h</text>
+            <line class="d-ln" x1="86.7" y1="105.1" x2="158.1" y2="144.0" marker-end="url(#kdl01-f4-ah)"/>
+            <line class="d-ln" x1="89.0" y1="156.0" x2="155.0" y2="156.0" marker-end="url(#kdl01-f4-ah)"/>
+            <line class="d-ln" x1="86.7" y1="206.9" x2="158.1" y2="168.0" marker-end="url(#kdl01-f4-ah)"/>
+            <line class="d-ln" x1="205.0" y1="156.0" x2="261.0" y2="156.0" marker-end="url(#kdl01-f4-ah)"/>
+            <circle class="node" cx="70" cy="96" r="19"/>
+            <circle class="node" cx="70" cy="156" r="19"/>
+            <circle class="node" cx="70" cy="216" r="19"/>
+            <text class="d-t" x="70" y="101" text-anchor="middle">7</text>
+            <text class="d-t" x="70" y="161" text-anchor="middle">3</text>
+            <text class="d-t" x="70" y="221" text-anchor="middle">7</text>
+            <text class="d-t" x="44" y="93" text-anchor="end">x₁</text>
+            <text class="d-s" x="44" y="107" text-anchor="end">study</text>
+            <text class="d-t" x="44" y="153" text-anchor="end">x₂</text>
+            <text class="d-s" x="44" y="167" text-anchor="end">play</text>
+            <text class="d-t" x="44" y="213" text-anchor="end">x₃</text>
+            <text class="d-s" x="44" y="227" text-anchor="end">sleep</text>
+            <circle class="node-acc" cx="180" cy="156" r="25"/>
+            <text class="d-s" x="180" y="160" text-anchor="middle">neuron</text>
+            <circle class="node" cx="280" cy="156" r="19"/>
+            <text class="d-t" x="280" y="161" text-anchor="middle">y</text>
+            <text class="d-s" x="280" y="194" text-anchor="middle">pass or fail</text>
+            <text class="d-s" x="280" y="208" text-anchor="middle">(1 or 0)</text>
+            <text class="d-al" x="70" y="258" text-anchor="middle">input layer</text>
+            <text class="d-al" x="180" y="258" text-anchor="middle">hidden layer 1</text>
+            <text class="d-al" x="280" y="258" text-anchor="middle">output layer</text>
+            <text class="d-s" x="20" y="286">every node connects to every node in the next layer</text>
+
+            <line class="d-rule" x1="335" y1="14" x2="335" y2="290"/>
+
+            <text class="d-h" x="350" y="26">Where it goes: more hidden layers</text>
+            <path class="d-ln" style="stroke-width:1" d="M390.7 104.6 L449.3 75.4 M392.0 110.0 L448.0 110.0 M390.7 115.4 L449.3 144.6 M388.5 118.5 L451.5 181.5 M386.7 120.0 L453.3 220.0 M388.5 141.5 L451.5 78.5 M390.7 144.6 L449.3 115.4 M392.0 150.0 L448.0 150.0 M390.7 155.4 L449.3 184.6 M388.5 158.5 L451.5 221.5 M386.7 180.0 L453.3 80.0 M388.5 181.5 L451.5 118.5 M390.7 184.6 L449.3 155.4 M392.0 190.0 L448.0 190.0 M390.7 195.4 L449.3 224.6 M471.6 72.9 L528.4 87.1 M469.6 77.2 L530.4 122.8 M467.5 79.4 L532.5 160.6 M466.0 80.4 L534.0 199.6 M471.6 107.1 L528.4 92.9 M471.6 112.9 L528.4 127.1 M469.6 117.2 L530.4 162.8 M467.5 119.4 L532.5 200.6 M469.6 142.8 L530.4 97.2 M471.6 147.1 L528.4 132.9 M471.6 152.9 L528.4 167.1 M469.6 157.2 L530.4 202.8 M467.5 180.6 L532.5 99.4 M469.6 182.8 L530.4 137.2 M471.6 187.1 L528.4 172.9 M471.6 192.9 L528.4 207.1 M466.0 219.6 L534.0 100.4 M467.5 220.6 L532.5 139.4 M469.6 222.8 L530.4 177.2 M471.6 227.1 L528.4 212.9 M549.4 97.5 L605.6 142.5 M551.6 133.1 L603.4 146.9 M551.6 166.9 L603.4 153.1 M549.4 202.5 L605.6 157.5"/>
+            <circle class="node" cx="380" cy="110" r="11"/>
+            <circle class="node" cx="380" cy="150" r="11"/>
+            <circle class="node" cx="380" cy="190" r="11"/>
+            <circle class="node-acc" cx="460" cy="70" r="11"/>
+            <circle class="node-acc" cx="460" cy="110" r="11"/>
+            <circle class="node-acc" cx="460" cy="150" r="11"/>
+            <circle class="node-acc" cx="460" cy="190" r="11"/>
+            <circle class="node-acc" cx="460" cy="230" r="11"/>
+            <circle class="node-acc" cx="540" cy="90" r="11"/>
+            <circle class="node-acc" cx="540" cy="130" r="11"/>
+            <circle class="node-acc" cx="540" cy="170" r="11"/>
+            <circle class="node-acc" cx="540" cy="210" r="11"/>
+            <circle class="node" cx="615" cy="150" r="11"/>
+            <text class="d-al" x="380" y="258" text-anchor="middle">input</text>
+            <text class="d-al" x="460" y="258" text-anchor="middle">hidden 1</text>
+            <text class="d-al" x="540" y="258" text-anchor="middle">hidden 2</text>
+            <text class="d-al" x="615" y="258" text-anchor="middle">output</text>
+            <text class="d-s" x="350" y="286">each hidden layer can have its own number of neurons</text>
+          </svg>
+        </div>
+        <figcaption><b>The perceptron as Krish draws it, and where the series goes next.</b> Left: three inputs, one hidden neuron and one output, with the first record of the pass/fail example entering the input layer. Right: an illustrative multi-layered network with two hidden layers of 5 and 4 neurons. The neuron counts are made up; Krish only says the layers can differ in size.</figcaption>
+      </figure>
+
+      <p class="note">Not in the video: textbooks usually draw the perceptron as a single unit whose result is the output itself, with no separate hidden layer. The "single layer" counts that one layer of computing units. Krish's sketch puts that unit in hidden layer 1 and adds an output node after it. In both pictures one neuron combines all the inputs. For the IIT Madras treatment, see Lecture 2 (<a href="lecture-02.html">lecture-02.html</a>).</p>
+    </section>
+
+    <section id="pass-fail">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1466s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>24:26</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1563s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>26:03 inputs x₁, x₂, x₃</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1596s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>26:36 record by record</a>
+        </div>
+        <h2>Example: will a student pass?</h2>
+      </div>
+      <p>To make the structure concrete, Krish takes a data set that records whether a student passed. Each student has three features (hours spent studying, playing and sleeping) and a result, pass or fail. He reasons about each record from common sense: someone who studies 7 hours will likely pass, while someone who studies 2 hours and plays 5 will most likely fail.</p>
+      <div class="tbl-wrap">
+        <table class="mini data-table">
+          <thead><tr><th class="num">Record</th><th class="num">Study (h), x₁</th><th class="num">Play (h), x₂</th><th class="num">Sleep (h), x₃</th><th>Result, y</th></tr></thead>
+          <tbody>
+            <tr><td class="num">1</td><td class="num">7</td><td class="num">3</td><td class="num">7</td><td>pass, 1</td></tr>
+            <tr><td class="num">2</td><td class="num">2</td><td class="num">5</td><td class="num">8</td><td>fail, 0</td></tr>
+            <tr><td class="num">3</td><td class="num">4</td><td class="num">3</td><td class="num">7</td><td>pass, 1</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>He imagines many more records like these. Pass and fail are coded 1 and 0, because this is a <dfn>binary classification</dfn> problem: the output is one of two classes. The question he then asks is how this neural network can use the data set to learn that classification.</p>
+      <p>The three features are the three inputs: \(x_1\) is study, \(x_2\) is play and \(x_3\) is sleep. Records are passed into the input layer <b>one at a time</b> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1596s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>26:36</a>. In the first instance the network receives 7, 3 and 7, the first record:</p>
+      <div class="eq">\[ \text{record 1:}\qquad (x_1, x_2, x_3) = (7, 3, 7), \qquad y = 1 \ (\text{pass}) \]</div>
+      <p>How the hidden neuron turns these numbers into a prediction, and how training adjusts it, are the next chapter's topics (<a href="krish-dl-02.html">Part 2</a>). The <a href="#neuron-preview">preview at the end of this page</a> shows the standard version for two inputs.</p>
+    </section>
+
+    <section id="brain">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1628s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>27:08</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1689s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>28:09 neurons</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1719s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>28:39 output neuron</a>
+        </div>
+        <h2>The brain analogy: how you recognize a camera</h2>
+      </div>
+      <p>Krish connects the three layers to how he recognizes the camera in front of him while teaching.</p>
+      <ul>
+        <li><b>Input.</b> He sees the camera and the monitor. That signal enters through his eyes, so the eyes are the input layer.</li>
+        <li><b>Hidden layer.</b> The signal goes on to neurons. A biological neuron does some kind of signal processing, so the hidden-layer neurons pre-process the data they receive <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1689s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>28:09</a>.</li>
+        <li><b>Output.</b> Finally the signal reaches the part of the brain, somewhere at the back, that is responsible for seeing. This is the output layer, with an <dfn>output neuron</dfn> that decides what the object is: a camera, a television, a mobile phone or something else.</li>
+      </ul>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 254" role="img" aria-label="Two rows of four boxes joined by arrows, with dashed lines pairing them. In the brain: eyes take in the signal, neurons process the signal, the visual area at the back of the brain, recognition that this is a camera. In the network: the input layer where x1, x2, x3 enter, the hidden layer whose neurons process it, the output layer with its output neuron, and the prediction of camera, TV or phone.">
+            <defs><marker id="kdl01-f5-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-row" x="24" y="40">In the brain</text>
+            <rect class="d-box" x="24" y="50" width="132" height="50" rx="8"/>
+            <rect class="d-box" x="184" y="50" width="132" height="50" rx="8"/>
+            <rect class="d-box" x="344" y="50" width="132" height="50" rx="8"/>
+            <rect class="d-box" x="504" y="50" width="132" height="50" rx="8"/>
+            <rect class="d-box-acc" x="24" y="156" width="132" height="50" rx="8"/>
+            <rect class="d-box-acc" x="184" y="156" width="132" height="50" rx="8"/>
+            <rect class="d-box-acc" x="344" y="156" width="132" height="50" rx="8"/>
+            <rect class="d-box-acc" x="504" y="156" width="132" height="50" rx="8"/>
+            <line class="d-ln" x1="158" y1="75" x2="181" y2="75" marker-end="url(#kdl01-f5-ah)"/>
+            <line class="d-ln" x1="318" y1="75" x2="341" y2="75" marker-end="url(#kdl01-f5-ah)"/>
+            <line class="d-ln" x1="478" y1="75" x2="501" y2="75" marker-end="url(#kdl01-f5-ah)"/>
+            <line class="d-ln" x1="158" y1="181" x2="181" y2="181" marker-end="url(#kdl01-f5-ah)"/>
+            <line class="d-ln" x1="318" y1="181" x2="341" y2="181" marker-end="url(#kdl01-f5-ah)"/>
+            <line class="d-ln" x1="478" y1="181" x2="501" y2="181" marker-end="url(#kdl01-f5-ah)"/>
+            <path class="d-ln d-dash" style="stroke-width:1" d="M90 102 V154 M250 102 V154 M410 102 V154 M570 102 V154"/>
+            <rect x="20" y="135" width="98" height="15" style="fill: var(--surface)"/>
+            <text class="d-row" x="24" y="146">In the network</text>
+            <text class="d-t" x="90" y="71" text-anchor="middle">Eyes</text>
+            <text class="d-s" x="90" y="88" text-anchor="middle">take in the signal</text>
+            <text class="d-t" x="250" y="71" text-anchor="middle">Neurons</text>
+            <text class="d-s" x="250" y="88" text-anchor="middle">process the signal</text>
+            <text class="d-t" x="410" y="71" text-anchor="middle">Visual area</text>
+            <text class="d-s" x="410" y="88" text-anchor="middle">back of the brain</text>
+            <text class="d-t" x="570" y="71" text-anchor="middle">Recognition</text>
+            <text class="d-s" x="570" y="88" text-anchor="middle">“this is a camera”</text>
+            <text class="d-t" x="90" y="177" text-anchor="middle">Input layer</text>
+            <text class="d-s" x="90" y="194" text-anchor="middle">x₁, x₂, x₃ enter</text>
+            <text class="d-t" x="250" y="177" text-anchor="middle">Hidden layer</text>
+            <text class="d-s" x="250" y="194" text-anchor="middle">neurons process it</text>
+            <text class="d-t" x="410" y="177" text-anchor="middle">Output layer</text>
+            <text class="d-s" x="410" y="194" text-anchor="middle">the output neuron</text>
+            <text class="d-t" x="570" y="177" text-anchor="middle">Prediction</text>
+            <text class="d-s" x="570" y="194" text-anchor="middle">camera, TV or phone?</text>
+            <text class="d-s" x="24" y="230">Neither recognizes anything at first. A baby is shown and told many times what things are;</text>
+            <text class="d-s" x="24" y="245">a new network is trained on many inputs with known outputs.</text>
+          </svg>
+        </div>
+        <figcaption><b>The analogy behind the layers.</b> Each stage of seeing has a counterpart in the network, and the dashed lines pair them. The analogy is loose; its purpose is to explain why the middle layers are made of "neurons".</figcaption>
+      </figure>
+      <p class="note">Not in the video: the area at the back of the brain is the visual cortex, in the occipital lobe. Lecture 2 describes its layered organization (<a href="lecture-02.html#biology">lecture-02.html</a>).</p>
+    </section>
+
+    <section id="training">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1743s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>29:03</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1780s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>29:40 his son</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1812s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>30:12 more hidden layers</a>
+        </div>
+        <h2>A network has to be trained, and it can grow deeper</h2>
+      </div>
+      <p>The analogy has a second half. When a baby sees a camera for the first time, it cannot tell that it is a camera. Someone has to teach it, again and again: this is a camera, this is food, this is your bed, this is milk. After a couple of months the baby understands. Krish's son, then about seven months old, recognizes a mobile phone and knows what his milk bottle looks like, and starts crying as soon as he sees the bottle. He learned this because he has been trained on these things from day one.</p>
+      <p>A neural network created from scratch is the same. It must always be <dfn>trained</dfn>, on input data together with the correct outputs. Shown a mobile phone, it should learn to predict "mobile phone"; shown a camera, "camera". Krish notes that the training process itself is a separate topic, which the following chapters take up (<a href="krish-dl-02.html">Part 2</a>).</p>
+      <p>Finally, a network is not limited to one hidden layer <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1812s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>30:12</a>. In the brain the signal passes through many neurons, from one to the next, and a network can likewise have any number of hidden layers, each with its own number of neurons. Hidden layer 1 might have five to ten neurons and the next layer a hundred. The right panel of the <a href="#perceptron">perceptron figure</a> shows the idea.</p>
+      <p>For the IIT Madras treatment of networks with hidden layers, see Lecture 2 (<a href="lecture-02.html">lecture-02.html</a>) on multilayer perceptrons and Lecture 3 (<a href="lecture-03.html">lecture-03.html</a>) on feedforward networks.</p>
+    </section>
+
+    <section id="neuron-preview">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=1827s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>30:27 next chapter: weights and bias</a>
+        </div>
+        <h2>Preview: what one neuron computes</h2>
+      </div>
+      <p class="note">Not in the video (this part): the part ends before saying what the hidden neuron computes. The next chapter adds a weight to every connection and a bias, and <a href="krish-dl-04.html">Part 4</a> covers activation functions. This section gives the standard form so that the interactive figure can show it.</p>
+      <p>In the classic perceptron, each input \(x_i\) is multiplied by a <b>weight</b> \(w_i\), the products are added together with a <b>bias</b> \(b\), and a <b>step function</b> turns the sum into a 0 or 1 decision. With two inputs, say study hours \(x_1\) and play hours \(x_2\):</p>
+      <div class="eq">\[ z = w_1 x_1 + w_2 x_2 + b, \qquad y = \begin{cases} 1 \ (\text{pass}) & \text{if } z \ge 0 \\ 0 \ (\text{fail}) & \text{if } z &lt; 0 \end{cases} \]</div>
+      <p>The inputs where \(z = 0\) form the line \(w_1 x_1 + w_2 x_2 + b = 0\), the <dfn>decision boundary</dfn>. Every student on one side is predicted to pass and every student on the other side to fail. The weights tilt the line and the bias shifts it. A positive weight on study hours means more study pushes towards pass; a negative weight on play hours means more play pushes towards fail. Some sources fire the step only when \(z &gt; 0\); the two conventions differ only for points exactly on the line.</p>
+
+      <figure id="neuron-fig">
+        <div class="controls">
+          <span class="ctl"><label for="neuron-w1">Weight w₁ (study)</label><input type="range" id="neuron-w1" min="-2" max="2" step="0.1" value="0.5"><output id="neuron-w1-out" for="neuron-w1">0.5</output></span>
+          <span class="ctl"><label for="neuron-w2">Weight w₂ (play)</label><input type="range" id="neuron-w2" min="-2" max="2" step="0.1" value="0.5"><output id="neuron-w2-out" for="neuron-w2">0.5</output></span>
+          <span class="ctl"><label for="neuron-b">Bias b</label><input type="range" id="neuron-b" min="-10" max="10" step="0.1" value="-3"><output id="neuron-b-out" for="neuron-b">−3.0</output></span>
+        </div>
+        <div class="controls">
+          <span class="ctl"><label for="neuron-x1">Study hours x₁</label><input type="range" id="neuron-x1" min="0" max="10" step="0.5" value="7"><output id="neuron-x1-out" for="neuron-x1">7 h</output></span>
+          <span class="ctl"><label for="neuron-x2">Play hours x₂</label><input type="range" id="neuron-x2" min="0" max="10" step="0.5" value="3"><output id="neuron-x2-out" for="neuron-x2">3 h</output></span>
+          <button class="btn" id="neuron-solve" type="button">Show a solution</button>
+          <button class="btn" id="neuron-reset" type="button">Reset</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">z = w₁x₁ + w₂x₂ + b</span><span class="v" id="neuron-z">–</span></div>
+          <div><span class="k">Output y</span><span class="v mine" id="neuron-y">–</span></div>
+          <div><span class="k">Records on the correct side</span><span class="v" id="neuron-ok">–</span></div>
+        </div>
+        <div class="status" id="neuron-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="neuron-svg" viewBox="0 0 640 360" role="img" aria-label="Left top: a neuron with inputs x1 and x2, their weights on the edges, a bias arrow, the weighted sum z, a step box and the output y. Left bottom: the step function with the current z marked. Right: students plotted by study hours and play hours, filled for pass and hollow for fail, with the decision line z = 0, the shaded side where the neuron outputs 1, dashed rings on records it gets wrong, and a ring on the current input."></svg></div>
+        <figcaption><b>One neuron with two inputs.</b> Move the weights and the bias to tilt and shift the decision line, and watch the weighted sum \(z\), the step output \(y\) and the count of correctly classified records change. Move the input sliders, or click the plane, to pick a student. R1–R3 are the video's three records with sleep hours left out so that they fit in a plane. The other 14 records are <b>synthetic</b>, generated for these notes from a seeded random generator and labelled by a made-up rule, so a line that separates everything exists. "Show a solution" moves to one such line.</figcaption>
+      </figure>
+      <p>Try the starting weights first. With \(w_1 = w_2 = 0.5\) and \(b = -3\), playing counts as much as studying, so R2 (2 hours of study, 5 of play) gets \(z = 1 + 2.5 - 3 = 0.5 \ge 0\) and is wrongly predicted to pass. Making \(w_2\) negative fixes it. For the IIT Madras treatment of weights, the bias as \(w_0 = -\theta\) and the perceptron learning algorithm that finds such a line automatically, see Lecture 2 (<a href="lecture-02.html#perceptron">lecture-02.html</a>).</p>
+    </section>
+
+    <!-- ============ REVISION ============ -->
+    <section id="terms">
+      <div class="sec-head"><h2>Key terms</h2></div>
+      <dl class="terms">
+        <div><dt>Artificial intelligence (AI)</dt><dd>In the video's definition, applications that do their task without human intervention, deciding from the user's behaviour. Examples: recommendations, self-driving cars, chatbots.</dd></div>
+        <div><dt>AI application</dt><dd>Existing software with an AI module integrated into it, such as the Netflix app with its recommender. The end product of every role in the field.</dd></div>
+        <div><dt>Machine learning (ML)</dt><dd>A subset of AI that provides statistical tools to analyze and visualize data, predict and forecast (supervised) and cluster (unsupervised).</dd></div>
+        <div><dt>Deep learning (DL)</dt><dd>A subset of ML built on multi-layered neural networks, with the aim of mimicking how the human brain learns. Researched since 1958.</dd></div>
+        <div><dt>Data science</dt><dd>Work that can sit at any level: building ML models, analyzing data or building DL models. Its final goal is an AI application.</dd></div>
+        <div><dt>Web 2.0</dt><dd>Web applications where users log in, store their data and interact with each other, such as Facebook. They made data grow exponentially.</dd></div>
+        <div><dt>Big data</dt><dd>Engineering for storing very large amounts of data efficiently, so that it can be read and used later. In demand from around 2008.</dd></div>
+        <div><dt>GPU</dt><dd>Graphics processing unit. It trains networks with many parameters over many epochs far faster than a CPU, and keeps getting cheaper.</dd></div>
+        <div><dt>Epoch</dt><dd>One full pass over the training data. Training usually takes many epochs. (The video uses the word without defining it.)</dd></div>
+        <div><dt>Perceptron</dt><dd>The first and simplest neural network. In the video: an input layer, a hidden layer with one neuron, and an output layer.</dd></div>
+        <div><dt>Input, hidden and output layers</dt><dd>The input layer receives one record's features, hidden layers of neurons process the signal, and the output layer gives the prediction.</dd></div>
+        <div><dt>Neuron</dt><dd>A node in a hidden or output layer that processes the signal it receives, by analogy with a biological neuron.</dd></div>
+        <div><dt>Binary classification</dt><dd>Predicting one of two classes, coded 1 and 0, such as pass and fail.</dd></div>
+        <div><dt>Training</dt><dd>Showing a network many inputs with their correct outputs so that it learns to predict them, as a baby is taught the names of things.</dd></div>
+      </dl>
+    </section>
+
+    <section id="test">
+      <div class="sec-head"><h2>Test yourself</h2></div>
+      <div class="quiz">
+        <details><summary><span class="q">Q1</span><span>Describe how AI, ML, DL and data science relate to each other, as Krish draws them.</span><span class="tog"></span></summary>
+          <p>AI is the outer universe. ML is a subset of AI, and DL is a subset of ML. Data science can be part of any of the three, because a data scientist may build ML models, analyze data or build DL models. In every case the end product is an AI application.</p></details>
+        <details><summary><span class="q">Q2</span><span>By the video's definition, what makes Netflix's recommendations AI, and what is the "existing software" in this case?</span><span class="tog"></span></summary>
+          <p>The recommender decides what to show from the user's own behaviour, without a human telling it what to do, which is the definition of AI used in the video. The existing software is the Netflix app for watching movies. The AI module is integrated into it to make the experience better.</p></details>
+        <details><summary><span class="q">Q3</span><span>Deep learning research goes back to 1958. What are the two reasons Krish gives for its popularity now?</span><span class="tog"></span></summary>
+          <p>First, huge amounts of data. Social networks on web 2.0 made data grow exponentially from around 2005, big data engineering made it storable from around 2008, and from around 2013 companies wanted to use it to improve their products. Second, hardware advancement. NVIDIA's GPUs train multi-layered networks quickly, and they keep getting cheaper and more efficient.</p></details>
+        <details><summary><span class="q">Q4</span><span>Why does a company not just store its data? Answer with the Panasonic example.</span><span class="tog"></span></summary>
+          <p>Stored data creates no value by itself. Panasonic's air conditioners already produced usage data. A model built on it, together with the outside temperature, suggests a usage profile that lowers the electricity bill. Customers get a seamless experience, the feature can be sold as a subscription, and the company earns revenue and makes better decisions.</p></details>
+        <details><summary><span class="q">Q5</span><span>Why does training a multi-layered neural network call for a GPU?</span><span class="tog"></span></summary>
+          <p>A multi-layered network has many parameters, and training goes over the data for many epochs, so it takes a long time. GPUs train such models much faster. (Not in the video: the work is mostly large matrix multiplications, which a GPU runs in parallel.)</p></details>
+        <details><summary><span class="q">Q6</span><span>In the pass/fail example, what are the inputs and the output for record 2, what kind of problem is it, and how do records enter the network?</span><span class="tog"></span></summary>
+          <p>Inputs \(x_1 = 2\) study hours, \(x_2 = 5\) play hours and \(x_3 = 8\) sleep hours; output fail, coded 0. There are two possible outputs, so it is a binary classification problem. Records are passed into the input layer one at a time, the first being \((7, 3, 7)\).</p></details>
+        <details><summary><span class="q">Q7</span><span>Map the brain analogy onto the three layers. What do the brain and the network both need before they can recognize a camera?</span><span class="tog"></span></summary>
+          <p>The eyes are the input layer. The neurons that process the signal are the hidden-layer neurons. The visual area at the back of the brain is the output layer, whose output neuron decides between camera, TV, mobile phone and so on. Both need training: a baby is told many times what things are, and a network is trained on many inputs with known outputs.</p></details>
+        <details><summary><span class="q">Q8</span><span>(Not in the video.) A neuron has \(w_1 = 1\), \(w_2 = -0.6\) and \(b = -1.6\), and outputs 1 when \(z \ge 0\). Classify the three records using study and play hours only.</span><span class="tog"></span></summary>
+          <p>R1: \(z = 7 - 1.8 - 1.6 = 3.6 \ge 0\), pass. R2: \(z = 2 - 3 - 1.6 = -2.6 &lt; 0\), fail. R3: \(z = 4 - 1.8 - 1.6 = 0.6 \ge 0\), pass. All three match the data. This is the "Show a solution" setting of the interactive figure, and it classifies the synthetic records correctly too.</p></details>
+      </div>
+    </section>
+
+    <!-- PAGER:START --><nav class="pager" aria-label="Previous and next part"><a href="index.html#extra"><span class="dir">← All notes</span><span class="nm">Deep Learning In-depth Tutorials in 5 Hours</span></a><a class="next" href="index.html#extra"><span class="dir">Part 2 · coming</span><span class="nm">Weights and bias, forward and backward propagation</span></a></nav><!-- PAGER:END -->
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the YouTube auto-generated captions of Krish Naik's video “Deep Learning In-depth Tutorials in 5 Hours”. Timestamp links open the video at that moment. Code is reconstructed from the audio. Charts marked synthetic use data generated for these notes. Not affiliated with Krish Naik or IIT Madras.</div>
+</footer>
+
+<script src="notes.js"></script>
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const mkRand = s0 => { let seed = s0; return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
+  const num = (v, d) => { const s = (Math.abs(v) < 0.5 * Math.pow(10, -d) ? 0 : v).toFixed(d); return s.replace('-', '−'); };
+  const setLine = (el, p, q) => { el.setAttribute('x1', p[0]); el.setAttribute('y1', p[1]); el.setAttribute('x2', q[0]); el.setAttribute('y2', q[1]); };
+  const arrowHead = (defs, id, token) => { const m = mk('marker', { id, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 6, markerHeight: 6, orient: 'auto-start-reverse' }, defs); mk('path', { d: 'M0,0 L10,5 L0,10 z', style: 'fill: var(' + token + ')' }, m); };
+
+  /* ---------- One neuron: weighted sum, step output and decision line ---------- */
+  (() => {
+    const svg = document.getElementById('neuron-svg'); if (!svg) return;
+    const $ = id => document.getElementById(id);
+    const KEYS = ['w1', 'w2', 'b', 'x1', 'x2'];
+    const S = {}, O = {};
+    KEYS.forEach(k => { S[k] = $('neuron-' + k); O[k] = $('neuron-' + k + '-out'); });
+    const oZ = $('neuron-z'), oY = $('neuron-y'), oOk = $('neuron-ok'), status = $('neuron-status');
+    const INIT = { w1: 0.5, w2: 0.5, b: -3, x1: 7, x2: 3 }, SOL = { w1: 1, w2: -0.6, b: -1.6 };
+    const r1 = v => Math.round(v * 10) / 10;
+    const hrs = v => (Number.isInteger(v) ? String(v) : num(v, 1));
+
+    /* data: the video's three records (sleep left out) and 14 synthetic ones */
+    const DATA = [{ s: 7, p: 3, y: 1, tag: 'R1' }, { s: 2, p: 5, y: 0, tag: 'R2' }, { s: 4, p: 3, y: 1, tag: 'R3' }];
+    const rand = mkRand(2022);
+    for (let t = 0; DATA.length < 17 && t < 2000; t++) {
+      const s = Math.round(rand() * 20) / 2, p = Math.round(rand() * 20) / 2, m = s - 0.6 * p - 1.6;
+      if (Math.abs(m) < 0.6 || DATA.some(d => Math.hypot(d.s - s, d.p - p) < 0.9)) continue;
+      DATA.push({ s, p, y: m >= 0 ? 1 : 0, tag: null });
+    }
+    const N = DATA.length;
+
+    const defs = mk('defs', {}, svg);
+    arrowHead(defs, 'kdl01-nr-ah', '--ink-2');
+
+    /* ---- left top: the neuron ---- */
+    mk('text', { x: 16, y: 20, class: 'c-title' }, svg).textContent = 'The neuron on the current input';
+    const XN = [[46, 80], [46, 160]], RI = 20, NEU = [150, 120], RN = 28;
+    const edges = XN.map(() => mk('line', {}, svg));
+    const wLbl = [mk('text', { x: 104, y: 86, 'text-anchor': 'middle', class: 'c-note' }, svg), mk('text', { x: 100, y: 164, 'text-anchor': 'middle', class: 'c-note' }, svg)];
+    XN.forEach((p, i) => {
+      const dx = NEU[0] - p[0], dy = NEU[1] - p[1], L = Math.hypot(dx, dy), u = [dx / L, dy / L];
+      setLine(edges[i], [p[0] + RI * u[0], p[1] + RI * u[1]], [NEU[0] - (RN + 2) * u[0], NEU[1] - (RN + 2) * u[1]]);
+    });
+    const inC = XN.map(p => mk('circle', { cx: p[0], cy: p[1], r: RI, style: 'fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.5' }, svg));
+    const inV = XN.map(p => mk('text', { x: p[0], y: p[1] + 4, 'text-anchor': 'middle', class: 'c-note' }, svg));
+    mk('text', { x: 46, y: 50, 'text-anchor': 'middle', class: 'c-note' }, svg).textContent = 'x₁ · study';
+    mk('text', { x: 46, y: 198, 'text-anchor': 'middle', class: 'c-note' }, svg).textContent = 'x₂ · play';
+    mk('line', { x1: NEU[0], y1: 52, x2: NEU[0], y2: NEU[1] - RN - 2, 'marker-end': 'url(#kdl01-nr-ah)', style: 'stroke: var(--ink-2); stroke-width: 1.4' }, svg);
+    const bLbl = mk('text', { x: NEU[0], y: 44, 'text-anchor': 'middle', class: 'c-note' }, svg);
+    mk('circle', { cx: NEU[0], cy: NEU[1], r: RN, style: 'fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2' }, svg);
+    mk('text', { x: NEU[0], y: NEU[1] + 7, 'text-anchor': 'middle', style: 'fill: var(--ink); font: 600 20px var(--font-head)' }, svg).textContent = 'Σ';
+    const zLbl = mk('text', { x: NEU[0], y: 177, 'text-anchor': 'middle', class: 'c-lbl' }, svg);
+    mk('line', { x1: NEU[0] + RN, y1: NEU[1], x2: 194, y2: NEU[1], 'marker-end': 'url(#kdl01-nr-ah)', style: 'stroke: var(--ink-2); stroke-width: 1.4' }, svg);
+    mk('rect', { x: 196, y: 102, width: 40, height: 36, rx: 6, style: 'fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.3' }, svg);
+    mk('path', { d: 'M202 130 H216 V110 H230', style: 'fill: none; stroke: var(--accent); stroke-width: 1.8' }, svg);
+    mk('text', { x: 216, y: 154, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = 'step';
+    mk('line', { x1: 236, y1: NEU[1], x2: 254, y2: NEU[1], 'marker-end': 'url(#kdl01-nr-ah)', style: 'stroke: var(--ink-2); stroke-width: 1.4' }, svg);
+    const outC = mk('circle', { cx: 272, cy: NEU[1], r: 16 }, svg);
+    const outV = mk('text', { x: 272, y: NEU[1] + 5, 'text-anchor': 'middle', class: 'c-note' }, svg);
+    mk('text', { x: 272, y: 96, 'text-anchor': 'middle', class: 'c-note' }, svg).textContent = 'y';
+    const outT = mk('text', { x: 272, y: 154, 'text-anchor': 'middle', class: 'c-tick' }, svg);
+
+    /* ---- left bottom: the step function ---- */
+    mk('text', { x: 16, y: 224, class: 'c-title' }, svg).textContent = 'Step: y = 1 if z ≥ 0, else 0';
+    const ZL = -10, ZH = 10, ZX0 = 40, ZX1 = 290, Y1 = 252, Y0 = 318;
+    const zx = z => ZX0 + (Math.max(ZL, Math.min(ZH, z)) - ZL) * (ZX1 - ZX0) / (ZH - ZL);
+    const g = mk('g', { class: 'c-grid' }, svg);
+    mk('line', { x1: ZX0, x2: ZX1, y1: Y1, y2: Y1 }, g);
+    mk('line', { x1: zx(0), x2: zx(0), y1: 246, y2: Y0 + 4 }, g);
+    mk('line', { x1: ZX0, x2: ZX1, y1: Y0, y2: Y0, class: 'c-axis' }, svg);
+    mk('path', { d: 'M' + ZX0 + ' ' + Y0 + ' H' + zx(0) + ' M' + zx(0) + ' ' + Y1 + ' H' + ZX1, style: 'fill: none; stroke: var(--ink-2); stroke-width: 2.2' }, svg);
+    mk('circle', { cx: zx(0), cy: Y0, r: 3.5, style: 'fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.5' }, svg);
+    mk('circle', { cx: zx(0), cy: Y1, r: 3.5, style: 'fill: var(--ink-2)' }, svg);
+    [-10, -5, 0, 5, 10].forEach(v => { mk('text', { x: zx(v), y: 334, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = num(v, 0); });
+    mk('text', { x: 32, y: Y1 + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = '1';
+    mk('text', { x: 32, y: Y0 + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = '0';
+    mk('text', { x: 297, y: Y0 + 4, class: 'c-note' }, svg).textContent = 'z';
+    const zMark = mk('line', { y1: 248, y2: Y0, style: 'stroke: var(--accent); stroke-width: 1.4; stroke-dasharray: 4 3' }, svg);
+    const zDot = mk('circle', { r: 5.5, class: 'c-pt-hi' }, svg);
+    const zTxt = mk('text', { y: 243, 'text-anchor': 'middle', class: 'c-lbl' }, svg);
+
+    mk('line', { x1: 310, y1: 12, x2: 310, y2: 348, style: 'stroke: var(--rule); stroke-width: 1' }, svg);
+
+    /* ---- right: the (study, play) plane ---- */
+    mk('text', { x: 326, y: 20, class: 'c-title' }, svg).textContent = 'Records: study hours x₁ against play hours x₂';
+    const PX0 = 352, PY0 = 296, U = 26, PX1 = PX0 + 10 * U, PY1 = PY0 - 10 * U;
+    const sx = v => PX0 + v * U, sy = v => PY0 - v * U;
+    const shade = mk('polygon', { style: 'fill: var(--accent-soft); fill-opacity: .85' }, svg);
+    const gg = mk('g', { class: 'c-grid' }, svg);
+    for (let v = 0; v <= 10; v += 2) { mk('line', { x1: sx(0), x2: sx(10), y1: sy(v), y2: sy(v) }, gg); mk('line', { x1: sx(v), x2: sx(v), y1: sy(0), y2: sy(10) }, gg); }
+    mk('line', { x1: sx(0), x2: sx(10), y1: sy(0), y2: sy(0), class: 'c-axis' }, svg);
+    mk('line', { x1: sx(0), x2: sx(0), y1: sy(0), y2: sy(10), class: 'c-axis' }, svg);
+    for (let v = 0; v <= 10; v += 2) {
+      mk('text', { x: sx(v), y: 312, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = String(v);
+      mk('text', { x: PX0 - 8, y: sy(v) + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = String(v);
+    }
+    mk('text', { x: PX1 + 6, y: PY0 + 4, class: 'c-note' }, svg).textContent = 'x₁';
+    const line = mk('line', { class: 'c-user' }, svg);
+    const rings = DATA.map(d => mk('circle', { cx: sx(d.s), cy: sy(d.p), r: d.tag ? 10.5 : 8.5, style: 'fill: none; stroke: var(--ink-2); stroke-width: 1.3; stroke-dasharray: 3 3' }, svg));
+    DATA.forEach(d => {
+      const big = !!d.tag;
+      mk('circle', { cx: sx(d.s), cy: sy(d.p), r: big ? 6.5 : 4.5, style: d.y ? 'fill: var(--accent); stroke: ' + (big ? 'var(--ink)' : 'var(--surface)') + '; stroke-width: 1.5' : 'fill: var(--surface); stroke: ' + (big ? 'var(--ink)' : 'var(--ink-2)') + '; stroke-width: 1.8' }, svg);
+      if (big) mk('text', { x: sx(d.s) + 10, y: sy(d.p) - 9, class: 'c-tick' }, svg).textContent = d.tag;
+    });
+    const cur = mk('circle', { r: 13, class: 'c-hl' }, svg);
+    const curDot = mk('circle', { r: 2.5, style: 'fill: var(--ink)' }, svg);
+    const hit = mk('rect', { x: PX0, y: PY1, width: PX1 - PX0, height: PY0 - PY1, class: 'plane-hit', style: 'fill: transparent' }, svg);
+    /* legend */
+    mk('circle', { cx: 334, cy: 332, r: 4.5, style: 'fill: var(--accent); stroke: var(--surface); stroke-width: 1.5' }, svg); mk('text', { x: 343, y: 336, class: 'c-tick' }, svg).textContent = 'pass (y = 1)';
+    mk('circle', { cx: 438, cy: 332, r: 4.5, style: 'fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.8' }, svg); mk('text', { x: 447, y: 336, class: 'c-tick' }, svg).textContent = 'fail (y = 0)';
+    mk('circle', { cx: 542, cy: 332, r: 7, style: 'fill: none; stroke: var(--ink-2); stroke-width: 1.3; stroke-dasharray: 3 3' }, svg); mk('text', { x: 554, y: 336, class: 'c-tick' }, svg).textContent = 'wrong side';
+    mk('rect', { x: 328, y: 343, width: 12, height: 12, style: 'fill: var(--accent-soft); stroke: var(--rule)' }, svg); mk('text', { x: 346, y: 353, class: 'c-tick' }, svg).textContent = 'z ≥ 0 side';
+    mk('circle', { cx: 434, cy: 349, r: 6, class: 'c-hl' }, svg); mk('text', { x: 445, y: 353, class: 'c-tick' }, svg).textContent = 'current input';
+    mk('text', { x: 636, y: 353, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = 'R1–R3: video';
+
+    const rect = [[0, 0], [10, 0], [10, 10], [0, 10]];
+    const clipHalf = (poly, f) => { const out = []; for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length], fa = f(a), fb = f(b); if (fa >= 0) out.push(a); if ((fa >= 0) !== (fb >= 0)) { const t = fa / (fa - fb); out.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]); } } return out; };
+    const lineEnds = f => { const pts = []; for (let i = 0; i < 4; i++) { const a = rect[i], b = rect[(i + 1) % 4], fa = f(a), fb = f(b); if (fa === 0) pts.push(a); else if (fa * fb < 0) { const t = fa / (fa - fb); pts.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]); } } return pts; };
+    const edgeStyle = w => (w > 0 ? 'stroke: var(--accent); stroke-width: ' + (1 + 1.3 * w).toFixed(2) : w < 0 ? 'stroke: var(--ink-2); stroke-width: ' + (1 + 1.3 * -w).toFixed(2) + '; stroke-dasharray: 5 4' : 'stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3');
+
+    const draw = () => {
+      const v = {}; KEYS.forEach(k => { v[k] = r1(+S[k].value); });
+      const { w1, w2, b, x1, x2 } = v;
+      O.w1.textContent = num(w1, 1); O.w2.textContent = num(w2, 1); O.b.textContent = num(b, 1);
+      O.x1.textContent = hrs(x1) + ' h'; O.x2.textContent = hrs(x2) + ' h';
+      const f = q => Math.round((w1 * q[0] + w2 * q[1] + b) * 1e9) / 1e9;
+      const z = f([x1, x2]), y = z >= 0 ? 1 : 0;
+
+      /* neuron */
+      edges[0].setAttribute('style', edgeStyle(w1)); edges[1].setAttribute('style', edgeStyle(w2));
+      wLbl[0].textContent = 'w₁ = ' + num(w1, 1); wLbl[1].textContent = 'w₂ = ' + num(w2, 1);
+      bLbl.textContent = 'b = ' + num(b, 1);
+      inV[0].textContent = hrs(x1); inV[1].textContent = hrs(x2);
+      zLbl.textContent = 'z = ' + num(z, 2);
+      outC.setAttribute('style', y ? 'fill: var(--accent); stroke: var(--accent); stroke-width: 1.5' : 'fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.5');
+      outV.textContent = String(y); outV.setAttribute('style', y ? 'fill: var(--surface)' : 'fill: var(--ink)');
+      outT.textContent = y ? 'pass' : 'fail';
+
+      /* step */
+      const mx = zx(z);
+      zMark.setAttribute('x1', mx); zMark.setAttribute('x2', mx);
+      zDot.setAttribute('cx', mx); zDot.setAttribute('cy', y ? Y1 : Y0);
+      zTxt.setAttribute('x', Math.max(70, Math.min(260, mx)));
+      zTxt.textContent = 'z = ' + num(z, 2) + (z > ZH ? ' →' : z < ZL ? ' ←' : '');
+
+      /* plane */
+      const poly = clipHalf(rect, f);
+      shade.setAttribute('points', poly.map(q => sx(q[0]).toFixed(1) + ',' + sy(q[1]).toFixed(1)).join(' '));
+      const ends = (w1 !== 0 || w2 !== 0) ? lineEnds(f) : [];
+      if (ends.length >= 2) { setLine(line, [sx(ends[0][0]), sy(ends[0][1])], [sx(ends[1][0]), sy(ends[1][1])]); line.setAttribute('visibility', 'visible'); } else line.setAttribute('visibility', 'hidden');
+      let wrong = 0; const badTags = [];
+      DATA.forEach((d, i) => { const bad = (f([d.s, d.p]) >= 0 ? 1 : 0) !== d.y; if (bad) { wrong++; if (d.tag) badTags.push(d.tag); } rings[i].setAttribute('visibility', bad ? 'visible' : 'hidden'); });
+      cur.setAttribute('cx', sx(x1)); cur.setAttribute('cy', sy(x2)); curDot.setAttribute('cx', sx(x1)); curDot.setAttribute('cy', sy(x2));
+
+      /* readouts and status */
+      oZ.textContent = num(z, 2); oY.textContent = y + (y ? ' (pass)' : ' (fail)'); oOk.textContent = (N - wrong) + ' of ' + N;
+      const term = (w, x) => (w < 0 ? ' − ' : ' + ') + num(Math.abs(w), 1) + '·' + hrs(x);
+      const s1 = 'Student (' + hrs(x1) + ', ' + hrs(x2) + '): z = ' + num(w1, 1) + '·' + hrs(x1) + term(w2, x2) + (b < 0 ? ' − ' : ' + ') + num(Math.abs(b), 1) + ' = ' + num(z, 2) + (z >= 0 ? ' ≥ 0' : ' < 0') + ', so y = ' + y + ' (' + (y ? 'pass' : 'fail') + ').';
+      let s2;
+      if (w1 === 0 && w2 === 0) s2 = 'With both weights at 0 there is no line: z = b for every student, so all of them get the same output.';
+      else if (!wrong) s2 = 'The line z = 0 puts every record on its correct side.';
+      else s2 = wrong + ' of ' + N + ' records are on the wrong side of the line z = 0' + (badTags.length ? ', including ' + badTags.join(' and ') : '') + '.';
+      status.textContent = s1 + ' ' + s2;
+    };
+
+    let anim = null;
+    const stopAnim = () => { if (anim) { cancelAnimationFrame(anim); anim = null; } };
+    const setVals = o => { for (const k in o) S[k].value = o[k]; draw(); };
+    const animateTo = target => {
+      stopAnim();
+      if (reduce) { setVals(target); return; }
+      const from = {}; for (const k in target) from[k] = r1(+S[k].value);
+      const t0 = performance.now(), T = 700;
+      const tick = now => {
+        const u = Math.min(1, (now - t0) / T), e = u * (2 - u), o = {};
+        for (const k in target) o[k] = r1(from[k] + (target[k] - from[k]) * e);
+        setVals(o);
+        anim = u < 1 ? requestAnimationFrame(tick) : null;
+      };
+      anim = requestAnimationFrame(tick);
+    };
+    KEYS.forEach(k => S[k].addEventListener('input', () => { stopAnim(); draw(); }));
+    $('neuron-solve').addEventListener('click', () => animateTo(SOL));
+    $('neuron-reset').addEventListener('click', () => { stopAnim(); setVals(INIT); });
+    hit.addEventListener('click', ev => {
+      const m = svg.getScreenCTM(); if (!m) return;
+      const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+      const q = pt.matrixTransform(m.inverse());
+      const snap = t => Math.max(0, Math.min(10, Math.round(t * 2) / 2));
+      S.x1.value = snap((q.x - PX0) / U); S.x2.value = snap((PY0 - q.y) / U); draw();
+    });
+    setVals(INIT);
+  })();
+})();
+</script>
+</body>
+</html>
