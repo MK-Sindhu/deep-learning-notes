@@ -1,0 +1,1571 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Part 6 · ANN practical in Keras · DL in 5 Hours</title>
+<meta name="description" content="Notes on Krish Naik's Deep Learning In-depth Tutorials in 5 Hours, Part 6: an ANN for bank customer churn in TensorFlow and Keras, from one-hot encoding, the train/test split and feature scaling to a Sequential model, Adam, binary cross-entropy, early stopping, training curves and test accuracy.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<script src="theme.js"></script>
+<style>
+.controls select { font: 500 14px/1.3 var(--font-head); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 10px; }
+.controls .lw { min-width: 150px; }
+#pc-summary { font-size: 12.5px; line-height: 1.5; white-space: pre; }
+pre.codeblock { font-variant-ligatures: none; }
+.mini.cm-table td, .mini.cm-table th { text-align: center; }
+.mini.cm-table td:first-child, .mini.cm-table th:first-child { text-align: left; }
+.mini.scale-table { min-width: 560px; }
+</style>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <!-- PARTNAV:START --><nav class="partnav" aria-label="Parts"><a href="index.html#extra">All notes</a><span class="sep">/</span><span>DL in 5 hours · Part 6 of 7</span><span class="sep">·</span><a href="krish-dl-02.html">← Part 2</a></nav><!-- PARTNAV:END -->
+    <div class="eyebrow">Krish Naik · Deep Learning In-depth Tutorials in 5 Hours</div>
+    <h1>Practical: an ANN for customer churn in TensorFlow and Keras</h1>
+    <p class="lede">Krish builds a neural network in Google Colab that predicts whether a bank customer will leave, starting from a raw CSV file. The notebook encodes and scales the features, stacks Dense layers in a Keras Sequential model, trains it with Adam and binary cross-entropy, uses early stopping to decide how many epochs are enough, and scores about 85% on the test set.</p>
+    <div class="meta">
+      <span><b>Part 6</b> of 7</span>
+      <span>Teacher <b>Krish Naik</b></span>
+      <span>About <b>59 min</b> of video</span>
+      <span><b>1</b> chapter</span>
+    </div>
+    <div class="watch">
+      <a class="btn solid" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12684s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:31:24 · ANN practical</a>
+    </div>
+  </div>
+</header>
+
+<div class="page gutter">
+  <nav class="toc" aria-label="Contents">
+    <div>
+      <h4>3:31:24 · ANN practical</h4>
+      <ul>
+        <li><a href="#setup">Colab and TensorFlow</a></li>
+        <li><a href="#dataset">The churn data set</a></li>
+        <li><a href="#features">Features and target</a></li>
+        <li><a href="#encoding">One-hot encoding</a></li>
+        <li><a href="#split">Train/test split</a></li>
+        <li><a href="#scaling">Feature scaling</a></li>
+        <li><a href="#tf-keras">TensorFlow and Keras</a></li>
+        <li><a href="#blocks">Sequential, Dense, Dropout</a></li>
+        <li><a href="#model">Building the network</a></li>
+        <li><a href="#compile">Compiling the model</a></li>
+        <li><a href="#fit">Training with fit</a></li>
+        <li><a href="#early-stopping">Early stopping</a></li>
+        <li><a href="#history">Plotting the history</a></li>
+        <li><a href="#evaluate">Predictions and accuracy</a></li>
+        <li><a href="#extras">Weights, dropout, saving</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Revision</h4>
+      <ul>
+        <li><a href="#terms">Key terms</a></li>
+        <li><a href="#test">Test yourself</a></li>
+        <li><a href="index.html#extra">All notes</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="glance" id="glance">
+      <h2>At a glance</h2>
+      <ul>
+        <li><b>The task.</b> From <code>Churn_Modelling.csv</code>, predict <code>Exited</code>: will a bank customer leave? It is a binary classification problem. Columns 3 to 12 are the features and column 13 is the target; the row number, customer ID and surname are left out.</li>
+        <li><b>Feature engineering.</b> Geography and Gender are one-hot encoded with <code>pd.get_dummies(..., drop_first=True)</code>, which leaves 11 numeric features. After an 80/20 train/test split, <code>StandardScaler</code> is fitted on the training set only, to avoid data leakage. ANNs, linear and logistic regression and distance-based methods need scaled features; tree-based methods do not.</li>
+        <li><b>The network.</b> A Keras <dfn>Sequential</dfn> model stacks <dfn>Dense</dfn> layers of 11, 7 and 6 ReLU units and one sigmoid output unit, 271 trainable parameters in all. <code>Dropout</code> layers between them reduce overfitting.</li>
+        <li><b>Training.</b> <code>compile</code> takes Adam (learning rate set to 0.01), binary cross-entropy and accuracy. <code>fit</code> uses <code>validation_split=0.33</code>, <code>batch_size=10</code> (536 steps per epoch) and <code>epochs=1000</code>, far more than needed: accuracy stalls near 86% early on.</li>
+        <li><b>Early stopping and evaluation.</b> An <dfn>EarlyStopping</dfn> callback on <code>val_loss</code> ended the run at epoch 30. The history plots show training and validation curves close together. Thresholding the predicted probabilities at 0.5 gives a confusion matrix and about 85% test accuracy.</li>
+      </ul>
+    </div>
+
+    <!-- ============ SETUP ============ -->
+    <section id="setup">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12684s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:31:24</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12785s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:33:05 install</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12854s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:34:14 version</a>
+        </div>
+        <h2>Setting up Colab and TensorFlow</h2>
+      </div>
+      <p>Krish opens the practical by promising an answer to a question students often ask: how many epochs should a deep learning model be trained for? The answer comes near the end, as early stopping. He works in a Google Colab notebook, live, and first switches the runtime to a GPU (Runtime → Change runtime type), terminating old sessions so the new one can connect.</p>
+      <p>The data set is <code>Churn_Modelling.csv</code>, shared through a Google Drive link in the live chat. Dragging the file onto Colab's file panel uploads it next to the notebook <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12751s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:32:31</a>. He then installs the GPU build of TensorFlow, a download of about 500 MB, and prints the version. Anything above 2.0 will do, because from version 2.0 Keras ships inside TensorFlow. The video's version is 2.8.0.</p>
+      <p class="note">The code on this page is reconstructed from the video's audio. The notebook itself is not visible in the captions, so variable names and small details may differ from Krish's screen.</p>
+      <div class="code-cap">Cell 1 · install and check TensorFlow</div>
+      <pre class="codeblock"><code><span class="cm"># Runtime → Change runtime type → GPU, then connect</span>
+!pip install tensorflow-gpu
+
+<span class="kw">import</span> tensorflow <span class="kw">as</span> tf
+print(tf.__version__)          <span class="cm"># 2.8.0 in the video</span></code></pre>
+      <p class="note">Not in the video: the separate <code>tensorflow-gpu</code> package has since been retired. Today <code>pip install tensorflow</code> (already installed on Colab) includes GPU support.</p>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 700 236" role="img" aria-label="The notebook in ten steps. Part 1, preparing the data: load the CSV of 10,000 rows and 14 columns, split it into X and y, one-hot encode to 11 features, split 80/20 into train and test, and standardize with a scaler fitted on the training set. Part 2, the ANN: build a Sequential model of Dense layers with 11, 7, 6 and 1 units, compile with Adam and binary cross-entropy, fit with batch size 10, a 33% validation split and early stopping, plot the history, and evaluate with a 0.5 threshold and a confusion matrix.">
+            <defs><marker id="kdl06-f1-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-row" x="10" y="24">Part 1 of the notebook · prepare the data</text>
+            <rect class="d-box" x="10" y="34" width="116" height="70" rx="8"/>
+            <rect class="d-box" x="150" y="34" width="116" height="70" rx="8"/>
+            <rect class="d-box" x="290" y="34" width="116" height="70" rx="8"/>
+            <rect class="d-box" x="430" y="34" width="116" height="70" rx="8"/>
+            <rect class="d-box" x="570" y="34" width="116" height="70" rx="8"/>
+            <text class="d-t" x="68" y="56" text-anchor="middle">1 · Load</text>
+            <text class="d-s" x="68" y="76" text-anchor="middle">the churn CSV,</text>
+            <text class="d-s" x="68" y="92" text-anchor="middle">10,000 rows × 14</text>
+            <text class="d-t" x="208" y="56" text-anchor="middle">2 · X and y</text>
+            <text class="d-s" x="208" y="76" text-anchor="middle">X: columns 3–12</text>
+            <text class="d-s" x="208" y="92" text-anchor="middle">y: Exited</text>
+            <text class="d-t" x="348" y="56" text-anchor="middle">3 · Encode</text>
+            <text class="d-s" x="348" y="76" text-anchor="middle">get_dummies,</text>
+            <text class="d-s" x="348" y="92" text-anchor="middle">drop_first → 11</text>
+            <text class="d-t" x="488" y="56" text-anchor="middle">4 · Split</text>
+            <text class="d-s" x="488" y="76" text-anchor="middle">80% train,</text>
+            <text class="d-s" x="488" y="92" text-anchor="middle">20% test</text>
+            <text class="d-t" x="628" y="56" text-anchor="middle">5 · Scale</text>
+            <text class="d-s" x="628" y="76" text-anchor="middle">StandardScaler,</text>
+            <text class="d-s" x="628" y="92" text-anchor="middle">fit on train only</text>
+            <line class="d-ln" x1="128" y1="69" x2="147" y2="69" marker-end="url(#kdl06-f1-ah)"/>
+            <line class="d-ln" x1="268" y1="69" x2="287" y2="69" marker-end="url(#kdl06-f1-ah)"/>
+            <line class="d-ln" x1="408" y1="69" x2="427" y2="69" marker-end="url(#kdl06-f1-ah)"/>
+            <line class="d-ln" x1="548" y1="69" x2="567" y2="69" marker-end="url(#kdl06-f1-ah)"/>
+
+            <text class="d-row" x="10" y="140">Part 2 · build, train and evaluate the ANN</text>
+            <rect class="d-box-acc" x="10" y="150" width="116" height="70" rx="8"/>
+            <rect class="d-box-acc" x="150" y="150" width="116" height="70" rx="8"/>
+            <rect class="d-box-acc" x="290" y="150" width="116" height="70" rx="8"/>
+            <rect class="d-box-acc" x="430" y="150" width="116" height="70" rx="8"/>
+            <rect class="d-box-acc" x="570" y="150" width="116" height="70" rx="8"/>
+            <text class="d-t" x="68" y="172" text-anchor="middle">6 · Build</text>
+            <text class="d-s" x="68" y="192" text-anchor="middle">Sequential: Dense</text>
+            <text class="d-s" x="68" y="208" text-anchor="middle">11, 7, 6 and 1</text>
+            <text class="d-t" x="208" y="172" text-anchor="middle">7 · Compile</text>
+            <text class="d-s" x="208" y="192" text-anchor="middle">Adam, binary</text>
+            <text class="d-s" x="208" y="208" text-anchor="middle">cross-entropy</text>
+            <text class="d-t" x="348" y="172" text-anchor="middle">8 · Fit</text>
+            <text class="d-s" x="348" y="192" text-anchor="middle">batch 10, val 33%,</text>
+            <text class="d-s" x="348" y="208" text-anchor="middle">early stopping</text>
+            <text class="d-t" x="488" y="172" text-anchor="middle">9 · Inspect</text>
+            <text class="d-s" x="488" y="192" text-anchor="middle">plot loss and</text>
+            <text class="d-s" x="488" y="208" text-anchor="middle">accuracy history</text>
+            <text class="d-t" x="628" y="172" text-anchor="middle">10 · Evaluate</text>
+            <text class="d-s" x="628" y="192" text-anchor="middle">threshold 0.5,</text>
+            <text class="d-s" x="628" y="208" text-anchor="middle">confusion matrix</text>
+            <line class="d-ln" x1="128" y1="185" x2="147" y2="185" marker-end="url(#kdl06-f1-ah)"/>
+            <line class="d-ln" x1="268" y1="185" x2="287" y2="185" marker-end="url(#kdl06-f1-ah)"/>
+            <line class="d-ln" x1="408" y1="185" x2="427" y2="185" marker-end="url(#kdl06-f1-ah)"/>
+            <line class="d-ln" x1="548" y1="185" x2="567" y2="185" marker-end="url(#kdl06-f1-ah)"/>
+          </svg>
+        </div>
+        <figcaption><b>The notebook in ten steps.</b> Krish himself splits it into two parts: everything up to scaling is ordinary feature engineering, and "part two" builds and trains the ANN. The sections below follow these steps in order.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ============ DATA SET ============ -->
+    <section id="dataset">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12925s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:35:25 libraries</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12957s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:35:57 read the CSV</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=12990s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:36:30 the problem</a>
+        </div>
+        <h2>The churn data set and the problem</h2>
+      </div>
+      <p>Three basic libraries come first: NumPy, Matplotlib for plotting and pandas for reading the data. Krish recommends a comment above every step, so that the notebook still makes sense later. The CSV is read straight from the uploaded file.</p>
+      <div class="code-cap">Cell 2 · libraries and data</div>
+      <pre class="codeblock"><code><span class="cm"># Import some basic libraries</span>
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="kw">import</span> matplotlib.pyplot <span class="kw">as</span> plt
+<span class="kw">import</span> pandas <span class="kw">as</span> pd
+
+dataset = pd.read_csv('Churn_Modelling.csv')
+dataset.head()</code></pre>
+      <p>Each row describes one customer of a bank: credit score, country, gender, age, how long they have been a customer, account balance, number of products, whether they hold a credit card, whether they are an active member and their estimated salary. The last column, <code>Exited</code>, says whether the customer left the bank. The problem is binary classification: from the details, predict whether a customer will exit. A bank that can see this coming can offer those customers more services and try to keep them.</p>
+      <p><code>Exited</code> is the <dfn>dependent feature</dfn>; the other columns are <dfn>independent features</dfn>.</p>
+      <p class="note">Not in the video: the file has 10,000 rows and 14 columns, and roughly one customer in five has <code>Exited = 1</code>.</p>
+    </section>
+
+    <!-- ============ FEATURES ============ -->
+    <section id="features">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=13025s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:37:05</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=13090s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:38:10 which columns</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=13121s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:38:41 iloc</a>
+        </div>
+        <h2>Independent and dependent features</h2>
+      </div>
+      <p>The first job is to split the data into the independent features <code>X</code> and the dependent feature <code>y</code>, using <code>.iloc</code> (index location). Not every column is useful. <code>RowNumber</code> is just a running count and <code>CustomerId</code> a unique identifier, so neither tells us anything about leaving. <code>Surname</code> plays no important role either. Krish keeps everything from <code>CreditScore</code> to <code>EstimatedSalary</code> as features, with <code>Exited</code> as the target.</p>
+      <p>Counting columns from 0, the features sit in positions 3 to 12. A slice excludes its end, so the features are <code>iloc[:, 3:13]</code>, all rows and columns 3 up to but not including 13. The target is column 13 <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=13152s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:39:12</a>. He checks both with <code>X.head()</code> and <code>y</code>.</p>
+      <div class="code-cap">Cell 3 · X and y</div>
+      <pre class="codeblock"><code><span class="cm"># Divide the data set into independent and dependent features</span>
+X = dataset.iloc[:, 3:13]      <span class="cm"># CreditScore … EstimatedSalary (10 columns)</span>
+y = dataset.iloc[:, 13]        <span class="cm"># Exited</span>
+
+X.head()
+y</code></pre>
+
+      <figure>
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 700 330" role="img" aria-label="Left: the 14 columns of the CSV with their positions 0 to 13. Positions 0 to 2, RowNumber, CustomerId and Surname, are dropped. Positions 3 to 12 form X, selected with iloc colon comma 3 colon 13; Geography and Gender among them are text. Position 13, Exited, is y. Right: get_dummies turns Geography values France, Spain and Germany into columns France, Germany and Spain, and drop_first removes France, so France is the row where Germany and Spain are both 0. Gender becomes a single Male column. After dropping and concatenating, X has 8 numeric columns plus Germany, Spain and Male, 11 features.">
+            <defs><marker id="kdl06-f2-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-h" x="12" y="22">The 14 columns of Churn_Modelling.csv</text>
+            <rect class="d-off" x="40" y="34" width="118" height="16" rx="3"/><text class="d-al" x="32" y="46" text-anchor="end">0</text><text class="d-s t-off" x="48" y="46">RowNumber</text>
+            <rect class="d-off" x="40" y="52" width="118" height="16" rx="3"/><text class="d-al" x="32" y="64" text-anchor="end">1</text><text class="d-s t-off" x="48" y="64">CustomerId</text>
+            <rect class="d-off" x="40" y="70" width="118" height="16" rx="3"/><text class="d-al" x="32" y="82" text-anchor="end">2</text><text class="d-s t-off" x="48" y="82">Surname</text>
+            <rect class="d-box" x="40" y="88" width="118" height="16" rx="3"/><text class="d-al" x="32" y="100" text-anchor="end">3</text><text class="d-s" x="48" y="100">CreditScore</text>
+            <rect class="d-box-acc" x="40" y="106" width="118" height="16" rx="3"/><text class="d-al" x="32" y="118" text-anchor="end">4</text><text class="d-s" x="48" y="118">Geography</text>
+            <rect class="d-box-acc" x="40" y="124" width="118" height="16" rx="3"/><text class="d-al" x="32" y="136" text-anchor="end">5</text><text class="d-s" x="48" y="136">Gender</text>
+            <rect class="d-box" x="40" y="142" width="118" height="16" rx="3"/><text class="d-al" x="32" y="154" text-anchor="end">6</text><text class="d-s" x="48" y="154">Age</text>
+            <rect class="d-box" x="40" y="160" width="118" height="16" rx="3"/><text class="d-al" x="32" y="172" text-anchor="end">7</text><text class="d-s" x="48" y="172">Tenure</text>
+            <rect class="d-box" x="40" y="178" width="118" height="16" rx="3"/><text class="d-al" x="32" y="190" text-anchor="end">8</text><text class="d-s" x="48" y="190">Balance</text>
+            <rect class="d-box" x="40" y="196" width="118" height="16" rx="3"/><text class="d-al" x="32" y="208" text-anchor="end">9</text><text class="d-s" x="48" y="208">NumOfProducts</text>
+            <rect class="d-box" x="40" y="214" width="118" height="16" rx="3"/><text class="d-al" x="32" y="226" text-anchor="end">10</text><text class="d-s" x="48" y="226">HasCrCard</text>
+            <rect class="d-box" x="40" y="232" width="118" height="16" rx="3"/><text class="d-al" x="32" y="244" text-anchor="end">11</text><text class="d-s" x="48" y="244">IsActiveMember</text>
+            <rect class="d-box" x="40" y="250" width="118" height="16" rx="3"/><text class="d-al" x="32" y="262" text-anchor="end">12</text><text class="d-s" x="48" y="262">EstimatedSalary</text>
+            <rect class="d-box" x="40" y="268" width="118" height="16" rx="3" style="stroke-width: 2"/><text class="d-al" x="32" y="280" text-anchor="end">13</text><text class="d-t" x="48" y="280">Exited</text>
+            <path class="d-ln" d="M164 35 H170 V85 H164"/>
+            <text class="d-s" x="180" y="57">dropped: row count,</text>
+            <text class="d-s" x="180" y="71">ID and surname</text>
+            <path class="d-ln" d="M164 89 H170 V265 H164"/>
+            <text class="d-al" x="180" y="170">X = dataset.iloc[:, 3:13]</text>
+            <text class="d-s" x="180" y="186">10 columns, 2 of them</text>
+            <text class="d-s" x="180" y="200">text (shaded)</text>
+            <path class="d-ln" d="M164 269 H170 V283 H164"/>
+            <text class="d-al" x="180" y="280">y = dataset.iloc[:, 13]</text>
+
+            <line class="d-rule" x1="356" y1="10" x2="356" y2="296"/>
+
+            <text class="d-h" x="372" y="22">One-hot encoding, drop_first=True</text>
+            <text class="d-al" x="372" y="46">pd.get_dummies(X['Geography'], drop_first=True)</text>
+            <text class="d-t" x="410" y="72" text-anchor="middle">Geography</text>
+            <rect class="d-box" x="372" y="80" width="76" height="20"/><text class="d-s" x="410" y="94" text-anchor="middle">France</text>
+            <rect class="d-box" x="372" y="100" width="76" height="20"/><text class="d-s" x="410" y="114" text-anchor="middle">Spain</text>
+            <rect class="d-box" x="372" y="120" width="76" height="20"/><text class="d-s" x="410" y="134" text-anchor="middle">Germany</text>
+            <line class="d-ln" x1="454" y1="110" x2="484" y2="110" marker-end="url(#kdl06-f2-ah)"/>
+            <text class="d-t t-off" x="518" y="72" text-anchor="middle">France</text>
+            <text class="d-t" x="574" y="72" text-anchor="middle">Germany</text>
+            <text class="d-t" x="630" y="72" text-anchor="middle">Spain</text>
+            <rect class="d-off" x="490" y="80" width="56" height="20"/><text class="d-s t-off" x="518" y="94" text-anchor="middle">1</text>
+            <rect class="d-off" x="490" y="100" width="56" height="20"/><text class="d-s t-off" x="518" y="114" text-anchor="middle">0</text>
+            <rect class="d-off" x="490" y="120" width="56" height="20"/><text class="d-s t-off" x="518" y="134" text-anchor="middle">0</text>
+            <rect class="d-box" x="546" y="80" width="56" height="20"/><text class="d-s" x="574" y="94" text-anchor="middle">0</text>
+            <rect class="d-box" x="546" y="100" width="56" height="20"/><text class="d-s" x="574" y="114" text-anchor="middle">0</text>
+            <rect class="d-box" x="546" y="120" width="56" height="20"/><text class="d-t" x="574" y="134" text-anchor="middle">1</text>
+            <rect class="d-box" x="602" y="80" width="56" height="20"/><text class="d-s" x="630" y="94" text-anchor="middle">0</text>
+            <rect class="d-box" x="602" y="100" width="56" height="20"/><text class="d-t" x="630" y="114" text-anchor="middle">1</text>
+            <rect class="d-box" x="602" y="120" width="56" height="20"/><text class="d-s" x="630" y="134" text-anchor="middle">0</text>
+            <text class="d-s t-off" x="518" y="156" text-anchor="middle">dropped</text>
+            <text class="d-s" x="372" y="178">France is the row with Germany = 0 and Spain = 0.</text>
+
+            <text class="d-al" x="372" y="206">pd.get_dummies(X['Gender'], drop_first=True)</text>
+            <text class="d-t" x="410" y="228" text-anchor="middle">Gender</text>
+            <rect class="d-box" x="372" y="236" width="76" height="20"/><text class="d-s" x="410" y="250" text-anchor="middle">Female</text>
+            <rect class="d-box" x="372" y="256" width="76" height="20"/><text class="d-s" x="410" y="270" text-anchor="middle">Male</text>
+            <line class="d-ln" x1="454" y1="256" x2="484" y2="256" marker-end="url(#kdl06-f2-ah)"/>
+            <text class="d-t t-off" x="518" y="228" text-anchor="middle">Female</text>
+            <text class="d-t" x="574" y="228" text-anchor="middle">Male</text>
+            <rect class="d-off" x="490" y="236" width="56" height="20"/><text class="d-s t-off" x="518" y="250" text-anchor="middle">1</text>
+            <rect class="d-off" x="490" y="256" width="56" height="20"/><text class="d-s t-off" x="518" y="270" text-anchor="middle">0</text>
+            <rect class="d-box" x="546" y="236" width="56" height="20"/><text class="d-s" x="574" y="250" text-anchor="middle">0</text>
+            <rect class="d-box" x="546" y="256" width="56" height="20"/><text class="d-t" x="574" y="270" text-anchor="middle">1</text>
+            <text class="d-s t-off" x="518" y="292" text-anchor="middle">dropped</text>
+            <text class="d-s" x="614" y="250">Male = 0</text>
+            <text class="d-s" x="614" y="264">means Female</text>
+
+            <text class="d-s" x="12" y="320" style="fill: var(--accent)">After the drop and the concatenation, X holds 8 numeric columns + Germany, Spain and Male = 11 features.</text>
+          </svg>
+        </div>
+        <figcaption><b>From 14 columns to 11 features.</b> Left: which columns <code>iloc</code> picks. Right: what <code>get_dummies</code> and <code>drop_first</code> do to the two text columns, on three illustrative rows. The numbers are 0/1 indicators; the dashed column is the one <code>drop_first</code> removes.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ============ ENCODING ============ -->
+    <section id="encoding">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=13188s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:39:48</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=13251s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:40:51 get_dummies</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=13314s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:41:54 drop_first</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=13508s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:45:08 concat</a>
+        </div>
+        <h2>One-hot encoding Geography and Gender</h2>
+      </div>
+      <p><code>X</code> is not ready yet: Geography and Gender hold text. Each has only a few categories, so one-hot encoding is a good fit, done with scikit-learn's encoder or with pandas' <code>get_dummies</code>, whichever you prefer. Krish uses <code>get_dummies</code> and calls this step feature engineering.</p>
+      <p><code>pd.get_dummies(X['Geography'])</code> makes one 0/1 column per country, France, Germany and Spain. A row gets 1 in the column of its own country and 0 in the others. With <code>drop_first=True</code> the first column is dropped and only Germany and Spain remain. Nothing is lost: a customer with Germany = 0 and Spain = 0 must be from France, so two columns represent all three countries. Gender becomes a single column, Male.</p>
+      <p>Next the original text columns are removed with <code>drop</code>. The argument <code>axis=1</code> matters: it drops columns, where <code>axis=0</code> would mean rows <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=13412s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:43:32</a>. Finally <code>pd.concat</code> joins <code>X</code> and the dummy columns side by side, again with <code>axis=1</code>. Krish runs the concatenation once without assigning it, checks that Germany, Spain and Male appear at the right end <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=13540s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:45:40</a>, and only then writes the result back to <code>X</code>.</p>
+      <div class="code-cap">Cell 4 · feature engineering</div>
+      <pre class="codeblock"><code><span class="cm"># Feature engineering: one-hot encode the categorical columns</span>
+geography = pd.get_dummies(X['Geography'], drop_first=True)   <span class="cm"># Germany, Spain</span>
+gender = pd.get_dummies(X['Gender'], drop_first=True)         <span class="cm"># Male</span>
+
+<span class="cm"># Drop the original text columns (axis=1: columns, not rows)</span>
+X = X.drop(['Geography', 'Gender'], axis=1)
+
+<span class="cm"># Concatenate the dummy columns, again column-wise</span>
+X = pd.concat([X, geography, gender], axis=1)
+X.head()</code></pre>
+      <p class="note">Not in the video: <code>get_dummies</code> orders the categories alphabetically, so <code>drop_first</code> removes France and Female. Keeping all the columns would give a set that sums to 1 in every row, a redundancy known as the dummy variable trap, which matters most for linear models. In pandas 2.x the dummy columns are booleans; pass <code>dtype=int</code> if you want 0 and 1.</p>
+    </section>
+
+    <!-- ============ SPLIT ============ -->
+    <section id="split">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=13574s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:46:14</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=13636s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:47:16 test_size</a>
+        </div>
+        <h2>Train/test split</h2>
+      </div>
+      <p>With the categorical features handled, the data is split into a training set, which the ANN learns from, and a test set held back for the final score. <code>train_test_split</code> returns four pieces. Krish keeps 20% for testing and fixes <code>random_state=0</code> so the split is the same on every run.</p>
+      <div class="code-cap">Cell 5 · train/test split</div>
+      <pre class="codeblock"><code><span class="cm"># Splitting the data set into the training set and test set</span>
+<span class="kw">from</span> sklearn.model_selection <span class="kw">import</span> train_test_split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)</code></pre>
+      <p>That gives 8,000 training rows and 2,000 test rows. A further split of the training rows happens inside <code>fit</code>, shown in the training section.</p>
+    </section>
+
+    <!-- ============ SCALING ============ -->
+    <section id="scaling">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=13669s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:47:49 interview question</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=13766s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:49:26 the answer</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=13830s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:50:30 StandardScaler</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=14024s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:53:44 data leakage</a>
+        </div>
+        <h2>Feature scaling, and which algorithms need it</h2>
+      </div>
+      <p>One step is essential before an ANN sees the data: <dfn>feature scaling</dfn>. Krish flags a common interview question here. For which algorithms is feature scaling required: an ANN, linear regression, logistic regression, a decision tree, a random forest? His answer:</p>
+      <div class="tbl-wrap">
+        <table class="mini scale-table">
+          <thead><tr><th>Algorithm</th><th>Scale the features?</th><th>Reason given in the video</th></tr></thead>
+          <tbody>
+            <tr><td>ANN</td><td>Yes</td><td>Trained by gradient descent and other optimizers; scaled inputs make convergence quicker.</td></tr>
+            <tr><td>Linear and logistic regression</td><td>Yes</td><td>Also fitted with gradient descent, so the same reason.</td></tr>
+            <tr><td>Distance-based methods (for example KNN, K-means)</td><td>Yes</td><td>They compute distances, and large values make the calculation slow.</td></tr>
+            <tr><td>Decision tree, random forest, AdaBoost, XGBoost</td><td>No</td><td>Tree-based methods do not need it.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Not in the video: the usual reason for distance-based methods is that a feature with a large range, such as an account balance, dominates the distance and drowns out a feature like the number of products. Trees split on one feature at a time at a threshold, and rescaling a feature just moves the threshold, so the splits they find do not change.</p>
+
+      <figure>
+        <div class="fig-scroll">
+<svg class="dg" viewBox="0 0 660 270" role="img" aria-label="Two contour maps of a loss over two weights. Left, unscaled features: the contours are long thin ellipses and gradient descent zig-zags across the narrow direction while creeping along the long one; after 15 steps it is still far from the minimum. Right, standardized features: the contours are circles and gradient descent heads straight for the minimum, arriving in about 5 steps.">
+            <text class="d-t" x="14" y="22">Unscaled features</text>
+            <text class="d-s" x="14" y="38">features on very different ranges</text>
+            <ellipse class="d-ln-mut" cx="175" cy="140" rx="36" ry="9"/>
+            <ellipse class="d-ln-mut" cx="175" cy="140" rx="72" ry="18"/>
+            <ellipse class="d-ln-mut" cx="175" cy="140" rx="108" ry="27"/>
+            <ellipse class="d-ln-mut" cx="175" cy="140" rx="144" ry="36"/>
+            <polyline class="d-ln-acc" points="43,123.5 57,151.6 69.6,131.9 80.8,145.7 90.8,136 99.7,142.8 107.7,138.1 114.9,141.4 121.3,139 127,140.7 132.1,139.5 136.6,140.3 140.7,139.8 144.4,140.2 147.6,139.9 150.5,140.1"/>
+            <circle cx="43" cy="123.5" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="57" cy="151.6" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="69.6" cy="131.9" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="80.8" cy="145.7" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="90.8" cy="136" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="99.7" cy="142.8" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="107.7" cy="138.1" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="114.9" cy="141.4" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="121.3" cy="139" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="127" cy="140.7" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="132.1" cy="139.5" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="136.6" cy="140.3" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="140.7" cy="139.8" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="144.4" cy="140.2" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="147.6" cy="139.9" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="150.5" cy="140.1" r="2.6" style="fill: var(--accent)"/>
+            <circle class="pt-new" cx="175" cy="140" r="5"/>
+            <text class="d-s" x="39" y="113.5">start</text>
+            <text class="d-s" x="185" y="198">minimum</text>
+            <line class="d-ln" x1="183" y1="187" x2="177" y2="148" style="stroke-width:1"/>
+            <text class="d-s" x="144.5" y="88" text-anchor="middle">after 15 steps</text>
+            <line class="d-ln" x1="144.5" y1="93" x2="150.5" y2="135.1" style="stroke-width:1"/>
+            <text class="d-al" x="320" y="230" text-anchor="end">w₁ →</text>
+            <text class="d-al" x="30" y="70">↑ w₂</text>
+            <text class="d-s" x="14" y="252">steep in w₂, flat in w₁: a safe step size zig-zags</text>
+            <text class="d-s" x="14" y="266">across and crawls along</text>
+            <line class="d-rule" x1="340" y1="10" x2="340" y2="262"/>
+            <text class="d-t" x="360" y="22">After StandardScaler</text>
+            <text class="d-s" x="360" y="38">each feature: mean 0, standard deviation 1</text>
+            <circle class="d-ln-mut" cx="505" cy="140" r="22.5"/>
+            <circle class="d-ln-mut" cx="505" cy="140" r="45"/>
+            <circle class="d-ln-mut" cx="505" cy="140" r="67.5"/>
+            <circle class="d-ln-mut" cx="505" cy="140" r="90"/>
+            <polyline class="d-ln-acc" points="420.4,109.2 471.2,127.7 491.5,135.1 499.6,138 502.8,139.2 504.1,139.7"/>
+            <circle cx="420.4" cy="109.2" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="471.2" cy="127.7" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="491.5" cy="135.1" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="499.6" cy="138" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="502.8" cy="139.2" r="2.6" style="fill: var(--accent)"/>
+            <circle cx="504.1" cy="139.7" r="2.6" style="fill: var(--accent)"/>
+            <circle class="pt-new" cx="505" cy="140" r="5"/>
+            <text class="d-s" x="416.4" y="99.2" text-anchor="middle">start</text>
+            <text class="d-s" x="517" y="160">minimum after ~5 steps</text>
+            <text class="d-al" x="646" y="230" text-anchor="end">w₁ →</text>
+            <text class="d-al" x="372" y="70">↑ w₂</text>
+            <text class="d-s" x="360" y="252">circles: each step heads for the minimum,</text>
+            <text class="d-s" x="360" y="266">so a larger step is safe</text>
+            </svg>
+        </div>
+        <figcaption><b>Why scaling speeds up gradient descent</b> (schematic, not drawn in the video). Each panel is a contour map of a loss over two weights, with the minimum marked. When the features have very different ranges, the loss is steep along one weight and flat along the other, so the contours are long thin ellipses. A step size small enough not to overshoot in the steep direction makes slow progress in the flat one, and the path zig-zags (left, 15 steps). After standardization the contours are round, the gradient points at the minimum, and the path goes straight there (right, 5 steps).</figcaption>
+      </figure>
+
+      <p>For the scaler itself he picks <code>StandardScaler</code> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=13860s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:51:00</a>. It applies the z-score from statistics to each column, so every feature ends up centred on its mean, with spread measured in standard deviations. <code>MinMaxScaler</code> would also work; it squeezes values into the range 0 to 1 (or −1 to 1), and Krish says to use it for CNNs, which come in the next session.</p>
+      <div class="eq">
+        \[ z = \frac{x - \mu}{\sigma} \quad \text{(StandardScaler)}, \qquad x' = \frac{x - x_{\min}}{x_{\max} - x_{\min}} \quad \text{(MinMaxScaler)} \]
+      </div>
+      <p>Here \(\mu\) and \(\sigma\) are the mean and standard deviation of that column. The difference between <code>fit_transform</code> and <code>transform</code> is another favourite interview question <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=13925s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:52:05</a>. <code>fit_transform</code> on the training set learns \(\mu\) and \(\sigma\) for each column and scales the training data with them. <code>transform</code> on the test set reuses those same training values. Fitting the scaler on the test data as well would cause <dfn>data leakage</dfn>: information from the data meant to be unseen would flow into the preprocessing, and the test score would no longer be an honest estimate.</p>
+      <div class="code-cap">Cell 6 · feature scaling</div>
+      <pre class="codeblock"><code><span class="cm"># Feature scaling</span>
+<span class="kw">from</span> sklearn.preprocessing <span class="kw">import</span> StandardScaler
+sc = StandardScaler()
+X_train = sc.fit_transform(X_train)   <span class="cm"># learn mean and sd on the training set, then scale it</span>
+X_test = sc.transform(X_test)         <span class="cm"># reuse the training mean and sd</span>
+
+X_train.shape                         <span class="cm"># (8000, 11)</span></code></pre>
+      <p>Running the cell shows a message that <code>X</code> has feature names but the scaler was fitted without feature names. Krish notes that it is only a warning; both arrays come out scaled. He adds that all of this is still feature engineering: choosing an ANN does not remove the need for it, and the same problem could also be solved with classical machine learning.</p>
+      <p class="note">Not in the video: that warning appears when the scaler is fitted on a NumPy array and then given a DataFrame, for example when the <code>fit_transform</code> line runs a second time and <code>X_train</code> is already an array. It does not change the result here.</p>
+    </section>
+
+    <!-- ============ TENSORFLOW AND KERAS ============ -->
+    <section id="tf-keras">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=14059s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:54:19</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=14126s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:55:26 Keras as a wrapper</a>
+        </div>
+        <h2>TensorFlow and Keras</h2>
+      </div>
+      <p>Part two of the notebook builds the ANN, and Krish first places the two libraries. <dfn>TensorFlow</dfn> is a popular deep learning library open-sourced by Google; PyTorch, from Facebook, can do the same things. <dfn>Keras</dfn> is a wrapper around TensorFlow: it offers simple functions that call TensorFlow's APIs underneath, so you can build a network without writing the low-level code.</p>
+      <p>Before TensorFlow 2.0 the two were separate. You installed TensorFlow, then Keras, and the versions had to match. From 2.0 on, Keras is integrated into TensorFlow as <code>tf.keras</code>, so one installation is enough. That is why the version check in the first cell mattered.</p>
+      <p class="note">Krish credits a Google DeepMind team with creating TensorFlow. It was in fact developed by the Google Brain team and released in 2015.</p>
+    </section>
+
+    <!-- ============ BUILDING BLOCKS ============ -->
+    <section id="blocks">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=14189s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:56:29 imports</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=14316s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:58:36 Sequential and Dense</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=14481s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:01:21 Dropout</a>
+        </div>
+        <h2>Sequential, Dense, activation layers and Dropout</h2>
+      </div>
+      <p>Everything the network needs comes from <code>tensorflow.keras</code>. Besides <code>Sequential</code> and <code>Dense</code>, Krish shows that <code>tensorflow.keras.layers</code> also offers the activation functions from Part 4 as layers, such as LeakyReLU, PReLU, ELU and ReLU, and he imports <code>Dropout</code>.</p>
+      <div class="code-cap">Cell 7 · Keras imports</div>
+      <pre class="codeblock"><code><span class="cm"># Part 2: now let's create the ANN</span>
+<span class="kw">from</span> tensorflow.keras.models <span class="kw">import</span> Sequential
+<span class="kw">from</span> tensorflow.keras.layers <span class="kw">import</span> Dense
+<span class="kw">from</span> tensorflow.keras.layers <span class="kw">import</span> LeakyReLU, PReLU, ELU, ReLU
+<span class="kw">from</span> tensorflow.keras.layers <span class="kw">import</span> Dropout</code></pre>
+      <p class="note">Not in the video: the model below uses activation names such as <code>'relu'</code>, so these activation layers are never needed. To use one, add a Dense layer without an activation and put the activation layer after it, for example <code>classifier.add(Dense(7))</code> followed by <code>classifier.add(LeakyReLU())</code>.</p>
+      <p>To explain the pieces he sketches a network <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=14348s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>3:59:08</a>: 11 inputs, a couple of hidden layers, and a single output that says 1 or 0, since the problem is binary. Every neuron in one layer connects to every neuron in the next.</p>
+      <ul>
+        <li><b>Sequential</b> treats the whole network as one block. Once it is built, that block can run forward propagation and backward propagation.</li>
+        <li><b>Dense</b> creates the neurons, the circles in the sketch: a fully connected layer. Krish uses it for every layer, input, hidden and output.</li>
+        <li><b>Activation functions</b> (ReLU, PReLU, sigmoid, tanh, and so on, covered in depth earlier) are applied inside the hidden layers.</li>
+      </ul>
+      <p class="note">Not in the video, a more precise picture: <code>Sequential</code> is a linear stack of layers in which each layer's output is the next layer's input. Forward propagation, the loss, backpropagation and the optimizer's weight updates all run when you call <code>fit</code>; see <a href="krish-dl-02.html">Part 2</a> for how they work. A Dense layer with weight matrix \(\mathbf{W}\) (shape inputs × units), bias \(\mathbf{b}\) and activation \(g\) computes \(\mathbf{h} = g(\mathbf{W}^\top\mathbf{x} + \mathbf{b})\). For the IIT Madras treatment, see Lecture 4 (<a href="lecture-04.html#architecture">lecture-04.html</a>).</p>
+
+      <h3>Dropout</h3>
+      <p>A deep, densely connected network can solve complex problems: forward and backward propagation, the loss and the optimizer together push the weights toward a minimum. Sometimes the network <dfn>overfits</dfn> instead <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=14544s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:02:24</a>: accuracy on the training data is very high, but accuracy on the test data drops. A <dfn>dropout layer</dfn> reduces overfitting. Krish compares it to the L1 and L2 regularization of his machine learning sessions.</p>
+      <p>A dropout ratio of 0.3 on a layer means that 30% of that layer's neurons are deactivated while training <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=14576s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:02:56</a>. With 0.5, half of them are. The neurons are chosen at random. A deactivated neuron behaves like a dead neuron for that pass: its connections are cut, and forward and backward propagation run through the neurons that remain.</p>
+
+      <figure>
+        <div class="fig-scroll">
+<svg class="dg" viewBox="0 0 660 290" role="img" aria-label="Left, one training step with dropout: three inputs, a hidden layer of four units with Dropout(0.3) where one unit is switched off, a second hidden layer of four units with Dropout(0.5) where two units are switched off, and one output. Switched-off units are dashed and all their connections are removed. Right, prediction: the same network with every unit and every connection present.">
+            <text class="d-t" x="10" y="22">One training step</text>
+            <text class="d-s" x="10" y="38">a fresh random set of units is dropped every step</text>
+            <line class="d-ln" x1="40" y1="95" x2="130" y2="70" style="stroke-width:1"/>
+            <line class="d-ln" x1="40" y1="95" x2="130" y2="120" style="stroke-width:1"/>
+            <line class="d-ln" x1="40" y1="95" x2="130" y2="220" style="stroke-width:1"/>
+            <line class="d-ln" x1="40" y1="145" x2="130" y2="70" style="stroke-width:1"/>
+            <line class="d-ln" x1="40" y1="145" x2="130" y2="120" style="stroke-width:1"/>
+            <line class="d-ln" x1="40" y1="145" x2="130" y2="220" style="stroke-width:1"/>
+            <line class="d-ln" x1="40" y1="195" x2="130" y2="70" style="stroke-width:1"/>
+            <line class="d-ln" x1="40" y1="195" x2="130" y2="120" style="stroke-width:1"/>
+            <line class="d-ln" x1="40" y1="195" x2="130" y2="220" style="stroke-width:1"/>
+            <line class="d-ln" x1="130" y1="70" x2="220" y2="120" style="stroke-width:1"/>
+            <line class="d-ln" x1="130" y1="70" x2="220" y2="170" style="stroke-width:1"/>
+            <line class="d-ln" x1="130" y1="120" x2="220" y2="120" style="stroke-width:1"/>
+            <line class="d-ln" x1="130" y1="120" x2="220" y2="170" style="stroke-width:1"/>
+            <line class="d-ln" x1="130" y1="220" x2="220" y2="120" style="stroke-width:1"/>
+            <line class="d-ln" x1="130" y1="220" x2="220" y2="170" style="stroke-width:1"/>
+            <line class="d-ln" x1="220" y1="120" x2="300" y2="145" style="stroke-width:1"/>
+            <line class="d-ln" x1="220" y1="170" x2="300" y2="145" style="stroke-width:1"/>
+            <circle class="node" cx="40" cy="95" r="13"/>
+            <circle class="node" cx="40" cy="145" r="13"/>
+            <circle class="node" cx="40" cy="195" r="13"/>
+            <circle class="node" cx="130" cy="70" r="13"/>
+            <circle class="node" cx="130" cy="120" r="13"/>
+            <circle class="d-off" cx="130" cy="170" r="13"/>
+            <path class="d-ln" style="stroke: var(--muted); stroke-width:1.4" d="M124 164 L136 176 M136 164 L124 176"/>
+            <circle class="node" cx="130" cy="220" r="13"/>
+            <circle class="d-off" cx="220" cy="70" r="13"/>
+            <path class="d-ln" style="stroke: var(--muted); stroke-width:1.4" d="M214 64 L226 76 M226 64 L214 76"/>
+            <circle class="node" cx="220" cy="120" r="13"/>
+            <circle class="node" cx="220" cy="170" r="13"/>
+            <circle class="d-off" cx="220" cy="220" r="13"/>
+            <path class="d-ln" style="stroke: var(--muted); stroke-width:1.4" d="M214 214 L226 226 M226 214 L214 226"/>
+            <circle class="node-acc" cx="300" cy="145" r="13"/>
+            <text class="d-al" x="40" y="252" text-anchor="middle">inputs</text>
+            <text class="d-al" x="130" y="252" text-anchor="middle">hidden 1</text>
+            <text class="d-al" x="220" y="252" text-anchor="middle">hidden 2</text>
+            <text class="d-al" x="300" y="252" text-anchor="middle">output</text>
+            <text class="d-s" x="130" y="270" text-anchor="middle" style="fill: var(--accent)">Dropout(0.3)</text>
+            <text class="d-s" x="220" y="270" text-anchor="middle" style="fill: var(--accent)">Dropout(0.5)</text>
+            <text class="d-s" x="130" y="285" text-anchor="middle">1 of 4 off</text>
+            <text class="d-s" x="220" y="285" text-anchor="middle">2 of 4 off</text>
+            <line class="d-rule" x1="340" y1="10" x2="340" y2="282"/>
+            <text class="d-t" x="350" y="22">Prediction</text>
+            <text class="d-s" x="350" y="38">every unit is used; nothing is dropped</text>
+            <line class="d-ln" x1="380" y1="95" x2="470" y2="70" style="stroke-width:1"/>
+            <line class="d-ln" x1="380" y1="95" x2="470" y2="120" style="stroke-width:1"/>
+            <line class="d-ln" x1="380" y1="95" x2="470" y2="170" style="stroke-width:1"/>
+            <line class="d-ln" x1="380" y1="95" x2="470" y2="220" style="stroke-width:1"/>
+            <line class="d-ln" x1="380" y1="145" x2="470" y2="70" style="stroke-width:1"/>
+            <line class="d-ln" x1="380" y1="145" x2="470" y2="120" style="stroke-width:1"/>
+            <line class="d-ln" x1="380" y1="145" x2="470" y2="170" style="stroke-width:1"/>
+            <line class="d-ln" x1="380" y1="145" x2="470" y2="220" style="stroke-width:1"/>
+            <line class="d-ln" x1="380" y1="195" x2="470" y2="70" style="stroke-width:1"/>
+            <line class="d-ln" x1="380" y1="195" x2="470" y2="120" style="stroke-width:1"/>
+            <line class="d-ln" x1="380" y1="195" x2="470" y2="170" style="stroke-width:1"/>
+            <line class="d-ln" x1="380" y1="195" x2="470" y2="220" style="stroke-width:1"/>
+            <line class="d-ln" x1="470" y1="70" x2="560" y2="70" style="stroke-width:1"/>
+            <line class="d-ln" x1="470" y1="70" x2="560" y2="120" style="stroke-width:1"/>
+            <line class="d-ln" x1="470" y1="70" x2="560" y2="170" style="stroke-width:1"/>
+            <line class="d-ln" x1="470" y1="70" x2="560" y2="220" style="stroke-width:1"/>
+            <line class="d-ln" x1="470" y1="120" x2="560" y2="70" style="stroke-width:1"/>
+            <line class="d-ln" x1="470" y1="120" x2="560" y2="120" style="stroke-width:1"/>
+            <line class="d-ln" x1="470" y1="120" x2="560" y2="170" style="stroke-width:1"/>
+            <line class="d-ln" x1="470" y1="120" x2="560" y2="220" style="stroke-width:1"/>
+            <line class="d-ln" x1="470" y1="170" x2="560" y2="70" style="stroke-width:1"/>
+            <line class="d-ln" x1="470" y1="170" x2="560" y2="120" style="stroke-width:1"/>
+            <line class="d-ln" x1="470" y1="170" x2="560" y2="170" style="stroke-width:1"/>
+            <line class="d-ln" x1="470" y1="170" x2="560" y2="220" style="stroke-width:1"/>
+            <line class="d-ln" x1="470" y1="220" x2="560" y2="70" style="stroke-width:1"/>
+            <line class="d-ln" x1="470" y1="220" x2="560" y2="120" style="stroke-width:1"/>
+            <line class="d-ln" x1="470" y1="220" x2="560" y2="170" style="stroke-width:1"/>
+            <line class="d-ln" x1="470" y1="220" x2="560" y2="220" style="stroke-width:1"/>
+            <line class="d-ln" x1="560" y1="70" x2="640" y2="145" style="stroke-width:1"/>
+            <line class="d-ln" x1="560" y1="120" x2="640" y2="145" style="stroke-width:1"/>
+            <line class="d-ln" x1="560" y1="170" x2="640" y2="145" style="stroke-width:1"/>
+            <line class="d-ln" x1="560" y1="220" x2="640" y2="145" style="stroke-width:1"/>
+            <circle class="node" cx="380" cy="95" r="13"/>
+            <circle class="node" cx="380" cy="145" r="13"/>
+            <circle class="node" cx="380" cy="195" r="13"/>
+            <circle class="node" cx="470" cy="70" r="13"/>
+            <circle class="node" cx="470" cy="120" r="13"/>
+            <circle class="node" cx="470" cy="170" r="13"/>
+            <circle class="node" cx="470" cy="220" r="13"/>
+            <circle class="node" cx="560" cy="70" r="13"/>
+            <circle class="node" cx="560" cy="120" r="13"/>
+            <circle class="node" cx="560" cy="170" r="13"/>
+            <circle class="node" cx="560" cy="220" r="13"/>
+            <circle class="node-acc" cx="640" cy="145" r="13"/>
+            <text class="d-al" x="380" y="252" text-anchor="middle">inputs</text>
+            <text class="d-al" x="470" y="252" text-anchor="middle">hidden 1</text>
+            <text class="d-al" x="560" y="252" text-anchor="middle">hidden 2</text>
+            <text class="d-al" x="640" y="252" text-anchor="middle">output</text>
+            <text class="d-s" x="515" y="276" text-anchor="middle">Dropout layers do nothing in predict()</text>
+            </svg>
+        </div>
+        <figcaption><b>Dropout switches units off only during training.</b> Left: one training step with <code>Dropout(0.3)</code> after the first hidden layer and <code>Dropout(0.5)</code> after the second, the two rates Krish uses in his explanation. The dashed units are off for this step, and their connections carry nothing. The rate is a probability, so how many units go off varies from step to step. Right: at prediction time every unit takes part.</figcaption>
+      </figure>
+      <p class="note">Not in the video: the Keras <code>rate</code> is the probability of dropping each unit, drawn afresh at every training step. During training Keras divides the kept outputs by \(1 - \text{rate}\), so at prediction time the layer simply passes its input through unchanged. Lecture 6 writes \(p\) for the probability of keeping a unit, the opposite convention. For the IIT Madras treatment, see Lecture 6 (<a href="lecture-06.html#dropout">lecture-06.html</a>).</p>
+    </section>
+
+    <!-- ============ MODEL ============ -->
+    <section id="model">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=14674s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:04:34 initialize</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=14710s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:05:10 "input layer"</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=14773s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:06:13 hidden layers</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=14906s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:08:26 output layer</a>
+        </div>
+        <h2>Building the network layer by layer</h2>
+      </div>
+      <p>The ANN starts as an empty <code>Sequential</code> model called <code>classifier</code>, and layers are added one at a time with <code>classifier.add</code>.</p>
+      <ul>
+        <li><b>"Input layer."</b> <code>X_train.shape</code> shows 11 features, so Krish adds <code>Dense(units=11, activation='relu')</code>. He describes the ReLU as the activation that will be applied to the next layer.</li>
+        <li><b>First hidden layer:</b> <code>Dense(units=7, activation='relu')</code>. He wavers between six and seven neurons; the exact number is up to you. There are techniques for choosing the number of hidden neurons, which he leaves for later.</li>
+        <li><b>Second hidden layer:</b> <code>Dense(units=6, activation='relu')</code>. A Dense layer has other parameters as well, such as the bias settings <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=14837s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:07:17</a>. The activation can be given as a string in quotes or as the function itself.</li>
+        <li><b>Output layer:</b> one neuron, because the problem is binary. He asks the audience for its activation and answers sigmoid.</li>
+      </ul>
+      <div class="code-cap">Cell 8 · the network</div>
+      <pre class="codeblock"><code><span class="cm"># Let's initialize the ANN</span>
+classifier = Sequential()
+
+<span class="cm"># Adding the input layer</span>
+classifier.add(Dense(units=11, activation='relu'))
+
+<span class="cm"># Adding the first hidden layer</span>
+classifier.add(Dense(units=7, activation='relu'))
+
+<span class="cm"># Adding the second hidden layer</span>
+classifier.add(Dense(units=6, activation='relu'))
+
+<span class="cm"># Adding the output layer</span>
+classifier.add(Dense(1, activation='sigmoid'))</code></pre>
+      <p class="note">Two corrections. First, Keras has no Dense input layer. <code>Dense(units=11)</code> is a layer of 11 neurons that receives the 11 features; the input itself is implicit, and Keras infers its size the first time it sees data (or you can declare it with <code>tf.keras.Input(shape=(11,))</code>). So the network is 11 inputs → 11 → 7 → 6 → 1, with three ReLU hidden layers. Second, a layer's activation acts on that layer's own output, \(\mathbf{h} = \operatorname{relu}(\mathbf{W}^\top\mathbf{x} + \mathbf{b})\), and the next layer receives these activated values.</p>
+      <p>The sigmoid squashes the output neuron's score \(z\) into \((0, 1)\), so the output reads as the probability that the customer exits:</p>
+      <div class="eq">
+        \[ \hat{y} = \sigma(z) = \frac{1}{1 + e^{-z}} = P(\text{Exited} = 1 \mid \mathbf{x}) \]
+      </div>
+      <p>Sigmoid and ReLU are covered in <a href="krish-dl-04.html">Part 4</a>; for the IIT Madras treatment, see Lecture 7 (<a href="lecture-07.html#relu">lecture-07.html</a>).</p>
+
+      <figure>
+        <div class="fig-scroll">
+<svg class="dg" viewBox="0 0 700 330" role="img" aria-label="The churn network drawn in full. 11 input features feed a Dense layer of 11 ReLU units, then a Dense layer of 7 ReLU units, a Dense layer of 6 ReLU units and one sigmoid output unit. Every unit is connected to every unit in the next layer. Parameter counts below each layer: 132, 84, 48 and 7, for 271 in total.">
+            <line class="d-ln" x1="62" y1="63" x2="202" y2="63" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="63" x2="202" y2="82" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="63" x2="202" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="63" x2="202" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="63" x2="202" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="63" x2="202" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="63" x2="202" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="63" x2="202" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="63" x2="202" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="63" x2="202" y2="234" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="63" x2="202" y2="253" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="82" x2="202" y2="63" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="82" x2="202" y2="82" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="82" x2="202" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="82" x2="202" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="82" x2="202" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="82" x2="202" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="82" x2="202" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="82" x2="202" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="82" x2="202" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="82" x2="202" y2="234" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="82" x2="202" y2="253" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="101" x2="202" y2="63" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="101" x2="202" y2="82" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="101" x2="202" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="101" x2="202" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="101" x2="202" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="101" x2="202" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="101" x2="202" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="101" x2="202" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="101" x2="202" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="101" x2="202" y2="234" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="101" x2="202" y2="253" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="120" x2="202" y2="63" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="120" x2="202" y2="82" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="120" x2="202" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="120" x2="202" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="120" x2="202" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="120" x2="202" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="120" x2="202" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="120" x2="202" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="120" x2="202" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="120" x2="202" y2="234" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="120" x2="202" y2="253" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="139" x2="202" y2="63" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="139" x2="202" y2="82" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="139" x2="202" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="139" x2="202" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="139" x2="202" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="139" x2="202" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="139" x2="202" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="139" x2="202" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="139" x2="202" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="139" x2="202" y2="234" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="139" x2="202" y2="253" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="158" x2="202" y2="63" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="158" x2="202" y2="82" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="158" x2="202" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="158" x2="202" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="158" x2="202" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="158" x2="202" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="158" x2="202" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="158" x2="202" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="158" x2="202" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="158" x2="202" y2="234" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="158" x2="202" y2="253" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="177" x2="202" y2="63" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="177" x2="202" y2="82" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="177" x2="202" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="177" x2="202" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="177" x2="202" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="177" x2="202" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="177" x2="202" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="177" x2="202" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="177" x2="202" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="177" x2="202" y2="234" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="177" x2="202" y2="253" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="196" x2="202" y2="63" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="196" x2="202" y2="82" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="196" x2="202" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="196" x2="202" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="196" x2="202" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="196" x2="202" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="196" x2="202" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="196" x2="202" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="196" x2="202" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="196" x2="202" y2="234" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="196" x2="202" y2="253" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="215" x2="202" y2="63" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="215" x2="202" y2="82" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="215" x2="202" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="215" x2="202" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="215" x2="202" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="215" x2="202" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="215" x2="202" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="215" x2="202" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="215" x2="202" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="215" x2="202" y2="234" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="215" x2="202" y2="253" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="234" x2="202" y2="63" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="234" x2="202" y2="82" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="234" x2="202" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="234" x2="202" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="234" x2="202" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="234" x2="202" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="234" x2="202" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="234" x2="202" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="234" x2="202" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="234" x2="202" y2="234" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="234" x2="202" y2="253" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="253" x2="202" y2="63" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="253" x2="202" y2="82" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="253" x2="202" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="253" x2="202" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="253" x2="202" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="253" x2="202" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="253" x2="202" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="253" x2="202" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="253" x2="202" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="253" x2="202" y2="234" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="62" y1="253" x2="202" y2="253" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="63" x2="342" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="63" x2="342" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="63" x2="342" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="63" x2="342" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="63" x2="342" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="63" x2="342" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="63" x2="342" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="82" x2="342" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="82" x2="342" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="82" x2="342" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="82" x2="342" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="82" x2="342" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="82" x2="342" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="82" x2="342" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="101" x2="342" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="101" x2="342" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="101" x2="342" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="101" x2="342" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="101" x2="342" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="101" x2="342" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="101" x2="342" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="120" x2="342" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="120" x2="342" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="120" x2="342" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="120" x2="342" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="120" x2="342" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="120" x2="342" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="120" x2="342" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="139" x2="342" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="139" x2="342" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="139" x2="342" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="139" x2="342" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="139" x2="342" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="139" x2="342" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="139" x2="342" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="158" x2="342" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="158" x2="342" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="158" x2="342" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="158" x2="342" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="158" x2="342" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="158" x2="342" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="158" x2="342" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="177" x2="342" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="177" x2="342" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="177" x2="342" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="177" x2="342" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="177" x2="342" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="177" x2="342" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="177" x2="342" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="196" x2="342" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="196" x2="342" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="196" x2="342" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="196" x2="342" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="196" x2="342" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="196" x2="342" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="196" x2="342" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="215" x2="342" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="215" x2="342" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="215" x2="342" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="215" x2="342" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="215" x2="342" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="215" x2="342" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="215" x2="342" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="234" x2="342" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="234" x2="342" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="234" x2="342" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="234" x2="342" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="234" x2="342" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="234" x2="342" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="234" x2="342" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="253" x2="342" y2="101" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="253" x2="342" y2="120" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="253" x2="342" y2="139" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="253" x2="342" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="253" x2="342" y2="177" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="253" x2="342" y2="196" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="202" y1="253" x2="342" y2="215" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="101" x2="482" y2="110.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="101" x2="482" y2="129.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="101" x2="482" y2="148.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="101" x2="482" y2="167.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="101" x2="482" y2="186.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="101" x2="482" y2="205.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="120" x2="482" y2="110.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="120" x2="482" y2="129.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="120" x2="482" y2="148.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="120" x2="482" y2="167.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="120" x2="482" y2="186.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="120" x2="482" y2="205.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="139" x2="482" y2="110.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="139" x2="482" y2="129.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="139" x2="482" y2="148.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="139" x2="482" y2="167.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="139" x2="482" y2="186.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="139" x2="482" y2="205.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="158" x2="482" y2="110.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="158" x2="482" y2="129.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="158" x2="482" y2="148.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="158" x2="482" y2="167.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="158" x2="482" y2="186.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="158" x2="482" y2="205.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="177" x2="482" y2="110.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="177" x2="482" y2="129.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="177" x2="482" y2="148.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="177" x2="482" y2="167.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="177" x2="482" y2="186.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="177" x2="482" y2="205.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="196" x2="482" y2="110.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="196" x2="482" y2="129.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="196" x2="482" y2="148.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="196" x2="482" y2="167.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="196" x2="482" y2="186.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="196" x2="482" y2="205.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="215" x2="482" y2="110.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="215" x2="482" y2="129.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="215" x2="482" y2="148.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="215" x2="482" y2="167.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="215" x2="482" y2="186.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="342" y1="215" x2="482" y2="205.5" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="482" y1="110.5" x2="622" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="482" y1="129.5" x2="622" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="482" y1="148.5" x2="622" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="482" y1="167.5" x2="622" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="482" y1="186.5" x2="622" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <line class="d-ln" x1="482" y1="205.5" x2="622" y2="158" style="stroke-width:0.8; opacity:.3"/>
+            <rect class="d-off" x="56" y="57" width="12" height="12" rx="2"/>
+            <rect class="d-off" x="56" y="76" width="12" height="12" rx="2"/>
+            <rect class="d-off" x="56" y="95" width="12" height="12" rx="2"/>
+            <rect class="d-off" x="56" y="114" width="12" height="12" rx="2"/>
+            <rect class="d-off" x="56" y="133" width="12" height="12" rx="2"/>
+            <rect class="d-off" x="56" y="152" width="12" height="12" rx="2"/>
+            <rect class="d-off" x="56" y="171" width="12" height="12" rx="2"/>
+            <rect class="d-off" x="56" y="190" width="12" height="12" rx="2"/>
+            <rect class="d-off" x="56" y="209" width="12" height="12" rx="2"/>
+            <rect class="d-off" x="56" y="228" width="12" height="12" rx="2"/>
+            <rect class="d-off" x="56" y="247" width="12" height="12" rx="2"/>
+            <text class="d-t" x="62" y="20" text-anchor="middle">11 input features</text>
+            <text class="d-s" x="62" y="36" text-anchor="middle">implicit input</text>
+            <circle class="node" cx="202" cy="63" r="6.5"/>
+            <circle class="node" cx="202" cy="82" r="6.5"/>
+            <circle class="node" cx="202" cy="101" r="6.5"/>
+            <circle class="node" cx="202" cy="120" r="6.5"/>
+            <circle class="node" cx="202" cy="139" r="6.5"/>
+            <circle class="node" cx="202" cy="158" r="6.5"/>
+            <circle class="node" cx="202" cy="177" r="6.5"/>
+            <circle class="node" cx="202" cy="196" r="6.5"/>
+            <circle class="node" cx="202" cy="215" r="6.5"/>
+            <circle class="node" cx="202" cy="234" r="6.5"/>
+            <circle class="node" cx="202" cy="253" r="6.5"/>
+            <text class="d-t" x="202" y="20" text-anchor="middle">Dense(11), relu</text>
+            <text class="d-s" x="202" y="36" text-anchor="middle">video: "input layer"</text>
+            <circle class="node" cx="342" cy="101" r="6.5"/>
+            <circle class="node" cx="342" cy="120" r="6.5"/>
+            <circle class="node" cx="342" cy="139" r="6.5"/>
+            <circle class="node" cx="342" cy="158" r="6.5"/>
+            <circle class="node" cx="342" cy="177" r="6.5"/>
+            <circle class="node" cx="342" cy="196" r="6.5"/>
+            <circle class="node" cx="342" cy="215" r="6.5"/>
+            <text class="d-t" x="342" y="20" text-anchor="middle">Dense(7), relu</text>
+            <text class="d-s" x="342" y="36" text-anchor="middle">"first hidden layer"</text>
+            <circle class="node" cx="482" cy="110.5" r="6.5"/>
+            <circle class="node" cx="482" cy="129.5" r="6.5"/>
+            <circle class="node" cx="482" cy="148.5" r="6.5"/>
+            <circle class="node" cx="482" cy="167.5" r="6.5"/>
+            <circle class="node" cx="482" cy="186.5" r="6.5"/>
+            <circle class="node" cx="482" cy="205.5" r="6.5"/>
+            <text class="d-t" x="482" y="20" text-anchor="middle">Dense(6), relu</text>
+            <text class="d-s" x="482" y="36" text-anchor="middle">"second hidden layer"</text>
+            <circle class="node-acc" cx="622" cy="158" r="9"/>
+            <text class="d-t" x="622" y="20" text-anchor="middle">Dense(1), sigmoid</text>
+            <text class="d-s" x="622" y="36" text-anchor="middle">P(Exited = 1)</text>
+            <text class="d-al" x="62" y="290" text-anchor="middle">shape (None, 11)</text>
+            <text class="d-s" x="62" y="306" text-anchor="middle">from X_train</text>
+            <text class="d-al" x="202" y="290" text-anchor="middle">11 × 11 + 11</text>
+            <text class="d-s" x="202" y="306" text-anchor="middle">= 132 params</text>
+            <text class="d-al" x="342" y="290" text-anchor="middle">11 × 7 + 7</text>
+            <text class="d-s" x="342" y="306" text-anchor="middle">= 84 params</text>
+            <text class="d-al" x="482" y="290" text-anchor="middle">7 × 6 + 6</text>
+            <text class="d-s" x="482" y="306" text-anchor="middle">= 48 params</text>
+            <text class="d-al" x="622" y="290" text-anchor="middle">6 × 1 + 1</text>
+            <text class="d-s" x="622" y="306" text-anchor="middle">= 7 params</text>
+            <text class="d-s" x="350" y="326" text-anchor="middle" style="fill: var(--accent)">total: 132 + 84 + 48 + 7 = 271 trainable parameters</text>
+            </svg>
+        </div>
+        <figcaption><b>The churn network as Keras builds it.</b> The dashed squares are the 11 input features, which are data rather than a layer. Each Dense layer is fully connected to the layer before it. The counts below are weights (inputs × units) plus one bias per unit.</figcaption>
+      </figure>
+
+      <p>Krish does not count the parameters, but he does marvel at how many weights train in parallel when he prints them later. The count follows directly from the shapes.</p>
+      <div class="result">
+        <span class="lbl">Parameters of a Dense layer (not in the video)</span>
+        \[ \text{params} = \underbrace{n_{\text{in}} \times n_{\text{units}}}_{\text{weights}} + \underbrace{n_{\text{units}}}_{\text{biases}} \qquad 132 + 84 + 48 + 7 = 271 \text{ for the churn model} \]
+        <p>Dropout layers have no parameters: they only zero some outputs.</p>
+      </div>
+
+      <figure id="pc-fig">
+        <div class="controls">
+          <label class="lw" for="pc-in">Input features</label>
+          <input type="range" id="pc-in" min="1" max="30" step="1" value="11">
+          <output id="pc-in-out" for="pc-in">11</output>
+        </div>
+        <div class="controls">
+          <label class="lw" for="pc-h1">Hidden layer 1 units</label>
+          <input type="range" id="pc-h1" min="1" max="64" step="1" value="11">
+          <output id="pc-h1-out" for="pc-h1">11</output>
+        </div>
+        <div class="controls">
+          <label class="lw" for="pc-h2">Hidden layer 2 units</label>
+          <input type="range" id="pc-h2" min="0" max="64" step="1" value="7">
+          <output id="pc-h2-out" for="pc-h2">7</output>
+        </div>
+        <div class="controls">
+          <label class="lw" for="pc-h3">Hidden layer 3 units</label>
+          <input type="range" id="pc-h3" min="0" max="64" step="1" value="6">
+          <output id="pc-h3-out" for="pc-h3">6</output>
+        </div>
+        <div class="controls">
+          <label class="lw" for="pc-out">Output units</label>
+          <input type="range" id="pc-out" min="1" max="10" step="1" value="1">
+          <output id="pc-out-out" for="pc-out">1</output>
+        </div>
+        <div class="controls">
+          <span class="check"><input type="checkbox" id="pc-drop"><label for="pc-drop">Dropout after each hidden layer</label></span>
+          <button class="btn" id="pc-reset" type="button">The video's model</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">Trainable params</span><span class="v mine" id="pc-total">–</span></div>
+          <div><span class="k">Weights</span><span class="v" id="pc-w">–</span></div>
+          <div><span class="k">Biases</span><span class="v" id="pc-b">–</span></div>
+          <div><span class="k">Dense layers</span><span class="v" id="pc-n">–</span></div>
+        </div>
+        <div class="status" id="pc-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="pc-svg" viewBox="0 0 640 220" role="img" aria-label="Horizontal bars, one per Dense layer, on a shared scale. Each bar is split into the layer's weights and its biases and labelled with the count, inputs times units plus units."></svg></div>
+        <pre class="codeblock"><code id="pc-summary"></code></pre>
+        <figcaption><b>Parameter counter for a Keras Sequential model.</b> Set the number of input features and the units in each Dense layer (0 leaves a hidden layer out). The bars split each layer's parameters into weights and biases, and the listing mimics what <code>classifier.summary()</code> prints once the model has seen its input (not used in the video). Output units above 1 switch the last layer to softmax. Ticking Dropout adds rows to the summary but no parameters.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ============ COMPILE ============ -->
+    <section id="compile">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=14937s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:08:57</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=14969s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:09:29 learning rate</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15000s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:10:00 an Adam object</a>
+        </div>
+        <h2>Compiling: optimizer, loss and metric</h2>
+      </div>
+      <p>Before training, the network is compiled with three choices. The <b>optimizer</b> is Adam, which Krish calls the best optimizer. The <b>loss</b> is binary cross-entropy, because the target has two classes, as discussed in the loss-functions session. The <b>metric</b> to report is accuracy.</p>
+      <div class="code-cap">Cell 9 · compile</div>
+      <pre class="codeblock"><code>classifier.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])</code></pre>
+      <p>For one training example with label \(y \in \{0, 1\}\) and predicted probability \(\hat{y}\), the loss is</p>
+      <div class="eq">
+        \[ L(y, \hat{y}) = -\big[\, y \log \hat{y} + (1 - y) \log(1 - \hat{y}) \,\big], \]
+      </div>
+      <p>averaged over the examples in a batch. Keras's accuracy metric counts \(\hat{y} \ge 0.5\) as a prediction of 1.</p>
+      <p>Where is the learning rate? To set it, create the optimizer as an object and pass that to <code>compile</code> instead of the string. Krish sets <code>learning_rate=0.01</code>. Any other optimizer under <code>tf.keras.optimizers</code>, such as SGD or RMSprop, can be used the same way, but he sticks with Adam.</p>
+      <div class="code-cap">Cell 10 · Adam with a chosen learning rate</div>
+      <pre class="codeblock"><code><span class="kw">import</span> tensorflow
+opt = tensorflow.keras.optimizers.Adam(learning_rate=0.01)
+opt                              <span class="cm"># an Adam optimizer object</span>
+
+classifier.compile(optimizer=opt, loss='binary_crossentropy', metrics=['accuracy'])</code></pre>
+      <p class="note">Krish says Adam's default learning rate is 0.01. In Keras the default is 0.001, so his explicit 0.01 is ten times the default. For Adam itself, see <a href="krish-dl-05.html">Part 5</a>; for the IIT Madras treatment, see Lecture 5 (<a href="lecture-05.html#adam">lecture-05.html</a>). Binary cross-entropy is in <a href="krish-dl-04.html">Part 4</a> and Lecture 4 (<a href="lecture-04.html#cross-entropy">lecture-04.html</a>).</p>
+    </section>
+
+    <!-- ============ FIT ============ -->
+    <section id="fit">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15063s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:11:03</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15130s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:12:10 536 steps</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15224s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:13:44 accuracy stalls</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15256s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:14:16 validation split</a>
+        </div>
+        <h2>Training with fit: validation split, batch size, epochs</h2>
+      </div>
+      <p>Training is one call to <code>fit</code>, whose return value Krish stores as <code>model_history</code>. Besides the training data it takes three settings.</p>
+      <ul>
+        <li><code>validation_split=0.33</code> holds back a third of the training rows. The model never trains on them; after every epoch it reports the loss and accuracy on them as <code>val_loss</code> and <code>val_accuracy</code>.</li>
+        <li><code>batch_size=10</code>: the weights are updated after every 10 rows. He keeps batches small because memory is limited.</li>
+        <li><code>epochs=1000</code>, deliberately far too many, to set up the discussion of early stopping.</li>
+      </ul>
+      <div class="code-cap">Cell 11 · first training run</div>
+      <pre class="codeblock"><code>model_history = classifier.fit(X_train, y_train, validation_split=0.33,
+                               batch_size=10, epochs=1000)
+<span class="cm"># Epoch 1/1000</span>
+<span class="cm"># 536/536 [======] - loss: … - accuracy: … - val_loss: … - val_accuracy: …</span></code></pre>
+      <p>The progress bar shows 536 iterations per epoch, and Krish asks why. The arithmetic: 8,000 training rows, of which 67% (5,360) remain after the validation split, in batches of 10.</p>
+      <div class="eq">
+        \[ \text{steps per epoch} = \frac{8000 \times (1 - 0.33)}{10} = \frac{5360}{10} = 536 \]
+      </div>
+
+      <figure>
+        <div class="fig-scroll">
+<svg class="dg" viewBox="0 0 700 236" role="img" aria-label="Three bars drawn to scale. The 10,000 rows split into 8,000 training rows and 2,000 test rows. Inside fit, validation_split 0.33 keeps 5,360 of the 8,000 for training and holds out the last 2,640 for validation. Each epoch passes over the 5,360 rows in 536 mini-batches of 10, one weight update per batch.">
+            <text class="d-al" x="150" y="24">train_test_split(X, y, test_size=0.2, random_state=0)</text>
+            <text class="d-t" x="12" y="54">10,000 rows</text>
+            <rect class="d-box-acc" x="150" y="34" width="400" height="30" rx="3"/>
+            <rect class="d-box" x="550" y="34" width="100" height="30" rx="3"/>
+            <text class="d-s" x="350" y="53" text-anchor="middle">X_train, y_train · 8,000 rows (80%)</text>
+            <text class="d-s" x="600" y="53" text-anchor="middle">X_test · 2,000</text>
+            <line class="d-ln d-dash" x1="150" y1="64" x2="150" y2="104"/>
+            <line class="d-ln d-dash" x1="550" y1="64" x2="550" y2="104"/>
+            <text class="d-al" x="156" y="90">classifier.fit(..., validation_split=0.33)</text>
+            <text class="d-t" x="12" y="124">8,000 train</text>
+            <rect class="d-box-acc" x="150" y="104" width="268" height="30" rx="3"/>
+            <rect class="d-off" x="418" y="104" width="132" height="30" rx="3"/>
+            <text class="d-s" x="284" y="123" text-anchor="middle">fits on 5,360 rows (67%)</text>
+            <text class="d-s" x="484" y="123" text-anchor="middle">validation · 2,640</text>
+            <text class="d-s" x="562" y="116">scored after every</text>
+            <text class="d-s" x="562" y="131">epoch: val_loss,</text>
+            <text class="d-s" x="562" y="146">val_accuracy</text>
+            <line class="d-ln d-dash" x1="150" y1="134" x2="150" y2="168"/>
+            <line class="d-ln d-dash" x1="418" y1="134" x2="418" y2="168"/>
+            <text class="d-t" x="12" y="186">one epoch</text>
+            <rect class="d-box" x="150" y="170" width="17" height="26" rx="2"/>
+            <text class="d-al" x="158.5" y="187" text-anchor="middle">1</text>
+            <rect class="d-box" x="171" y="170" width="17" height="26" rx="2"/>
+            <text class="d-al" x="179.5" y="187" text-anchor="middle">2</text>
+            <rect class="d-box" x="192" y="170" width="17" height="26" rx="2"/>
+            <text class="d-al" x="200.5" y="187" text-anchor="middle">3</text>
+            <rect class="d-box" x="213" y="170" width="17" height="26" rx="2"/>
+            <text class="d-al" x="221.5" y="187" text-anchor="middle">4</text>
+            <rect class="d-box" x="234" y="170" width="17" height="26" rx="2"/>
+            <text class="d-al" x="242.5" y="187" text-anchor="middle">5</text>
+            <rect class="d-box" x="255" y="170" width="17" height="26" rx="2"/>
+            <text class="d-al" x="263.5" y="187" text-anchor="middle">6</text>
+            <rect class="d-box" x="276" y="170" width="17" height="26" rx="2"/>
+            <text class="d-al" x="284.5" y="187" text-anchor="middle">7</text>
+            <rect class="d-box" x="297" y="170" width="17" height="26" rx="2"/>
+            <text class="d-al" x="305.5" y="187" text-anchor="middle">8</text>
+            <text class="d-t" x="322" y="187">…</text>
+            <rect class="d-box" x="383" y="170" width="35" height="26" rx="2"/>
+            <text class="d-al" x="400.5" y="187" text-anchor="middle">536</text>
+            <text class="d-s" x="150" y="216">batch_size=10: 5,360 / 10 = 536 mini-batches, one weight update each.</text>
+            <text class="d-s" x="150" y="231">The progress bar counts these: 536/536 per epoch.</text>
+            </svg>
+        </div>
+        <figcaption><b>Where the 10,000 rows go</b>, drawn to scale. <code>train_test_split</code> sets 2,000 rows aside for the final test. Inside <code>fit</code>, <code>validation_split=0.33</code> holds out 2,640 of the 8,000 training rows for validation. The remaining 5,360 rows are what the network learns from, in 536 mini-batches per epoch.</figcaption>
+      </figure>
+
+      <p>As training runs, the log shows accuracy rising, the training loss falling, and the validation loss falling while the validation accuracy rises. Soon the training accuracy is near 86% and the validation accuracy near 85%. Then the numbers stop moving: 86.49%, 86.32%, 86.42%, 86.14%, hovering in one place without improving.</p>
+      <p>Krish explains the validation split once more <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15256s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:14:16</a>: of the whole training set, about two thirds are used for training and the rest is used to validate the model at every epoch.</p>
+      <p class="note">Not in the video: Keras takes the validation rows from the end of the arrays, before any shuffling. That is fine here because <code>train_test_split</code> has already shuffled the rows. For mini-batches, see Lecture 5 (<a href="lecture-05.html#minibatch">lecture-05.html</a>).</p>
+      <p>Rather than wait for a thousand epochs of the same accuracy, he interrupts the cell after about 44 epochs <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15289s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:14:49</a>, which raises a <code>KeyboardInterrupt</code>, and tries to look at the training history to see where it should have stopped. That fails: <code>fit</code> never returned, so <code>model_history</code> was never assigned and there is nothing to plot. The real question remains: how do we decide the number of epochs?</p>
+      <div class="code-cap">Cell 12 · after the interrupt</div>
+      <pre class="codeblock"><code>model_history.history.keys()
+<span class="cm"># NameError: name 'model_history' is not defined</span></code></pre>
+    </section>
+
+    <!-- ============ EARLY STOPPING ============ -->
+    <section id="early-stopping">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15388s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:16:28</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15421s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:17:01 Keras docs</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15520s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:18:40 callbacks</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15655s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:20:55 stops at epoch 30</a>
+        </div>
+        <h2>Early stopping</h2>
+      </div>
+      <p><dfn>Early stopping</dfn> ends training automatically once the model stops improving. Krish searches for "early stopping keras", copies the example call from the Keras documentation into the notebook, and edits the values. In the documentation's words, the callback will “stop training when a monitored metric has stopped improving”. He sets a small <code>min_delta</code>, a patience and <code>verbose=1</code>, so that Keras prints a message when it stops.</p>
+      <div class="code-cap">Cell 13 · the EarlyStopping callback</div>
+      <pre class="codeblock"><code><span class="cm"># Early stopping (pasted from the Keras documentation, then edited)</span>
+<span class="kw">import</span> tensorflow <span class="kw">as</span> tf
+early_stopping = tf.keras.callbacks.EarlyStopping(
+    monitor='val_loss',
+    min_delta=0.0001,            <span class="cm"># illustrative: the value he types is not audible</span>
+    patience=20,                 <span class="cm"># illustrative</span>
+    verbose=1,
+    mode='auto',
+    baseline=None,
+    restore_best_weights=False,
+)</code></pre>
+      <p>What the arguments mean, following the documentation he opens:</p>
+      <ul>
+        <li><code>monitor</code>: the quantity to watch, here the validation loss.</li>
+        <li><code>min_delta</code>: the smallest change that counts as an improvement.</li>
+        <li><code>patience</code>: how many epochs without improvement to allow before stopping.</li>
+        <li><code>verbose</code>: 1 prints a message when training stops.</li>
+        <li><code>mode</code>: whether the quantity should go down (<code>'min'</code>, for a loss) or up (<code>'max'</code>, for an accuracy). <code>'auto'</code> infers it from the name.</li>
+        <li><code>baseline</code>: an optional value the metric must beat.</li>
+        <li><code>restore_best_weights</code>: whether to go back to the weights of the best epoch at the end. With <code>False</code>, the model keeps the weights from the last epoch it ran.</li>
+      </ul>
+      <p>The callback is passed to <code>fit</code> through the <code>callbacks</code> argument. That tells Keras to monitor the validation loss and stop the training when it no longer improves. When Krish runs it, <code>classifier</code> turns out to be undefined because the kernel had restarted <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15553s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:19:13</a>, so he re-runs every cell from the top: data, encoding, scaling, model, optimizer, compile, callback, and then the new <code>fit</code>.</p>
+      <div class="code-cap">Cell 14 · training with early stopping</div>
+      <pre class="codeblock"><code>model_history = classifier.fit(X_train, y_train, validation_split=0.33,
+                               batch_size=10, epochs=1000,
+                               callbacks=[early_stopping])
+<span class="cm"># ...</span>
+<span class="cm"># Epoch 00030: early stopping</span></code></pre>
+      <p>He expects the accuracy not to go beyond about 87% anyway. Towards the end the validation loss starts to rise, and at epoch 30 Keras prints that it has stopped early, with the validation accuracy around 85%. Out of the thousand epochs requested, 30 were run.</p>
+      <ol class="algo">
+        <li class="algo-title">What EarlyStopping(monitor='val_loss') does after each epoch (Keras's rule, not spelled out in the video)</li>
+        <li>Read the epoch's <code>val_loss</code>.</li>
+        <li>If it is below the best value so far by more than <code>min_delta</code>, it is an improvement: record it as the best, reset the wait counter to 0, and (with <code>restore_best_weights=True</code>) remember the current weights.</li>
+        <li>Otherwise add 1 to the wait counter. If the counter has reached <code>patience</code>, stop training.</li>
+        <li>On stopping, keep the last epoch's weights, or put the remembered best weights back if <code>restore_best_weights=True</code>.</li>
+      </ol>
+      <p>So training stops exactly <code>patience</code> epochs after the last improvement. If the patience had been 20, the stop at epoch 30 would mean the last improvement came at epoch 10. The demo below runs this rule on a synthetic pair of loss curves.</p>
+
+      <figure id="es-fig">
+        <div class="controls">
+          <label for="es-pat">patience</label>
+          <input type="range" id="es-pat" min="1" max="40" step="1" value="20">
+          <output id="es-pat-out" for="es-pat">20 epochs</output>
+        </div>
+        <div class="controls">
+          <label for="es-md">min_delta</label>
+          <select id="es-md">
+            <option value="0">0</option>
+            <option value="0.0001" selected>0.0001</option>
+            <option value="0.001">0.001</option>
+            <option value="0.005">0.005</option>
+            <option value="0.01">0.01</option>
+          </select>
+          <span class="check"><input type="checkbox" id="es-rb"><label for="es-rb">restore_best_weights</label></span>
+        </div>
+        <div class="controls">
+          <button class="btn" id="es-play" type="button">Play training</button>
+          <button class="btn" id="es-new" type="button">New noise</button>
+        </div>
+        <div class="readouts">
+          <div><span class="k">Best epoch</span><span class="v" id="es-best">–</span></div>
+          <div><span class="k">Stopped at epoch</span><span class="v mine" id="es-stop">–</span></div>
+          <div><span class="k">Weights kept from</span><span class="v" id="es-kept">–</span></div>
+          <div><span class="k">Their val_loss</span><span class="v" id="es-loss">–</span></div>
+        </div>
+        <div class="status" id="es-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="es-svg" viewBox="0 0 640 300" role="img" aria-label="Training loss and validation loss against epoch for a synthetic run. The training loss keeps falling. The validation loss falls, bottoms out and slowly rises. A dashed line marks the best epoch, a shaded band the patience window after it, and a solid line the epoch where early stopping ends training. The validation loss the run would have produced afterwards is drawn faintly."></svg></div>
+        <figcaption><b>Early stopping with patience, on a synthetic run.</b> The curves are generated for these notes from a seeded random generator, shaped like a small tabular classifier's: the training loss keeps falling while the validation loss bottoms out and creeps up. The rule is Keras's: after each epoch, an improvement of more than <code>min_delta</code> resets the wait counter, and training stops when the counter reaches <code>patience</code>. A larger patience tolerates more noise but runs longer past the best epoch; a large <code>min_delta</code> ignores small improvements and stops sooner. Play shows the wait counter epoch by epoch.</figcaption>
+      </figure>
+      <p class="note">For the IIT Madras treatment, see Lecture 6 (<a href="lecture-06.html#early-stopping">lecture-06.html</a>). Its version returns the model saved \(p\) steps before the stop, which in Keras corresponds to <code>restore_best_weights=True</code>.</p>
+    </section>
+
+    <!-- ============ HISTORY ============ -->
+    <section id="history">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15691s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:21:31 history keys</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15721s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:22:01 accuracy plot</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15753s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:22:33 loss plot</a>
+        </div>
+        <h2>Plotting the training history</h2>
+      </div>
+      <p>This time <code>fit</code> returned, so <code>model_history</code> exists. It is a <dfn>History</dfn> object whose <code>.history</code> attribute is a dictionary with one list per quantity, one value per epoch: <code>loss</code>, <code>accuracy</code>, <code>val_loss</code> and <code>val_accuracy</code>. Krish pastes in a standard plotting snippet, once for accuracy and once for loss.</p>
+      <div class="code-cap">Cell 15 · history and plots</div>
+      <pre class="codeblock"><code>model_history.history.keys()
+<span class="cm"># dict_keys(['loss', 'accuracy', 'val_loss', 'val_accuracy'])</span>
+
+<span class="cm"># summarize history for accuracy</span>
+plt.plot(model_history.history['accuracy'])
+plt.plot(model_history.history['val_accuracy'])
+plt.title('model accuracy')
+plt.ylabel('accuracy')
+plt.xlabel('epoch')
+plt.legend(['train', 'test'], loc='upper left')
+plt.show()
+
+<span class="cm"># summarize history for loss</span>
+plt.plot(model_history.history['loss'])
+plt.plot(model_history.history['val_loss'])
+plt.title('model loss')
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['train', 'test'], loc='upper left')
+plt.show()</code></pre>
+      <p>In the accuracy plot the validation curve rises together with the training curve, and the gap between them stays very small. Krish's point is that early stopping ends training before that gap has a chance to grow. The loss plot tells the same story: both losses come down, stay close, and training stops there.</p>
+      <p class="note">The curve labelled "test" in the legend is the validation split. The model has still not seen <code>X_test</code>.</p>
+    </section>
+
+    <!-- ============ EVALUATE ============ -->
+    <section id="evaluate">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15785s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:23:05 predict</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15847s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:24:07 confusion matrix</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15883s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:24:43 accuracy</a>
+        </div>
+        <h2>Predictions, confusion matrix and accuracy</h2>
+      </div>
+      <p>Now the test set. <code>classifier.predict(X_test)</code> returns the sigmoid output for each customer, a probability between 0 and 1. Comparing it with 0.5 turns it into a decision: a probability of 0.5 or more becomes <code>True</code> (predicted to exit), anything lower becomes <code>False</code>. Scikit-learn then builds the confusion matrix and the accuracy.</p>
+      <div class="code-cap">Cell 16 · evaluate on the test set</div>
+      <pre class="codeblock"><code><span class="cm"># Making the predictions and evaluating the model</span>
+y_pred = classifier.predict(X_test)     <span class="cm"># probabilities, shape (2000, 1)</span>
+y_pred = (y_pred &gt;= 0.5)                 <span class="cm"># True = predicted to exit</span>
+
+<span class="cm"># Make the confusion matrix</span>
+<span class="kw">from</span> sklearn.metrics <span class="kw">import</span> confusion_matrix
+cm = confusion_matrix(y_test, y_pred)
+cm
+
+<span class="cm"># Calculate the accuracy</span>
+<span class="kw">from</span> sklearn.metrics <span class="kw">import</span> accuracy_score
+score = accuracy_score(y_pred, y_test)
+score                                    <span class="cm"># about 0.85 in the video</span></code></pre>
+      <p>The confusion matrix has the true classes as rows and the predicted classes as columns. The video does not read its four numbers aloud; its layout is:</p>
+      <div class="tbl-wrap">
+        <table class="mini cm-table">
+          <thead><tr><th></th><th>Predicted 0 (stays)</th><th>Predicted 1 (exits)</th></tr></thead>
+          <tbody>
+            <tr><td><b>Actual 0</b> (stayed)</td><td>true negatives (TN)</td><td>false positives (FP)</td></tr>
+            <tr><td><b>Actual 1</b> (exited)</td><td>false negatives (FN)</td><td>true positives (TP)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="eq">
+        \[ \text{accuracy} = \frac{TN + TP}{TN + FP + FN + TP} = \frac{TN + TP}{2000} \]
+      </div>
+      <p>Krish's score is about 85% <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15918s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:25:18</a>, and he says you may get around 86% or 87%.</p>
+      <p class="note">Not in the video: runs differ a little because the initial weights are random. Scikit-learn's signature is <code>accuracy_score(y_true, y_pred)</code>. Swapping the arguments does not change accuracy, but it would swap precision and recall. Also, since roughly four in five customers stay, predicting "stays" for everyone would already score about 80%. The confusion matrix shows how many of the customers who left the model actually catches.</p>
+    </section>
+
+    <!-- ============ EXTRAS ============ -->
+    <section id="extras">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15948s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:25:48 get_weights</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=15980s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:26:20 adding dropout</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16148s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:29:08 the working syntax</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=16209s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>4:30:09 saving</a>
+        </div>
+        <h2>Weights, dropout layers and saving the model</h2>
+      </div>
+      <p>The trained weights can be inspected. <code>classifier.get_weights()</code> returns them as a list of arrays, one weight matrix and one bias vector per layer, and Krish notes that they can be stored, for example as a pickle file, and reused elsewhere. Looking at that many numbers tells you little by itself, he adds; what is impressive is that all of them were trained in parallel.</p>
+      <div class="code-cap">Cell 17 · the learned weights</div>
+      <pre class="codeblock"><code>classifier.get_weights()
+<span class="cm"># a list of 8 NumPy arrays, shapes:</span>
+<span class="cm"># (11, 11), (11,), (11, 7), (7,), (7, 6), (6,), (6, 1), (1,)</span></code></pre>
+      <p>Last, he shows how to add the dropout layers he explained earlier. It takes a few tries on screen, which is instructive in itself. Passing <code>dropout=0.3</code> inside <code>Dense</code> fails with "Keyword argument not understood", and <code>classifier.add(Dropout=0.3)</code> fails too. The documentation shows the fix: <code>Dropout</code> is a layer of its own, created as <code>Dropout(0.2)</code> and added after the layer whose outputs it should drop. He suggests a rate such as 0.2 after one layer and 0.3 after the others, then compiling and fitting again with early stopping, exactly as before. He also warns that library syntax changes over time, so keep checking the documentation.</p>
+      <div class="code-cap">Cell 18 · first attempts (both raise errors)</div>
+      <pre class="codeblock"><code>classifier.add(Dense(units=11, activation='relu', dropout=0.3))
+<span class="cm"># TypeError: ('Keyword argument not understood:', 'dropout')</span>
+
+classifier.add(Dropout=0.3)
+<span class="cm"># TypeError: unexpected keyword argument</span></code></pre>
+      <div class="code-cap">Cell 19 · the network with dropout layers</div>
+      <pre class="codeblock"><code><span class="cm"># Dropout is a layer of its own: add it after the layer whose outputs it drops</span>
+classifier = Sequential()
+classifier.add(Dense(units=11, activation='relu'))
+classifier.add(Dropout(0.2))
+classifier.add(Dense(units=7, activation='relu'))
+classifier.add(Dropout(0.3))
+classifier.add(Dense(units=6, activation='relu'))
+classifier.add(Dropout(0.3))
+classifier.add(Dense(1, activation='sigmoid'))
+
+classifier.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.01),
+                   loss='binary_crossentropy', metrics=['accuracy'])
+model_history = classifier.fit(X_train, y_train, validation_split=0.33,
+                               batch_size=10, epochs=1000,
+                               callbacks=[early_stopping])</code></pre>
+      <p>He closes the practical by noting that the model can be saved, by pickling or in the h5 format, and reused for predictions and scoring.</p>
+      <div class="code-cap">Not in the video · saving and loading</div>
+      <pre class="codeblock"><code>classifier.save('churn_ann.h5')                    <span class="cm"># architecture, weights and optimizer state</span>
+model = tf.keras.models.load_model('churn_ann.h5')</code></pre>
+      <p class="note">Not in the video: newer Keras versions prefer the native <code>.keras</code> file format, used the same way. The next part, <a href="krish-dl-07.html">Part 7</a>, opens with black-box and white-box models and then moves on to CNNs.</p>
+    </section>
+
+    <!-- ============ REVISION ============ -->
+    <section id="terms">
+      <div class="sec-head"><h2>Key terms</h2></div>
+      <dl class="terms">
+        <div><dt>Customer churn</dt><dd>Customers leaving a business. Here the target <code>Exited</code> is 1 if the customer left the bank, which makes a binary classification problem.</dd></div>
+        <div><dt>Independent and dependent features</dt><dd>The inputs <code>X</code> (columns 3 to 12) and the target <code>y</code> (column 13), split with <code>iloc</code>.</dd></div>
+        <div><dt>One-hot encoding</dt><dd>One 0/1 column per category of a text feature; <code>pd.get_dummies</code> in pandas.</dd></div>
+        <div><dt>drop_first=True</dt><dd>Drops the first category's column, so \(k\) categories need \(k - 1\) columns; the dropped category is the row of all zeros.</dd></div>
+        <div><dt>Feature scaling</dt><dd><code>StandardScaler</code>: \(z = (x - \mu)/\sigma\) per column. <code>MinMaxScaler</code>: values into \([0, 1]\). Needed for ANNs, linear and logistic regression and distance-based methods.</dd></div>
+        <div><dt>Data leakage</dt><dd>Information from the test data influencing training. Avoided by fitting the scaler on the training set and only transforming the test set.</dd></div>
+        <div><dt>Sequential model</dt><dd>A Keras model that is a linear stack of layers; <code>fit</code> runs forward propagation, backpropagation and the weight updates.</dd></div>
+        <div><dt>Dense layer</dt><dd>A fully connected layer: \(\mathbf{h} = g(\mathbf{W}^\top\mathbf{x} + \mathbf{b})\), with \(n_{\text{in}} n_{\text{units}} + n_{\text{units}}\) parameters.</dd></div>
+        <div><dt>Dropout layer</dt><dd>During training, zeros each output of the previous layer with probability <code>rate</code>, chosen afresh every step; does nothing at prediction. Reduces overfitting; no parameters.</dd></div>
+        <div><dt>Binary cross-entropy</dt><dd>\(-[y\log\hat{y} + (1-y)\log(1-\hat{y})]\), the loss for a 0/1 target with a sigmoid output.</dd></div>
+        <div><dt>Validation split</dt><dd>The fraction of training rows <code>fit</code> holds out to report <code>val_loss</code> and <code>val_accuracy</code> after each epoch; 0.33 here.</dd></div>
+        <div><dt>Batch size, step, epoch</dt><dd>Rows per weight update; one update; one pass over the training rows. Here 536 steps of 10 rows make an epoch.</dd></div>
+        <div><dt>Early stopping</dt><dd>A callback that stops training once the monitored metric has not improved by more than <code>min_delta</code> for <code>patience</code> epochs.</dd></div>
+        <div><dt>History object</dt><dd>What <code>fit</code> returns; <code>.history</code> holds per-epoch lists of <code>loss</code>, <code>accuracy</code>, <code>val_loss</code> and <code>val_accuracy</code>.</dd></div>
+      </dl>
+    </section>
+
+    <section id="test">
+      <div class="sec-head"><h2>Test yourself</h2></div>
+      <div class="quiz">
+        <details><summary><span class="q">Q1</span><span>Which columns does <code>dataset.iloc[:, 3:13]</code> select, and why does the network end up with 11 inputs?</span><span class="tog"></span></summary>
+          <p>Positions 3 to 12, since a slice excludes its end: CreditScore, Geography, Gender, Age, Tenure, Balance, NumOfProducts, HasCrCard, IsActiveMember and EstimatedSalary, 10 columns. Positions 0 to 2 are a row counter, an ID and a surname, with no information about churn, and 13 is the target. Encoding removes Geography and Gender (8 left) and adds Germany and Spain from Geography and Male from Gender: \(8 + 2 + 1 = 11\).</p></details>
+        <details><summary><span class="q">Q2</span><span>After <code>pd.get_dummies(X['Geography'], drop_first=True)</code>, how are customers from France, Germany and Spain represented? Why is dropping a column safe?</span><span class="tog"></span></summary>
+          <p>Two columns remain, Germany and Spain. France is \((0, 0)\), Germany \((1, 0)\) and Spain \((0, 1)\). Every customer is in exactly one country, so the third column would always equal 1 minus the other two; it carries no extra information. (Not in the video: keeping it creates the dummy variable trap for linear models.)</p></details>
+        <details><summary><span class="q">Q3</span><span>Why <code>sc.fit_transform(X_train)</code> but only <code>sc.transform(X_test)</code>?</span><span class="tog"></span></summary>
+          <p><code>fit</code> computes each column's mean and standard deviation. They must come from the training data alone, and the test set must be scaled with those same values so both sets are on one scale. Fitting on the test data would let information from it leak into the preprocessing (data leakage), and the test score would stop being an honest estimate of performance on new customers.</p></details>
+        <details><summary><span class="q">Q4</span><span>Which of these need feature scaling: an ANN, logistic regression, KNN, a random forest, XGBoost?</span><span class="tog"></span></summary>
+          <p>The ANN and logistic regression do, because they are trained by gradient descent, which converges faster on scaled inputs. KNN does, because it is distance-based. The random forest and XGBoost do not: they are built from trees, which split one feature at a time at a threshold, and rescaling a feature only moves the threshold.</p></details>
+        <details><summary><span class="q">Q5</span><span>Count the trainable parameters of the 11-input network with Dense layers of 11, 7, 6 and 1 units. What changes if the first layer has 20 units, or if Dropout layers are added?</span><span class="tog"></span></summary>
+          <p>\(11 \cdot 11 + 11 = 132\), \(11 \cdot 7 + 7 = 84\), \(7 \cdot 6 + 6 = 48\) and \(6 \cdot 1 + 1 = 7\), so 271. With 20 units first: \(11 \cdot 20 + 20 = 240\), then \(20 \cdot 7 + 7 = 147\), then 48 and 7, so 442. Dropout layers add nothing; they have no weights.</p></details>
+        <details><summary><span class="q">Q6</span><span>With 8,000 training rows and <code>validation_split=0.33</code>, how many steps does an epoch take with <code>batch_size=10</code>? With <code>batch_size=32</code>?</span><span class="tog"></span></summary>
+          <p>The split leaves \(8000 \times 0.67 = 5360\) rows to train on. With batches of 10 that is \(5360 / 10 = 536\) steps, the number in Krish's progress bar. With 32: \(5360 / 32 = 167.5\), so 168 steps, 167 full batches and a last one of 16 rows.</p></details>
+        <details><summary><span class="q">Q7</span><span>Suppose <code>EarlyStopping(monitor='val_loss', patience=20)</code> prints "Epoch 00030: early stopping". When did the validation loss last improve, and which weights does the model hold?</span><span class="tog"></span></summary>
+          <p>Training stops when 20 epochs in a row bring no improvement, so the last improvement was at epoch 10 (epochs 11 to 30 are the 20). With the default <code>restore_best_weights=False</code> the model keeps the epoch-30 weights, whose validation loss is worse than at epoch 10. Setting <code>restore_best_weights=True</code> puts the epoch-10 weights back. (The patience Krish actually used is not audible; this is a what-if.)</p></details>
+        <details><summary><span class="q">Q8</span><span>What does <code>Dropout(0.3)</code> placed after a <code>Dense(10)</code> layer do during training, and during <code>predict</code>?</span><span class="tog"></span></summary>
+          <p>At every training step each of the 10 outputs is set to 0 with probability 0.3, independently, so about 3 are off on average and a different set each time. The dropped units pass nothing on for that step, which keeps the network from relying on any single unit and reduces overfitting. Keras scales the kept outputs by \(1/0.7\) during training, so at prediction the layer passes everything through unchanged. It adds no parameters.</p></details>
+      </div>
+    </section>
+
+    <!-- PAGER:START --><nav class="pager" aria-label="Previous and next part"><a href="krish-dl-02.html"><span class="dir">← Part 2</span><span class="nm">Weights and bias, forward and backward propagation</span></a><a class="next" href="index.html#extra"><span class="dir">Part 7 · coming</span><span class="nm">Black-box models, CNNs and a CNN practical</span></a></nav><!-- PAGER:END -->
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the YouTube auto-generated captions of Krish Naik's video “Deep Learning In-depth Tutorials in 5 Hours”. Timestamp links open the video at that moment. Code is reconstructed from the audio. Charts marked synthetic use data generated for these notes. Not affiliated with Krish Naik or IIT Madras.</div>
+</footer>
+
+<script src="notes.js"></script>
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const mkRand = s0 => { let seed = s0; return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; };
+  const normal = r => { let u = 0; while (u === 0) u = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * r()); };
+  const fmt = n => n.toLocaleString('en-US');
+
+  /* ---------- Parameter counter for a Sequential model ---------- */
+  (() => {
+    const svg = document.getElementById('pc-svg'); if (!svg) return;
+    const keys = ['in', 'h1', 'h2', 'h3', 'out'];
+    const S = {}, O = {};
+    keys.forEach(k => { S[k] = document.getElementById('pc-' + k); O[k] = document.getElementById('pc-' + k + '-out'); });
+    const drop = document.getElementById('pc-drop');
+    const oT = document.getElementById('pc-total'), oW = document.getElementById('pc-w'), oB = document.getElementById('pc-b'), oN = document.getElementById('pc-n');
+    const status = document.getElementById('pc-status'), sumEl = document.getElementById('pc-summary');
+    const X0 = 152, BAR = 300;
+    mk('text', { x: 12, y: 18, class: 'c-title' }, svg).textContent = 'Parameters per Dense layer: weights (inputs × units) + biases (units)';
+    const rows = [0, 1, 2, 3].map(() => {
+      const g = mk('g', {}, svg);
+      return {
+        g,
+        name: mk('text', { x: 12, class: 'c-note' }, g),
+        sub: mk('text', { x: 12, class: 'c-tick' }, g),
+        bw: mk('rect', { x: X0, height: 20, style: 'fill: var(--accent)' }, g),
+        bb: mk('rect', { height: 20, style: 'fill: var(--mark); stroke: var(--ink-2); stroke-width: 1' }, g),
+        val: mk('text', { class: 'c-note' }, g)
+      };
+    });
+    mk('rect', { x: 12, y: 199, width: 12, height: 12, style: 'fill: var(--accent)' }, svg);
+    mk('text', { x: 30, y: 209, class: 'c-tick' }, svg).textContent = 'weights';
+    mk('rect', { x: 100, y: 199, width: 12, height: 12, style: 'fill: var(--mark); stroke: var(--ink-2); stroke-width: 1' }, svg);
+    mk('text', { x: 118, y: 209, class: 'c-tick' }, svg).textContent = 'biases';
+    mk('text', { x: 628, y: 209, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = 'all bars share one scale';
+
+    const draw = () => {
+      const v = {};
+      keys.forEach(k => { v[k] = parseInt(S[k].value, 10); O[k].textContent = (k === 'h2' || k === 'h3') && v[k] === 0 ? 'none' : String(v[k]); });
+      const units = [v.h1, v.h2, v.h3].filter(u => u > 0).concat([v.out]);
+      let prev = v.in;
+      const L = units.map((u, i) => {
+        const r = { name: i ? 'dense_' + i : 'dense', inp: prev, u, w: prev * u, b: u, act: i === units.length - 1 ? (u === 1 ? 'sigmoid' : 'softmax') : 'relu' };
+        prev = u; return r;
+      });
+      const tw = L.reduce((s, r) => s + r.w, 0), tb = L.reduce((s, r) => s + r.b, 0), tot = tw + tb;
+      const mx = Math.max(...L.map(r => r.w + r.b));
+      rows.forEach((row, i) => {
+        const r = L[i];
+        if (!r) { row.g.setAttribute('visibility', 'hidden'); return; }
+        row.g.setAttribute('visibility', 'visible');
+        const y = 32 + i * 40, ww = BAR * r.w / mx, wb = Math.max(BAR * r.b / mx, 2);
+        row.name.setAttribute('y', y + 9); row.name.textContent = r.name + ' · Dense(' + r.u + ')';
+        row.sub.setAttribute('y', y + 23); row.sub.textContent = r.act + ', ' + r.inp + ' inputs';
+        row.bw.setAttribute('y', y); row.bw.setAttribute('width', ww.toFixed(1));
+        row.bb.setAttribute('x', (X0 + ww).toFixed(1)); row.bb.setAttribute('y', y); row.bb.setAttribute('width', wb.toFixed(1));
+        row.val.setAttribute('x', (X0 + ww + wb + 8).toFixed(1)); row.val.setAttribute('y', y + 14);
+        row.val.textContent = r.inp + ' × ' + r.u + ' + ' + r.u + ' = ' + fmt(r.w + r.b);
+      });
+      oT.textContent = fmt(tot); oW.textContent = fmt(tw); oB.textContent = fmt(tb); oN.textContent = String(L.length);
+
+      const lines = ['Model: "sequential"', '_'.repeat(65), ' ' + 'Layer (type)'.padEnd(28) + 'Output Shape'.padEnd(26) + 'Param #', '='.repeat(65)];
+      let di = 0;
+      L.forEach((r, i) => {
+        lines.push(' ' + (r.name + ' (Dense)').padEnd(28) + ('(None, ' + r.u + ')').padEnd(26) + String(r.w + r.b));
+        if (drop.checked && i < L.length - 1) { lines.push(' ' + ((di ? 'dropout_' + di : 'dropout') + ' (Dropout)').padEnd(28) + ('(None, ' + r.u + ')').padEnd(26) + '0'); di++; }
+      });
+      lines.push('='.repeat(65), 'Total params: ' + fmt(tot), 'Trainable params: ' + fmt(tot), 'Non-trainable params: 0', '_'.repeat(65));
+      sumEl.textContent = lines.join('\n');
+
+      const big = L.reduce((a, r) => (r.w + r.b > a.w + a.b ? r : a), L[0]);
+      const isVideo = v.in === 11 && units.join(',') === '11,7,6,1';
+      let s = isVideo
+        ? 'This is the network from the video: 11 inputs → 11 → 7 → 6 → 1, with ' + fmt(tot) + ' trainable parameters.'
+        : L.length + ' Dense layer' + (L.length === 1 ? '' : 's') + ' on ' + v.in + ' input' + (v.in === 1 ? '' : 's') + ': ' + fmt(tot) + ' trainable parameters.';
+      s += ' The largest layer is ' + big.name + ': ' + big.inp + ' × ' + big.u + ' weights + ' + big.u + ' biases = ' + fmt(big.w + big.b) + ' (' + Math.round(100 * (big.w + big.b) / tot) + '% of the total).';
+      if (drop.checked) s += ' The Dropout layers appear in the summary with 0 parameters.';
+      if (v.out > 1) s += ' With ' + v.out + ' output units the last layer would use softmax and a categorical cross-entropy loss.';
+      status.textContent = s;
+    };
+    keys.forEach(k => S[k].addEventListener('input', draw));
+    drop.addEventListener('change', draw);
+    document.getElementById('pc-reset').addEventListener('click', () => { S.in.value = 11; S.h1.value = 11; S.h2.value = 7; S.h3.value = 6; S.out.value = 1; drop.checked = false; draw(); });
+    draw();
+  })();
+
+  /* ---------- Early stopping with patience on a synthetic run ---------- */
+  (() => {
+    const svg = document.getElementById('es-svg'); if (!svg) return;
+    const pS = document.getElementById('es-pat'), pO = document.getElementById('es-pat-out');
+    const mdS = document.getElementById('es-md'), rb = document.getElementById('es-rb');
+    const bPlay = document.getElementById('es-play'), bNew = document.getElementById('es-new');
+    const oBest = document.getElementById('es-best'), oStop = document.getElementById('es-stop'), oKept = document.getElementById('es-kept'), oLoss = document.getElementById('es-loss');
+    const status = document.getElementById('es-status');
+    const N = 1000, SHOW = 150, L = 54, R = 626, T = 22, B = 256, Y0 = 0.28, Y1 = 0.50;
+    const sx = e => L + (e / SHOW) * (R - L);
+    const sy = v => B - (Math.min(Math.max(v, Y0), Y1) - Y0) / (Y1 - Y0) * (B - T);
+    const setX = (el, x) => { el.setAttribute('x1', x.toFixed(1)); el.setAttribute('x2', x.toFixed(1)); };
+
+    const win = mk('rect', { y: T, height: B - T, style: 'fill: var(--accent-soft); fill-opacity: .85' }, svg);
+    const grid = mk('g', { class: 'c-grid' }, svg);
+    [0.30, 0.35, 0.40, 0.45, 0.50].forEach(v => {
+      mk('line', { x1: L, x2: R, y1: sy(v), y2: sy(v) }, grid);
+      mk('text', { x: L - 6, y: sy(v) + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = v.toFixed(2);
+    });
+    for (let e = 0; e <= SHOW; e += 25) mk('text', { x: sx(e), y: B + 16, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = String(e);
+    mk('line', { x1: L, x2: R, y1: B, y2: B, class: 'c-axis' }, svg);
+    mk('line', { x1: L, x2: L, y1: T, y2: B, class: 'c-axis' }, svg);
+    mk('text', { x: L, y: 12, class: 'c-title' }, svg).textContent = 'loss (binary cross-entropy), synthetic run';
+    mk('text', { x: R, y: B + 34, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = 'epoch (fit was given epochs=1000; the first 150 are drawn)';
+    const ghost = mk('polyline', { style: 'fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 4 4' }, svg);
+    const trL = mk('polyline', { style: 'fill: none; stroke: var(--ink-2); stroke-width: 1.6' }, svg);
+    const vaL = mk('polyline', { style: 'fill: none; stroke: var(--accent); stroke-width: 2.2' }, svg);
+    const bestLn = mk('line', { y1: T, y2: B, style: 'stroke: var(--ok); stroke-width: 1.6; stroke-dasharray: 5 4' }, svg);
+    const stopLn = mk('line', { y1: T, y2: B, style: 'stroke: var(--ink); stroke-width: 1.8' }, svg);
+    const bestDot = mk('circle', { r: 5, class: 'c-centroid' }, svg);
+    const stopT = mk('text', { y: T + 13, class: 'c-note' }, svg);
+    const bestT = mk('text', { class: 'c-note' }, svg);
+    const winT = mk('text', { y: B - 50, 'text-anchor': 'middle', class: 'c-lbl' }, svg);
+    const lg = (y, style, label) => { mk('line', { x1: R - 200, x2: R - 176, y1: y, y2: y, style }, svg); mk('text', { x: R - 170, y: y + 4, class: 'c-tick' }, svg).textContent = label; };
+    lg(58, 'stroke: var(--ink-2); stroke-width: 1.6', 'training loss');
+    lg(74, 'stroke: var(--accent); stroke-width: 2.2', 'val_loss, epochs run');
+    lg(90, 'stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 4 4', 'val_loss had it gone on');
+
+    let seed = 7, tr = [], va = [], timer = null;
+    const gen = () => {
+      const r = mkRand(seed); tr = []; va = [];
+      for (let t = 1; t <= N; t++) {
+        tr.push(0.300 + 0.17 * Math.exp(-t / 6) - 0.0001 * Math.min(t, 300) + 0.002 * normal(r));
+        va.push(0.338 + 0.15 * Math.exp(-t / 5) + 0.00022 * t + 0.005 * normal(r));
+      }
+    };
+    /* Keras rule: wait += 1; an improvement (val + min_delta < best) resets wait; stop once wait >= patience. */
+    const sim = () => {
+      const p = parseInt(pS.value, 10), md = parseFloat(mdS.value);
+      let best = Infinity, bi = 0, wait = 0, stop = -1;
+      const st = [];
+      for (let i = 0; i < N; i++) {
+        wait++;
+        if (va[i] + md < best) { best = va[i]; bi = i; wait = 0; } else if (wait >= p && i > 0) stop = i;
+        st.push({ bi, wait });
+        if (stop >= 0) break;
+      }
+      return { st, p, stop: stop >= 0 ? stop : N - 1, early: stop >= 0 };
+    };
+    const pts = (arr, a, b) => { const o = []; for (let i = a; i <= b && i < SHOW; i++) o.push(sx(i + 1).toFixed(1) + ',' + sy(arr[i]).toFixed(1)); return o.join(' '); };
+
+    const render = (res, cur, final) => {
+      const p = res.p, s = res.st[cur], bi = s.bi;
+      pO.textContent = p + (p === 1 ? ' epoch' : ' epochs');
+      trL.setAttribute('points', pts(tr, 0, cur)); vaL.setAttribute('points', pts(va, 0, cur));
+      ghost.setAttribute('points', final && cur < SHOW - 1 ? pts(va, cur, SHOW - 1) : '');
+      const xb = sx(Math.min(bi, SHOW - 1) + 1), xc = sx(Math.min(cur, SHOW - 1) + 1);
+      setX(bestLn, xb); bestDot.setAttribute('cx', xb.toFixed(1)); bestDot.setAttribute('cy', sy(va[bi]).toFixed(1));
+      win.setAttribute('x', xb.toFixed(1)); win.setAttribute('width', Math.max(0, xc - xb).toFixed(1));
+      const showStop = final && res.early && res.stop < SHOW;
+      stopLn.setAttribute('visibility', showStop ? 'visible' : 'hidden'); setX(stopLn, xc);
+      stopT.setAttribute('visibility', showStop ? 'visible' : 'hidden');
+      stopT.setAttribute('x', (xc + 5).toFixed(1)); stopT.textContent = 'stop ' + (res.stop + 1);
+      bestT.textContent = 'best ' + (bi + 1);
+      const wBest = 6.4 * bestT.textContent.length;
+      if (xb - 5 - wBest > L + 4) { bestT.setAttribute('x', (xb - 5).toFixed(1)); bestT.setAttribute('text-anchor', 'end'); bestT.setAttribute('y', T + 13); }
+      else { bestT.setAttribute('x', (xb + 5).toFixed(1)); bestT.setAttribute('text-anchor', 'start'); bestT.setAttribute('y', T + 29); }
+      const ww = xc - xb;
+      winT.setAttribute('x', ((xb + xc) / 2).toFixed(1)); winT.textContent = 'patience';
+      winT.setAttribute('visibility', final && ww > 60 ? 'visible' : 'hidden');
+
+      oBest.textContent = String(bi + 1);
+      if (!final) {
+        oStop.textContent = '…'; oKept.textContent = '…'; oLoss.textContent = '…';
+        status.textContent = 'Epoch ' + (cur + 1) + ': val_loss ' + va[cur].toFixed(4) + '. Best so far ' + va[bi].toFixed(4) + ' at epoch ' + (bi + 1) + '; epochs without an improvement: ' + s.wait + ' of ' + p + '.';
+        return;
+      }
+      const Bn = bi + 1, Sn = res.stop + 1, kept = rb.checked && res.early ? bi : res.stop;
+      oStop.textContent = res.early ? String(Sn) : 'none';
+      oKept.textContent = 'epoch ' + (kept + 1); oLoss.textContent = va[kept].toFixed(4);
+      if (!res.early) { status.textContent = 'No ' + p + ' epochs in a row without an improvement, so all 1000 epochs run.'; return; }
+      let msg = 'val_loss last improved by more than min_delta at epoch ' + Bn + ' (' + va[bi].toFixed(4) + '). Epochs ' + (Bn + 1) + ' to ' + Sn + ' did not, so after ' + p + ' such epoch' + (p === 1 ? '' : 's') + ' training stopped at epoch ' + Sn + ' of 1000 ("Epoch ' + String(Sn).padStart(5, '0') + ': early stopping").';
+      if (res.stop >= SHOW) msg += ' That is beyond the 150 epochs drawn.';
+      msg += rb.checked ? ' restore_best_weights=True puts the epoch-' + Bn + ' weights back.' : ' The model keeps the epoch-' + Sn + ' weights; restore_best_weights=True would restore epoch ' + Bn + '.';
+      status.textContent = msg;
+    };
+    const stopTimer = () => { if (timer) { clearInterval(timer); timer = null; } bPlay.textContent = 'Play training'; };
+    const full = () => { stopTimer(); const res = sim(); render(res, res.stop, true); };
+    bPlay.addEventListener('click', () => {
+      if (timer) { full(); return; }
+      const res = sim();
+      if (reduce) { render(res, res.stop, true); return; }
+      let cur = 0;
+      bPlay.textContent = 'Skip to the end';
+      render(res, 0, false);
+      timer = setInterval(() => {
+        cur++;
+        if (cur >= res.stop) { stopTimer(); render(res, res.stop, true); return; }
+        render(res, cur, false);
+      }, 60);
+    });
+    pS.addEventListener('input', full);
+    mdS.addEventListener('change', full);
+    rb.addEventListener('change', full);
+    bNew.addEventListener('click', () => { seed++; gen(); full(); });
+    gen(); full();
+  })();
+})();
+</script>
+</body>
+</html>
