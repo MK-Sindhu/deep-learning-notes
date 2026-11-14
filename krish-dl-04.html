@@ -1,0 +1,1202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DL in 5 hours · Part 4 · Activation and loss functions · DL Notes</title>
+<meta name="description" content="Notes on Krish Naik's Deep Learning In-depth Tutorials in 5 Hours, Part 4: activation functions (sigmoid, tanh, ReLU, leaky ReLU, ELU, PReLU, Swish, softmax) with their derivatives, pros and cons, and the loss functions MSE, MAE, Huber, binary and categorical cross-entropy, with when to use each.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%235B3CC4%22/%3E%3Ccircle cx=%229%22 cy=%2210%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%229%22 cy=%2222%22 r=%223%22 fill=%22white%22/%3E%3Ccircle cx=%2223%22 cy=%2216%22 r=%223%22 fill=%22white%22/%3E%3Cpath d=%22M11.5 11 L20.5 15 M11.5 21 L20.5 17%22 stroke=%22white%22 stroke-width=%222%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="notes.css">
+<script src="theme.js"></script>
+<style>
+.btn.tog { padding: 8px 12px; font-family: var(--font-mono); font-weight: 500; }
+.btn.tog[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.controls select { font: 500 14px/1.3 var(--font-head); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 7px 10px; }
+.cmp { min-width: 700px; }
+.cmp td, .cmp th { font-size: 14px; }
+.cmp td:first-child { font-family: var(--font-head); font-weight: 600; white-space: nowrap; }
+</style>
+<script>
+window.MathJax = { tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js"></script>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner gutter">
+    <!-- PARTNAV:START --><nav class="partnav" aria-label="Parts"><a href="index.html#extra">All notes</a><span class="sep">/</span><span>DL in 5 hours · Part 4 of 7</span><span class="sep">·</span><a href="krish-dl-02.html">← Part 2</a><span class="sep">·</span><a href="krish-dl-06.html">Part 6 →</a></nav><!-- PARTNAV:END -->
+    <div class="eyebrow">Krish Naik · Deep Learning In-depth Tutorials in 5 Hours</div>
+    <h1>Activation functions and loss functions</h1>
+    <p class="lede">Krish compares the activation functions a neuron can use, from sigmoid and tanh to ReLU and its variants, by their formulas, derivatives, strengths and weaknesses, and gives a rule for which one goes where. He then covers the loss functions for regression (MSE, MAE, Huber) and for classification (binary and categorical cross-entropy with a softmax output), and pairs each kind of problem with an output activation and a loss.</p>
+    <div class="meta">
+      <span><b>Part 4 of 7</b></span>
+      <span>Teacher <b>Krish Naik</b></span>
+      <span>About <b>50 min</b> of video</span>
+      <span><b>2</b> chapters</span>
+    </div>
+    <div class="watch">
+      <a class="btn solid" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6298s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:44:58 · Activation functions</a>
+      <a class="btn" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7459s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:04:19 · Loss functions</a>
+    </div>
+  </div>
+</header>
+
+<div class="page gutter">
+  <nav class="toc" aria-label="Contents">
+    <div>
+      <h4>Activation functions</h4>
+      <ul>
+        <li><a href="#sigmoid">Sigmoid</a></li>
+        <li><a href="#tanh">tanh</a></li>
+        <li><a href="#relu">ReLU and dead neurons</a></li>
+        <li><a href="#leaky-relu">Leaky ReLU</a></li>
+        <li><a href="#elu">ELU</a></li>
+        <li><a href="#prelu-swish">PReLU and Swish</a></li>
+        <li><a href="#act-compare">Side by side</a></li>
+        <li><a href="#which-activation">Which one to use</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Loss functions</h4>
+      <ul>
+        <li><a href="#why-loss">Regression and classification</a></li>
+        <li><a href="#loss-vs-cost">Loss vs cost</a></li>
+        <li><a href="#mse">Mean squared error</a></li>
+        <li><a href="#mae">Mean absolute error</a></li>
+        <li><a href="#huber">Huber loss</a></li>
+        <li><a href="#bce">Binary cross-entropy</a></li>
+        <li><a href="#cce">Categorical cross-entropy</a></li>
+        <li><a href="#softmax">Softmax</a></li>
+        <li><a href="#summary">Putting it together</a></li>
+      </ul>
+    </div>
+    <div>
+      <h4>Revision</h4>
+      <ul>
+        <li><a href="#terms">Key terms</a></li>
+        <li><a href="#test">Test yourself</a></li>
+        <li><a href="index.html#extra">All notes</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <div class="glance" id="glance">
+      <h2>At a glance</h2>
+      <ul>
+        <li>An activation function shapes each neuron's output, and its derivative enters every chain-rule product in backpropagation. <b>Sigmoid</b> gives outputs in \((0, 1)\) but its derivative is at most 0.25, so gradients vanish in deep networks; it is also not zero-centred and needs an exponential. <b>tanh</b> is zero-centred with a derivative of up to 1, but it still saturates.</li>
+        <li><b>ReLU</b> \(= \max(0, x)\) is cheap and has derivative 1 for positive inputs, which makes it the default for hidden layers. For negative inputs its output and derivative are both 0, which can leave a <dfn>dead neuron</dfn> that never updates. <b>Leaky ReLU</b> (\(0.01x\)), <b>PReLU</b> (a learned slope) and <b>ELU</b> (\(\alpha(e^x - 1)\)) keep a non-zero gradient there. <b>Swish</b> is a smooth, self-gated alternative.</li>
+        <li>Krish's rule: ReLU in the hidden layers (PReLU or ELU if training does not converge). In the output layer use sigmoid for binary classification, softmax for multi-class classification and a linear unit for regression.</li>
+        <li>A <dfn>loss function</dfn> measures the error on one record and a <dfn>cost function</dfn> the error on a batch. For regression, <b>MSE</b> is smooth with a single minimum but outliers dominate it; <b>MAE</b> is robust to outliers but needs a sub-gradient at 0; <b>Huber</b> is squared for errors up to \(\delta\) and linear beyond.</li>
+        <li>For classification, <b>binary cross-entropy</b> (log loss) works on a sigmoid output. <b>Categorical cross-entropy</b> works on one-hot labels and a <b>softmax</b> output, which turns the output scores into probabilities that sum to 1.</li>
+      </ul>
+    </div>
+
+    <!-- ============ CHAPTER 1: ACTIVATION FUNCTIONS ============ -->
+    <section id="sigmoid">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6304s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:45:04</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6370s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:46:10 advantages</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6400s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:46:40 zero-centred</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6496s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:48:16 exponential cost</a>
+        </div>
+        <h2>Sigmoid: smooth, but its gradient vanishes</h2>
+      </div>
+      <p>An activation function decides what a neuron passes on once it has formed the weighted sum of its inputs. Krish teaches this chapter from a written summary, which he says he will share, that shows each function on the left and its derivative on the right. The derivative matters because backpropagation multiplies one such derivative per layer in the chain rule, as Part 3 showed (<a href="krish-dl-03.html">krish-dl-03.html</a>).</p>
+      <div class="eq">\[ \sigma(x) = \frac{1}{1 + e^{-x}}, \qquad 0 \lt \sigma(x) \lt 1, \qquad 0 \lt \sigma'(x) \le 0.25 \]</div>
+      <p>The sigmoid's output lies between 0 and 1, and its derivative between 0 and 0.25. That small derivative is the reason the vanishing gradient problem exists.</p>
+
+      <h3>Advantages</h3>
+      <ul>
+        <li><b>Smooth gradient.</b> The curve has no jumps, which prevents jumps in the output values. Krish adds that the smooth gradient helps training converge.</li>
+        <li><b>Normalized output.</b> Every neuron's output lies between 0 and 1.</li>
+        <li><b>Clear predictions.</b> Large inputs give outputs very close to 1 or 0.</li>
+      </ul>
+
+      <h3>Disadvantages</h3>
+      <ol>
+        <li><b>Gradient vanishing</b> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6465s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:47:45</a>. Once the input moves away from the origin, the gradient becomes very small, almost 0. Backpropagation computes each weight's gradient with the chain rule, and every sigmoid on the way contributes one of these small factors, so the product for the early weights becomes tiny. For scale (computed for these notes): \(\sigma'(0) = 0.25\), \(\sigma'(2) \approx 0.105\) and \(\sigma'(4) \approx 0.018\).</li>
+        <li><b>Not zero-centred.</b> Krish explains the term with a sketch. A zero-centred curve passes through the origin and produces both negative and positive values. The sigmoid passes through \((0, 0.5)\) and its outputs are always positive, so it is not zero-centred. He says weight updates are more efficient with a zero-centred function, and that this property reduces the efficiency of the sigmoid's weight updates.</li>
+        <li><b>Slow to compute.</b> Each evaluation needs the exponential \(e^{-x}\), which is a slow operation for a computer.</li>
+      </ol>
+      <p class="note">Not in the video: why zero-centring matters. The next layer receives only positive inputs, so all the gradients of the weights feeding one neuron share a sign. They can all increase or all decrease together, and gradient descent has to zigzag toward an optimum that needs some weights up and others down. For the IIT Madras treatment, see Lecture 7 (<a href="lecture-07.html#sigmoid">lecture-07.html</a>).</p>
+      <p>A network whose gradients vanish cannot be made deep, so researchers kept looking for better functions <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6565s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:49:25</a>. The rest of the chapter follows that search.</p>
+    </section>
+
+    <section id="tanh">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6598s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:49:58</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6631s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:50:31 derivative</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6696s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:51:36 compared with sigmoid</a>
+        </div>
+        <h2>tanh: zero-centred, still saturating</h2>
+      </div>
+      <p>The second function researchers proposed is the hyperbolic tangent.</p>
+      <div class="eq">\[ \tanh(x) = \frac{e^{x} - e^{-x}}{e^{x} + e^{-x}}, \qquad -1 \lt \tanh(x) \lt 1, \qquad 0 \lt \tanh'(x) \le 1 \]</div>
+      <p>Its output ranges from \(-1\) to \(+1\), and its derivative from 0 to 1. That is better than the sigmoid's 0 to 0.25. It still does not fully prevent the vanishing gradient problem. In a very deep network the gradient can still vanish at some point, so Krish advises against tanh in the hidden layers as well. tanh does fix the centring problem. The curve passes through the origin and gives negative and positive outputs.</p>
+      <p>The summary he reads compares the two curves, which look alike. For inputs far from 0 the output flattens and the gradient is small, which hampers the weight update. (The captions say "conducive" here, but a small gradient slows updates, so "not conducive" must be meant.) The difference is the output interval, \((-1, 1)\), and the curve is zero-centred, which makes tanh better than sigmoid. The summary also gives an older convention for binary classification: tanh in the hidden layers and sigmoid in the output layer. Krish's own rule, below, replaces tanh with ReLU.</p>
+      <p class="note">Not in the video: \(\tanh'(x) = 1 - \tanh^2(x)\), and \(\tanh(x) = 2\sigma(2x) - 1\), a sigmoid stretched to \((-1, 1)\). That is why tanh keeps the sigmoid's flat ends. For the IIT Madras treatment, see Lecture 7 (<a href="lecture-07.html#tanh">lecture-07.html</a>).</p>
+    </section>
+
+    <section id="relu">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6731s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:52:11</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6795s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:53:15 dead neurons</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6860s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:54:20 advantages</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6924s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:55:24 sub-gradient</a>
+        </div>
+        <h2>ReLU: fast and non-saturating, but neurons can die</h2>
+      </div>
+      <p>The next function is the most popular one today. Krish jokes that people use it even when they know nothing about why. It is the <dfn>rectified linear unit</dfn>.</p>
+      <div class="eq">\[ \operatorname{ReLU}(x) = \max(0, x), \qquad \operatorname{ReLU}'(x) = \begin{cases} 0 & x \lt 0 \\ 1 & x \gt 0 \end{cases} \]</div>
+      <p>A negative input becomes 0 and a positive input passes through unchanged: 1 gives 1, 2 gives 2, 3 gives 3. The derivative is either 0 or 1.</p>
+
+      <h3>The dead neuron problem</h3>
+      <p>The derivative of 0 is a concern. Suppose a neuron in hidden layer 1 has ReLU derivative 0 during backpropagation. The chain-rule product for every weight feeding that neuron contains this 0, so the whole gradient is 0 and</p>
+      <div class="eq">\[ w_{\text{new}} = w_{\text{old}} - \eta \cdot 0 = w_{\text{old}} . \]</div>
+      <p>In the forward pass the neuron outputs 0, and in the backward pass it passes no gradient. Its weights stop changing and the neuron is <dfn>dead</dfn>. This is ReLU's main disadvantage.</p>
+
+      <figure id="fig-dead-relu">
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 300" role="img" aria-label="Top row: a ReLU neuron with inputs x1 and x2 has a negative pre-activation z, so its output h is 0. The gradient dL/dh comes back from the loss, but the ReLU derivative is 0, so dL/dw1 is 0 and w1 does not change: the neuron is dead. Bottom row: the same neuron with leaky ReLU outputs 0.01 z and has derivative 0.01, so w1 still gets a small update.">
+            <defs>
+              <marker id="kdl04-f1-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker>
+              <marker id="kdl04-f1-aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah-acc" d="M0,0 L10,5 L0,10 z"/></marker>
+            </defs>
+            <text class="d-h" x="20" y="24">ReLU, with z &lt; 0</text>
+            <line class="d-ln" x1="74.7" y1="68.9" x2="162.5" y2="86.5" marker-end="url(#kdl04-f1-ah)"/>
+            <line class="d-ln" x1="74.7" y1="115.1" x2="162.5" y2="97.5" marker-end="url(#kdl04-f1-ah)"/>
+            <circle class="node" cx="60" cy="66" r="15"/><text class="d-t" x="60" y="71" text-anchor="middle">x₁</text>
+            <circle class="node" cx="60" cy="118" r="15"/><text class="d-t" x="60" y="123" text-anchor="middle">x₂</text>
+            <text class="d-s" x="118" y="70" text-anchor="middle">w₁</text>
+            <text class="d-s" x="118" y="124" text-anchor="middle">w₂</text>
+            <circle class="node-acc" cx="190" cy="92" r="28"/><text class="d-t" x="190" y="97" text-anchor="middle">ReLU</text>
+            <text class="d-s" x="190" y="140" text-anchor="middle">z = w₁x₁ + w₂x₂ + b &lt; 0</text>
+            <line class="d-ln" x1="218" y1="88" x2="288" y2="88" marker-end="url(#kdl04-f1-ah)"/>
+            <text class="d-s" x="253" y="80" text-anchor="middle">h = 0</text>
+            <rect class="d-box" x="290" y="72" width="112" height="38" rx="6"/>
+            <text class="d-s" x="346" y="95" text-anchor="middle">… → ŷ → loss L</text>
+            <line class="d-ln-acc d-dash" x1="290" y1="102" x2="222" y2="102" marker-end="url(#kdl04-f1-aha)"/>
+            <text class="d-s" x="256" y="120" text-anchor="middle" style="fill: var(--accent)">∂L/∂h</text>
+            <text class="d-t" x="430" y="50">Backward pass</text>
+            <text class="d-s" x="430" y="72">∂L/∂w₁ = ∂L/∂h · f′(z) · x₁</text>
+            <text class="d-s" x="430" y="90">f′(z) = 0, because z &lt; 0</text>
+            <text class="d-s" x="430" y="108">new w₁ = old w₁ − η · 0 = old w₁</text>
+            <text class="d-s" x="430" y="130" style="fill: var(--accent)">no update: the neuron is dead</text>
+
+            <line class="d-rule" x1="20" y1="152" x2="640" y2="152"/>
+
+            <text class="d-h" x="20" y="168">Leaky ReLU, same z</text>
+            <line class="d-ln" x1="74.7" y1="212.9" x2="162.5" y2="230.5" marker-end="url(#kdl04-f1-ah)"/>
+            <line class="d-ln" x1="74.7" y1="259.1" x2="162.5" y2="241.5" marker-end="url(#kdl04-f1-ah)"/>
+            <circle class="node" cx="60" cy="210" r="15"/><text class="d-t" x="60" y="215" text-anchor="middle">x₁</text>
+            <circle class="node" cx="60" cy="262" r="15"/><text class="d-t" x="60" y="267" text-anchor="middle">x₂</text>
+            <text class="d-s" x="118" y="214" text-anchor="middle">w₁</text>
+            <text class="d-s" x="118" y="268" text-anchor="middle">w₂</text>
+            <circle class="node-acc" cx="190" cy="236" r="28"/><text class="d-t" x="190" y="241" text-anchor="middle">leaky</text>
+            <text class="d-s" x="190" y="284" text-anchor="middle">z = w₁x₁ + w₂x₂ + b &lt; 0</text>
+            <line class="d-ln" x1="218" y1="232" x2="288" y2="232" marker-end="url(#kdl04-f1-ah)"/>
+            <text class="d-s" x="253" y="224" text-anchor="middle">h = 0.01z</text>
+            <rect class="d-box" x="290" y="216" width="112" height="38" rx="6"/>
+            <text class="d-s" x="346" y="239" text-anchor="middle">… → ŷ → loss L</text>
+            <line class="d-ln-acc d-dash" x1="290" y1="246" x2="222" y2="246" marker-end="url(#kdl04-f1-aha)"/>
+            <text class="d-s" x="256" y="264" text-anchor="middle" style="fill: var(--accent)">∂L/∂h</text>
+            <text class="d-t" x="430" y="194">Backward pass</text>
+            <text class="d-s" x="430" y="216">∂L/∂w₁ = ∂L/∂h · f′(z) · x₁</text>
+            <text class="d-s" x="430" y="234">f′(z) = 0.01, because z &lt; 0</text>
+            <text class="d-s" x="430" y="252">w₁ moves by −η · 0.01 · ∂L/∂h · x₁</text>
+            <text class="d-s" x="430" y="274" style="fill: var(--accent)">a small update: the neuron can recover</text>
+          </svg>
+        </div>
+        <figcaption><b>Why a ReLU neuron dies and a leaky ReLU neuron does not.</b> When the pre-activation \(z\) is negative, ReLU outputs 0 and its derivative is 0, so the chain-rule product for every incoming weight is 0 and gradient descent leaves the weights where they are. Leaky ReLU's derivative of 0.01 lets a small gradient through.</figcaption>
+      </figure>
+      <p class="note">Not in the video: one negative input only skips one update. A neuron is dead for good when its pre-activation is negative for every training example, for instance after a large update pushes its bias far below 0. Then no example can revive it.</p>
+
+      <h3>Why ReLU still wins</h3>
+      <ul>
+        <li><b>Speed.</b> There is no exponential, only a comparison with 0, so ReLU is much quicker to compute than sigmoid and tanh.</li>
+        <li><b>No vanishing from the activation.</b> The derivative is exactly 1 for every positive input, so ReLU does not shrink the gradient there. Krish says this solves the vanishing gradient problem and the other problems of sigmoid and tanh.</li>
+        <li><b>The remaining drawback</b> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6892s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:54:52</a>. ReLU is not zero-centred. The curve passes through 0 but never gives negative values.</li>
+      </ul>
+      <p>The summary he reads adds a few points. ReLU is not differentiable everywhere: at \(x = 0\) there is a corner, and a <dfn>sub-gradient</dfn> is used instead of a derivative. When the input is positive there is no gradient saturation. ReLU is linear on each side, in the forward and the backward pass alike, so it is much faster than sigmoid and tanh. Its disadvantages are that it is completely inactive for negative inputs, so a neuron that only receives negative inputs dies, and that it is not zero-centred.</p>
+      <p class="note">Not in the video: TensorFlow and PyTorch use 0 as ReLU's derivative at exactly \(x = 0\). For the IIT Madras treatment, see Lecture 7 (<a href="lecture-07.html#relu">lecture-07.html</a>).</p>
+    </section>
+
+    <section id="leaky-relu">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6957s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:55:57</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7023s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:57:03 a parameter instead</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7056s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:57:36 in practice</a>
+        </div>
+        <h2>Leaky ReLU: a small slope for negative inputs</h2>
+      </div>
+      <p>To solve the dead neuron problem, leaky ReLU changes one thing. For a negative input it outputs \(0.01x\) instead of 0.</p>
+      <div class="eq">\[ \operatorname{LeakyReLU}(x) = \max(0.01x,\ x) = \begin{cases} x & x \gt 0 \\ 0.01x & x \le 0 \end{cases}, \qquad \operatorname{LeakyReLU}'(x) = \begin{cases} 1 & x \gt 0 \\ 0.01 & x \lt 0 \end{cases} \]</div>
+      <p>The curve now dips slightly below 0 on the left, so the function has some negative outputs. More importantly, the derivative is never 0: it is 0.01 for negative inputs and 1 for positive ones. A neuron whose input is negative still gets a small update, which solves the dead neuron problem.</p>
+      <p>The summary then describes the step that leads to PReLU. Setting the left half to \(0.01x\) is one choice, and another intuitive idea is a parameter-based method that uses some other slope there. In theory leaky ReLU has all of ReLU's advantages and no dead neurons. In practice, the summary says, it has not been fully proved that leaky ReLU is always better than ReLU. People still use it as an option.</p>
+      <p>Krish promises to say which function to use by default for each kind of problem once all of them are covered. That rule is in <a href="#which-activation">Which one to use</a>.</p>
+    </section>
+
+    <section id="elu">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7088s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:58:08</a>
+        </div>
+        <h2>ELU: an exponential curve for negative inputs</h2>
+      </div>
+      <p>The <dfn>exponential linear unit</dfn> keeps the identity for positive inputs and bends smoothly for negative ones.</p>
+      <div class="eq">\[ \operatorname{ELU}(x) = \begin{cases} x & x \gt 0 \\ \alpha\,(e^{x} - 1) & x \le 0 \end{cases}, \qquad \operatorname{ELU}'(x) = \begin{cases} 1 & x \gt 0 \\ \alpha\, e^{x} & x \le 0 \end{cases} \]</div>
+      <p>For negative inputs the curve flattens toward \(-\alpha\). The derivative also has an exponential part, and its values lie between 0 and 1. The summary lists three properties:</p>
+      <ul>
+        <li>no dead ReLU problem, since the derivative is never 0;</li>
+        <li>outputs can be negative, so the mean output is close to zero and the function is close to zero-centred;</li>
+        <li>one small problem: it is slightly more expensive to compute, because of the exponential.</li>
+      </ul>
+      <p>Krish calls these variants small changes to ReLU that people do use.</p>
+      <p class="note">Not in the video: the usual choice is \(\alpha = 1\), Keras's default. With \(\alpha = 1\) both pieces have slope 1 at \(x = 0\), so ELU has no corner there and its derivative lies in \((0, 1]\).</p>
+    </section>
+
+    <section id="prelu-swish">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7118s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:58:38</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7151s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:59:11 Swish</a>
+        </div>
+        <h2>PReLU and Swish</h2>
+      </div>
+      <p>Softmax is the next function in the summary, but Krish postpones it to the loss functions (see <a href="#softmax">Softmax</a>) and turns to the <dfn>parametric ReLU</dfn>, PReLU. From the diagram alone, he says, you can see what it does. Writing \(y_i\) for the input of unit \(i\):</p>
+      <div class="eq">\[ f(y_i) = \begin{cases} y_i & y_i \gt 0 \\ a_i\, y_i & y_i \le 0 \end{cases} \]</div>
+      <ul>
+        <li>If \(a_i = 0\), \(f\) is ReLU.</li>
+        <li>If \(a_i\) is a small fixed positive value, such as 0.01, \(f\) is leaky ReLU.</li>
+        <li>If \(a_i\) is a learnable parameter, \(f\) is PReLU. The slope keeps changing during training, and that is the only difference.</li>
+      </ul>
+      <p class="note">Not in the video: \(a_i\) is learned by gradient descent along with the weights. The index \(i\) means each unit (or channel) can learn its own slope.</p>
+      <p>The last function he shows is <dfn>Swish</dfn>, a self-gated function that he believes came from Google, and he shows its curve. Then he closes the list: any of these functions can be used, and what matters is a technique for choosing.</p>
+      <p class="note">Not in the video: \(\operatorname{Swish}(x) = x\,\sigma(\beta x)\), proposed by Google Brain researchers in 2017; with \(\beta = 1\) it is also called SiLU. "Self-gated" means the input gates itself through \(\sigma(x)\). The curve is smooth, dips slightly below 0 for negative inputs (minimum about \(-0.28\) near \(x = -1.28\)) and grows like \(x\) for large positive inputs. Its derivative is \(\sigma(x) + x\,\sigma(x)(1 - \sigma(x))\). The captions here also mention a derivative that cannot be found at zero. That is true of ReLU's corner; Swish is differentiable everywhere. For the IIT Madras treatment, see Lecture 7 (<a href="lecture-07.html#relu-variants">lecture-07.html</a>).</p>
+    </section>
+
+    <section id="act-compare">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=6304s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:45:04 function and derivative</a>
+        </div>
+        <h2>All the activations side by side</h2>
+      </div>
+      <p>Krish's summary shows every function next to its derivative. The table collects the formulas and ranges, and the explorer below draws them. Krish gives the ranges; the derivative formulas are standard and not in the video.</p>
+      <div class="tbl-wrap">
+        <table class="mini cmp">
+          <thead><tr><th>Function</th><th>\(f(x)\)</th><th>Output range</th><th>\(f'(x)\)</th><th>Range of \(f'\)</th></tr></thead>
+          <tbody>
+            <tr><td>Sigmoid</td><td>\(\dfrac{1}{1 + e^{-x}}\)</td><td>\((0, 1)\)</td><td>\(\sigma(x)(1 - \sigma(x))\)</td><td>\((0, 0.25]\)</td></tr>
+            <tr><td>tanh</td><td>\(\dfrac{e^x - e^{-x}}{e^x + e^{-x}}\)</td><td>\((-1, 1)\)</td><td>\(1 - \tanh^2 x\)</td><td>\((0, 1]\)</td></tr>
+            <tr><td>ReLU</td><td>\(\max(0, x)\)</td><td>\([0, \infty)\)</td><td>0 if \(x \lt 0\), 1 if \(x \gt 0\)</td><td>\(\{0, 1\}\)</td></tr>
+            <tr><td>Leaky ReLU</td><td>\(\max(0.01x, x)\)</td><td>\((-\infty, \infty)\)</td><td>0.01 if \(x \lt 0\), 1 if \(x \gt 0\)</td><td>\(\{0.01, 1\}\)</td></tr>
+            <tr><td>ELU</td><td>\(x\) or \(\alpha(e^x - 1)\)</td><td>\((-\alpha, \infty)\)</td><td>1 or \(\alpha e^x\)</td><td>\((0, 1]\) for \(\alpha = 1\)</td></tr>
+            <tr><td>PReLU</td><td>\(x\) or \(a x\), \(a\) learned</td><td>\((-\infty, \infty)\) if \(a \gt 0\)</td><td>1 or \(a\)</td><td>\(\{a, 1\}\)</td></tr>
+            <tr><td>Swish</td><td>\(x\,\sigma(x)\)</td><td>about \([-0.28, \infty)\)</td><td>\(\sigma(x) + x\sigma(x)(1 - \sigma(x))\)</td><td>about \((-0.10, 1.10)\)</td></tr>
+            <tr><td>Softmax</td><td>\(\dfrac{e^{z_i}}{\sum_j e^{z_j}}\)</td><td>each in \((0, 1)\), sum 1</td><td>\(\dfrac{\partial p_i}{\partial z_j} = p_i(\delta_{ij} - p_j)\)</td><td>entries in \([-0.25, 0.25]\)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure id="act-fig">
+        <div class="controls" role="group" aria-label="Function to read out">
+          <span>Function</span>
+          <button class="btn tog" type="button" data-fn="sigmoid" aria-pressed="true">sigmoid</button>
+          <button class="btn tog" type="button" data-fn="tanh" aria-pressed="false">tanh</button>
+          <button class="btn tog" type="button" data-fn="relu" aria-pressed="false">ReLU</button>
+          <button class="btn tog" type="button" data-fn="leaky" aria-pressed="false">leaky ReLU</button>
+          <button class="btn tog" type="button" data-fn="elu" aria-pressed="false">ELU</button>
+          <button class="btn tog" type="button" data-fn="prelu" aria-pressed="false">PReLU</button>
+          <button class="btn tog" type="button" data-fn="swish" aria-pressed="false">Swish</button>
+        </div>
+        <div class="controls">
+          <label for="act-cmp">Compare with</label>
+          <select id="act-cmp">
+            <option value="none">nothing</option>
+            <option value="sigmoid">sigmoid</option>
+            <option value="tanh" selected>tanh</option>
+            <option value="relu">ReLU</option>
+            <option value="leaky">leaky ReLU</option>
+            <option value="elu">ELU</option>
+            <option value="prelu">PReLU</option>
+            <option value="swish">Swish</option>
+          </select>
+          <span class="check"><input type="checkbox" id="act-deriv" checked><label for="act-deriv">Show derivatives</label></span>
+        </div>
+        <div class="controls">
+          <label for="act-x">Input \(x\)</label>
+          <input type="range" id="act-x" min="-5" max="5" step="0.1" value="-2.5">
+          <output id="act-x-out" for="act-x">−2.5</output>
+        </div>
+        <div class="controls">
+          <label for="act-a">PReLU slope \(a\)</label>
+          <input type="range" id="act-a" min="0" max="0.5" step="0.01" value="0.25">
+          <output id="act-a-out" for="act-a">0.25</output>
+        </div>
+        <div class="readouts">
+          <div><span class="k">f(x)</span><span class="v mine" id="act-f">–</span></div>
+          <div><span class="k">f′(x)</span><span class="v" id="act-d">–</span></div>
+          <div><span class="k">f′(x)¹⁰, ten layers</span><span class="v" id="act-d10">–</span></div>
+          <div><span class="k">Output range</span><span class="v" id="act-range">–</span></div>
+        </div>
+        <div class="status" id="act-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="act-svg" viewBox="0 0 640 360" role="img" aria-label="The chosen activation function (solid, accent colour) and its derivative (dashed) for x from minus 5 to 5, with an optional second function in grey for comparison. A vertical line marks the input x, with dots at the function and derivative values there."></svg></div>
+        <figcaption><b>Activation explorer.</b> Pick a function to read out, and a second one to compare it with. Solid curves are \(f(x)\), dashed curves \(f'(x)\); the dotted line at 0.25 is the sigmoid's largest derivative. The readout \(f'(x)^{10}\) is the activations' share of the chain-rule product if ten layers all sat at this input, with the weights left out: for sigmoid it is below \(10^{-6}\) even at \(x = 0\), for ReLU it is 1 for any positive input. Leaky ReLU's slope of 0.01 is too small to see on the curve, but the readout shows it. ELU uses \(\alpha = 1\).</figcaption>
+      </figure>
+    </section>
+
+    <section id="which-activation">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7181s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>1:59:41</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7248s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:00:48 binary</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7312s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:01:52 multi-class</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7410s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:03:30 regression</a>
+        </div>
+        <h2>Which activation to use where</h2>
+      </div>
+      <p>Krish's technique starts from what to avoid. Sigmoid in the hidden layers gives vanishing gradients, and so does tanh. The rest depends on the problem.</p>
+      <ul>
+        <li><b>Binary classification</b> <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7213s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:00:13</a>. Use ReLU in every hidden layer, since it is the most efficient activation, and sigmoid in the output layer. If training does not converge with ReLU, change the hidden layers to PReLU or ELU <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7280s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:01:20</a>. The output of a binary classifier should always be a sigmoid.</li>
+        <li><b>Multi-class classification.</b> Use softmax in the output layer (the loss functions chapter explains it). The hidden layers again use ReLU by default, or PReLU and other variants if training does not converge. ReLU solves most of the problems. At one point <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7377s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:02:57</a> he also names sigmoid as an option for the multi-class output.</li>
+        <li><b>Regression</b>, where the output is a continuous value. The hidden layers use ReLU or one of its variants, and the output layer uses a <dfn>linear activation</dfn>, \(f(x) = x\), so the output can take any value. Regression also has its own loss functions, which come next.</li>
+      </ul>
+      <p class="note">Not in the video: separate sigmoid outputs suit multi-label problems, where one example can belong to several classes at once. When each example has exactly one of \(C\) classes, softmax is the standard output.</p>
+      <p class="rule-of-thumb">Hidden layers: ReLU, or PReLU or ELU if training does not converge. Output layer: sigmoid for binary classification, softmax for multi-class classification, linear for regression.</p>
+
+      <div class="tbl-wrap">
+        <table class="mini cmp">
+          <thead><tr><th>Function</th><th>Advantages</th><th>Disadvantages</th><th>Where Krish uses it</th></tr></thead>
+          <tbody>
+            <tr><td>Sigmoid</td><td>smooth gradient; output in \((0, 1)\); clear predictions near 0 or 1</td><td>vanishing gradient (\(f' \le 0.25\)); not zero-centred; slow exponential</td><td>output layer, binary classification</td></tr>
+            <tr><td>tanh</td><td>zero-centred; \(f'\) up to 1</td><td>still vanishes in very deep networks; exponential</td><td>avoid in hidden layers (the summary's older convention uses it there)</td></tr>
+            <tr><td>ReLU</td><td>no exponential, fast; derivative 1 for \(x \gt 0\), no saturation</td><td>dead neurons for \(x \lt 0\); not zero-centred; corner at 0 (sub-gradient)</td><td>default for every hidden layer</td></tr>
+            <tr><td>Leaky ReLU</td><td>derivative 0.01 for \(x \lt 0\), no dead neurons</td><td>not proved to beat ReLU in practice</td><td>hidden layers, alternative to ReLU</td></tr>
+            <tr><td>ELU</td><td>no dead neurons; mean output near 0</td><td>slightly more expensive (exponential)</td><td>hidden layers, if ReLU does not converge</td></tr>
+            <tr><td>PReLU</td><td>the negative slope is learned</td><td>not discussed</td><td>hidden layers, if ReLU does not converge</td></tr>
+            <tr><td>Swish</td><td>smooth curve</td><td>not discussed</td><td>mentioned as an option</td></tr>
+            <tr><td>Softmax</td><td>outputs are probabilities summing to 1</td><td>not discussed</td><td>output layer, multi-class classification</td></tr>
+            <tr><td>Linear</td><td>output can be any real value</td><td>not discussed</td><td>output layer, regression</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>For the IIT Madras comparison of activation functions, see Lecture 7 (<a href="lecture-07.html#which-activation">lecture-07.html</a>).</p>
+    </section>
+
+    <!-- ============ CHAPTER 2: LOSS FUNCTIONS ============ -->
+    <section id="why-loss">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7459s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:04:19</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7538s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:05:38 regression data</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7569s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:06:09 classification data</a>
+        </div>
+        <h2>Loss functions for regression and classification</h2>
+      </div>
+      <p>Loss appears right after forward propagation: the network computes \(\hat y\), the loss measures how far it is from \(y\), and backpropagation tries to reduce it. Different problems need different loss functions. An artificial neural network solves two kinds of problem, regression and classification.</p>
+      <ul>
+        <li><b>Regression.</b> A data set with years of experience and degree as features and salary as the output. Someone with 10 years of experience and a PhD will have a high salary. The output is a continuous value.</li>
+        <li><b>Classification.</b> A data set with play hours and study hours as features and pass or fail as the output. Krish's illustrative rows are below. Two outcomes make it binary classification; more categories make it multi-class.</li>
+      </ul>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th class="num">Play hours</th><th class="num">Study hours</th><th>Likely result</th></tr></thead>
+          <tbody>
+            <tr><td class="num">10</td><td class="num">2</td><td>fail</td></tr>
+            <tr><td class="num">4</td><td class="num">3</td><td>fail</td></tr>
+            <tr><td class="num">5</td><td class="num">5</td><td>may pass</td></tr>
+            <tr><td class="num">2</td><td class="num">7</td><td>pass</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The plan for the chapter <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7634s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:07:14</a>: three losses for a continuous output (mean squared error, mean absolute error and Huber loss), then cross-entropy for classification.</p>
+    </section>
+
+    <section id="loss-vs-cost">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7700s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:08:20</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7733s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:08:53 batches</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7800s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:10:00 the difference</a>
+        </div>
+        <h2>Loss function vs cost function</h2>
+      </div>
+      <p>Take a data set of 100 records. One way to train is to pass one record at a time: the forward pass computes \(\hat y\), the loss \((y - \hat y)^2\) is computed, and backpropagation updates the weights. This happens for every record, which is not efficient.</p>
+      <p>Instead, set a batch size, say 10. Each forward pass then takes 10 records, and the loss is computed for all 10 together. That combined quantity is called the <dfn>cost function</dfn>. With \(n\) the batch size, Krish writes</p>
+      <div class="result">
+        <span class="lbl">Loss and cost for squared error, as Krish writes them</span>
+        \[ \text{loss (one record): } L = \tfrac{1}{2}\,(y - \hat y)^2, \qquad \text{cost (a batch of } n\text{): } J = \tfrac{1}{2} \sum_{i=1}^{n} (y_i - \hat y_i)^2 \]
+        <p>The loss function uses one data point; the cost function uses a batch of data points.</p>
+      </div>
+      <p class="note">He describes each batch as being passed in every epoch. The usual terms are an <b>iteration</b> (or step) for one forward and backward pass over a batch, and an <b>epoch</b> for one pass over all the records: here, 10 iterations of 10 records. Not in the video: Keras averages the per-record losses over the batch, dividing by \(n\) instead of using \(\tfrac{1}{2}\), so the cost does not grow with the batch size.</p>
+    </section>
+
+    <section id="mse">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7832s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:10:32</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7896s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:11:36 quadratic</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=7959s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:12:39 advantages</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8058s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:14:18 outliers</a>
+        </div>
+        <h2>Mean squared error</h2>
+      </div>
+      <p>The first regression loss is the <dfn>mean squared error</dfn> (MSE).</p>
+      <div class="eq">\[ L = \tfrac{1}{2}\,(y - \hat y)^2, \qquad J = \tfrac{1}{2} \sum_{i=1}^{n} (y_i - \hat y_i)^2 \]</div>
+      <p>Krish calls this formula a quadratic equation. Like \((a - b)^2 = a^2 - 2ab + b^2\), it has the general form \(ax^2 + bx + c\), and plotting it gives a parabola: the bowl-shaped curve that gradient descent moves down, with one lowest point.</p>
+      <h3>Advantages</h3>
+      <ol>
+        <li><b>Differentiable.</b> The curve is smooth, so its derivative exists everywhere, and the weight update formula uses that derivative.</li>
+        <li><b>One minimum.</b> The curve has only one minimum, which is both local and global.</li>
+        <li><b>Fast convergence.</b> It converges faster.</li>
+      </ol>
+      <p class="note">Not in the video: the single minimum is a property of the loss as a function of \(\hat y\), and of linear regression's cost as a function of its weights. A deep network's cost as a function of its weights is not a parabola and can have many minima. The \(\tfrac{1}{2}\) is there for convenience: \(\partial L / \partial \hat y = -(y - \hat y)\), with no factor 2.</p>
+      <h3>Disadvantage: not robust to outliers</h3>
+      <p>MSE has one disadvantage, and Krish calls it a big one. Picture a linear regression problem. Without outliers, the best-fit line follows the points. Add a few outliers and the new best-fit line shifts strongly toward them <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8090s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:14:50</a>. The reason is the square. Each error is squared, so large errors are penalized far more than small ones: an error of 10 adds 100 to the sum while an error of 1 adds 1. A few outliers then dominate the cost, and the line moves to reduce their errors.</p>
+
+      <figure id="fig-outliers">
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 290" role="img" aria-label="Two scatter plots of the same eleven points that rise along a line. Left, without outliers: the MSE and MAE fits almost coincide, with slopes 0.77 and 0.80. Right, with two outliers added high up at the right: the MSE fit tilts up to slope 1.17 while the MAE fit stays close to the data at slope 0.86. The dashed line is the MSE fit without the outliers.">
+            <text class="d-t" x="50" y="24">Without outliers</text>
+            <text class="d-t" x="380" y="24">With two outliers</text>
+            <rect class="d-plot" x="50" y="40" width="260" height="200"/>
+            <line class="d-rule" x1="50" y1="173.3" x2="310" y2="173.3"/>
+            <line class="d-rule" x1="50" y1="106.7" x2="310" y2="106.7"/>
+            <line class="d-rule" x1="168.2" y1="40" x2="168.2" y2="240"/>
+            <line class="d-rule" x1="286.4" y1="40" x2="286.4" y2="240"/>
+            <text class="d-al" x="50.0" y="254" text-anchor="middle">0</text>
+            <text class="d-al" x="168.2" y="254" text-anchor="middle">5</text>
+            <text class="d-al" x="286.4" y="254" text-anchor="middle">10</text>
+            <text class="d-al" x="310" y="254" text-anchor="end">x</text>
+            <text class="d-al" x="44" y="244.0" text-anchor="end">0</text>
+            <text class="d-al" x="44" y="177.3" text-anchor="end">6</text>
+            <text class="d-al" x="44" y="110.7" text-anchor="end">12</text>
+            <text class="d-al" x="44" y="44.0" text-anchor="end">18</text>
+            <line class="d-ln" x1="50.0" y1="215.5" x2="310.0" y2="121.6" style="stroke-width:2"/>
+            <line class="d-ln-acc" x1="50.0" y1="219.0" x2="310.0" y2="121.2" style="stroke-width:2"/>
+            <circle class="pt-plain" cx="68.9" cy="211.9" r="3.5"/>
+            <circle class="pt-plain" cx="90.2" cy="193.4" r="3.5"/>
+            <circle class="pt-plain" cx="111.5" cy="205.1" r="3.5"/>
+            <circle class="pt-plain" cx="132.7" cy="173.0" r="3.5"/>
+            <circle class="pt-plain" cx="154.0" cy="180.8" r="3.5"/>
+            <circle class="pt-plain" cx="175.3" cy="173.7" r="3.5"/>
+            <circle class="pt-plain" cx="196.5" cy="159.2" r="3.5"/>
+            <circle class="pt-plain" cx="217.8" cy="155.0" r="3.5"/>
+            <circle class="pt-plain" cx="239.1" cy="154.7" r="3.5"/>
+            <circle class="pt-plain" cx="260.4" cy="134.3" r="3.5"/>
+            <circle class="pt-plain" cx="281.6" cy="131.9" r="3.5"/>
+            <rect class="d-plot" x="380" y="40" width="260" height="200"/>
+            <line class="d-rule" x1="380" y1="173.3" x2="640" y2="173.3"/>
+            <line class="d-rule" x1="380" y1="106.7" x2="640" y2="106.7"/>
+            <line class="d-rule" x1="498.2" y1="40" x2="498.2" y2="240"/>
+            <line class="d-rule" x1="616.4" y1="40" x2="616.4" y2="240"/>
+            <text class="d-al" x="380.0" y="254" text-anchor="middle">0</text>
+            <text class="d-al" x="498.2" y="254" text-anchor="middle">5</text>
+            <text class="d-al" x="616.4" y="254" text-anchor="middle">10</text>
+            <text class="d-al" x="640" y="254" text-anchor="end">x</text>
+            <text class="d-al" x="374" y="244.0" text-anchor="end">0</text>
+            <text class="d-al" x="374" y="177.3" text-anchor="end">6</text>
+            <text class="d-al" x="374" y="110.7" text-anchor="end">12</text>
+            <text class="d-al" x="374" y="44.0" text-anchor="end">18</text>
+            <line class="d-ln d-dash" x1="380.0" y1="215.5" x2="640.0" y2="121.6" style="stroke: var(--muted)"/>
+            <line class="d-ln" x1="380.0" y1="229.9" x2="640.0" y2="86.9" style="stroke-width:2"/>
+            <line class="d-ln-acc" x1="380.0" y1="219.5" x2="640.0" y2="114.2" style="stroke-width:2"/>
+            <circle class="pt-plain" cx="398.9" cy="211.9" r="3.5"/>
+            <circle class="pt-plain" cx="420.2" cy="193.4" r="3.5"/>
+            <circle class="pt-plain" cx="441.5" cy="205.1" r="3.5"/>
+            <circle class="pt-plain" cx="462.7" cy="173.0" r="3.5"/>
+            <circle class="pt-plain" cx="484.0" cy="180.8" r="3.5"/>
+            <circle class="pt-plain" cx="505.3" cy="173.7" r="3.5"/>
+            <circle class="pt-plain" cx="526.5" cy="159.2" r="3.5"/>
+            <circle class="pt-plain" cx="547.8" cy="155.0" r="3.5"/>
+            <circle class="pt-plain" cx="569.1" cy="154.7" r="3.5"/>
+            <circle class="pt-plain" cx="590.4" cy="134.3" r="3.5"/>
+            <circle class="pt-plain" cx="611.6" cy="131.9" r="3.5"/>
+            <circle class="pt-new" cx="583.3" cy="67.8" r="5"/>
+            <circle class="pt-new" cx="611.6" cy="51.1" r="5"/>
+            <text class="d-s" x="58" y="58">MSE fit: slope 0.77</text>
+            <text class="d-s" x="58" y="74" style="fill: var(--accent)">MAE fit: slope 0.80</text>
+            <text class="d-s" x="388" y="58">MSE fit: slope 1.17, pulled up</text>
+            <text class="d-s" x="388" y="74" style="fill: var(--accent)">MAE fit: slope 0.86</text>
+            <text class="d-s" x="597" y="92" text-anchor="middle">outliers</text>
+            <line class="d-ln" x1="50" y1="276" x2="74" y2="276" style="stroke-width:2"/><text class="d-s" x="80" y="280">MSE fit (least squares)</text>
+            <line class="d-ln-acc" x1="230" y1="276" x2="254" y2="276" style="stroke-width:2"/><text class="d-s" x="260" y="280">MAE fit</text>
+            <line class="d-ln d-dash" x1="330" y1="276" x2="354" y2="276" style="stroke: var(--muted)"/><text class="d-s" x="360" y="280">MSE fit without the outliers</text>
+            <circle class="pt-new" cx="552" cy="276" r="5"/><text class="d-s" x="562" y="280">outlier</text>
+          </svg>
+        </div>
+        <figcaption><b>Squared errors let outliers drag the line</b> (synthetic data). Eleven points from a seeded generator around \(y = 2 + 0.8x\), fitted by minimizing MSE and by minimizing MAE. Two outliers barely move the MAE line, but the MSE line tilts toward them, because their squared errors outweigh the rest of the points.</figcaption>
+      </figure>
+      <p>For the IIT Madras treatment of squared-error loss in a network, see Lecture 4 (<a href="lecture-04.html#regression">lecture-04.html</a>).</p>
+    </section>
+
+    <section id="mae">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8189s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:16:29</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8226s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:17:06 robust</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8258s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:17:38 sub-gradient</a>
+        </div>
+        <h2>Mean absolute error</h2>
+      </div>
+      <p>Researchers answered MSE's weakness with the <dfn>mean absolute error</dfn> (MAE), which takes the absolute value of the error instead of squaring it.</p>
+      <div class="eq">\[ L = \lvert y - \hat y \rvert, \qquad J = \sum_{i=1}^{n} \lvert y_i - \hat y_i \rvert \]</div>
+      <p class="note">Krish writes a \(\tfrac{1}{2}\) in front of both, carried over from MSE. The usual MAE has no such factor, and a constant factor does not move the minimum. Keras's version also divides by \(n\).</p>
+      <p>Because the error is not squared, a large error is not penalized out of proportion. That is MAE's major advantage: it is <b>robust to outliers</b>. With a few outliers the best-fit line still shifts, but only a little, as the MAE line in the figure above shows.</p>
+      <p>Plotted against the error, MAE is a V shape with a corner at 0, where it has no derivative. For the weight update Krish says we must take a <dfn>sub-gradient</dfn>: split the curve into its pieces and use the slope of each piece (\(-1\) on the left, \(+1\) on the right). He calls this a small task that still takes time, so MAE is more time-consuming to optimize than MSE.</p>
+      <p class="note">Not in the video: at the corner any slope between \(-1\) and \(1\) is a valid sub-gradient, and frameworks use 0. MAE's slope stays \(\pm 1\) however small the error is, so its steps do not shrink near the minimum the way MSE's do.</p>
+    </section>
+
+    <section id="huber">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8321s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:18:41</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8353s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:19:13 the threshold δ</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8386s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:19:46 large errors</a>
+        </div>
+        <h2>Huber loss: squared for small errors, linear for large ones</h2>
+      </div>
+      <p>The third regression loss, <dfn>Huber loss</dfn>, combines MSE and MAE.</p>
+      <div class="result">
+        <span class="lbl">Huber loss with threshold δ</span>
+        \[ L_\delta(y, \hat y) = \begin{cases} \tfrac{1}{2}\,(y - \hat y)^2 & \text{if } \lvert y - \hat y \rvert \le \delta \\ \delta\,\lvert y - \hat y \rvert - \tfrac{1}{2}\,\delta^2 & \text{otherwise} \end{cases} \]
+      </div>
+      <p>\(\delta\) is a hyperparameter, and it decides whether a point counts as an outlier. When the error is at most \(\delta\), there is no outlier and the squared branch is used, as in MSE. When the error is larger, the point is treated as an outlier and the linear branch is used, as in MAE. A good \(\delta\) is found while coding, by trying values.</p>
+      <p class="note">Correction: the spoken second branch is garbled in the captions. The standard form is the one above, \(\delta\,(\lvert y - \hat y \rvert - \tfrac{1}{2}\delta)\). Not in the video: with it the two branches meet at \(\lvert y - \hat y \rvert = \delta\) with the same value \(\tfrac{1}{2}\delta^2\) and the same slope \(\delta\), so Huber loss is differentiable everywhere. In Keras it is <code>tf.keras.losses.Huber(delta=1.0)</code>.</p>
+
+      <figure id="loss-fig">
+        <div class="controls">
+          <label for="loss-e">Error \(e = y - \hat y\)</label>
+          <input type="range" id="loss-e" min="-6" max="6" step="0.1" value="3">
+          <output id="loss-e-out" for="loss-e">3.0</output>
+          <button class="btn" id="loss-grow" type="button">Grow the error</button>
+        </div>
+        <div class="controls">
+          <label for="loss-d">Huber threshold \(\delta\)</label>
+          <input type="range" id="loss-d" min="0.5" max="3" step="0.1" value="1">
+          <output id="loss-d-out" for="loss-d">1.0</output>
+        </div>
+        <div class="readouts">
+          <div><span class="k">MSE ½e²</span><span class="v" id="loss-mse">–</span></div>
+          <div><span class="k">MAE |e|</span><span class="v" id="loss-mae">–</span></div>
+          <div><span class="k">Huber</span><span class="v mine" id="loss-hub">–</span></div>
+          <div><span class="k">Slopes MSE · MAE · Huber</span><span class="v" id="loss-slopes">–</span></div>
+        </div>
+        <div class="status" id="loss-status" aria-live="polite"></div>
+        <div class="chart-wrap"><svg id="loss-svg" viewBox="0 0 640 320" role="img" aria-label="Left: MSE, MAE and Huber loss plotted against the error from minus 6 to 6, with dashed lines at plus and minus delta and markers at the chosen error. Right: the slope of each loss against the error. MSE's slope grows in a straight line, MAE's is minus 1 or plus 1, and Huber's follows MSE between minus delta and delta and stays at plus or minus delta beyond."></svg></div>
+        <figcaption><b>Loss explorer: MSE, MAE and Huber as the error grows.</b> Left, the loss of one point; right, its slope \(dL/de\), which sets how hard that point pulls the fit during gradient descent. MSE's pull grows with the error, so a far outlier pulls hardest. MAE pulls with the same strength, 1, whatever the error. Huber matches MSE inside \(\pm\delta\) (its slope line lies on MSE's there) and caps the pull at \(\delta\) outside. "Grow the error" sweeps \(e\) from 0 to 6.</figcaption>
+      </figure>
+      <p>With MSE, MAE and Huber, the regression losses are complete. The next losses are for classification <a class="ts" style="margin-left:4px" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8416s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:20:16</a>.</p>
+    </section>
+
+    <section id="bce">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8449s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:20:49</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8514s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:21:54 log loss</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8580s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:23:00 two cases</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8612s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:23:32 ŷ from sigmoid</a>
+        </div>
+        <h2>Binary cross-entropy</h2>
+      </div>
+      <p>Classification uses <dfn>cross-entropy</dfn>, in two types: <b>binary cross-entropy</b> for binary classification and <b>categorical cross-entropy</b> for multi-class classification. As before, the cost over a batch is the sum of the per-record losses over \(i = 1, \dots, n\).</p>
+      <p>Krish asks whether viewers have learned logistic regression, because its loss, the log loss, is exactly binary cross-entropy. Logistic regression is a binary classifier too.</p>
+      <div class="result">
+        <span class="lbl">Binary cross-entropy (log loss)</span>
+        \[ L = -\,y \log \hat y \;-\; (1 - y) \log (1 - \hat y) \qquad\Longleftrightarrow\qquad L = \begin{cases} -\log (1 - \hat y) & \text{if } y = 0 \\ -\log \hat y & \text{if } y = 1 \end{cases} \]
+      </div>
+      <p>The two forms agree. When \(y = 0\), the first term is 0 and \(1 - y = 1\), which leaves \(-\log(1 - \hat y)\). When \(y = 1\), the second term is 0, which leaves \(-\log \hat y\).</p>
+      <p>How is \(\hat y\) computed? With a sigmoid activation in the last layer. The network applies the sigmoid to get \(\hat y\), applies the log loss to it, and then backpropagates.</p>
+
+      <figure id="fig-bce">
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 280" role="img" aria-label="The binary cross-entropy loss plotted against the predicted probability from 0 to 1. For y equal to 1 the curve minus log y-hat falls from very large values near 0 to 0 at 1. For y equal to 0 the curve minus log of 1 minus y-hat rises from 0 at 0 to very large values near 1. Marked: y-hat 0.9 with y 1 costs 0.11, and y-hat 0.1 with y 1 costs 2.30.">
+            <rect class="d-plot" x="60" y="30" width="360" height="210"/>
+            <line class="d-rule" x1="60" y1="198" x2="420" y2="198"/><line class="d-rule" x1="60" y1="156" x2="420" y2="156"/><line class="d-rule" x1="60" y1="114" x2="420" y2="114"/><line class="d-rule" x1="60" y1="72" x2="420" y2="72"/>
+            <line class="d-rule" x1="150" y1="30" x2="150" y2="240"/><line class="d-rule" x1="240" y1="30" x2="240" y2="240"/><line class="d-rule" x1="330" y1="30" x2="330" y2="240"/>
+            <text class="d-al" x="60" y="254" text-anchor="middle">0</text><text class="d-al" x="150" y="254" text-anchor="middle">0.25</text><text class="d-al" x="240" y="254" text-anchor="middle">0.5</text><text class="d-al" x="330" y="254" text-anchor="middle">0.75</text><text class="d-al" x="420" y="254" text-anchor="middle">1</text>
+            <text class="d-al" x="54" y="244" text-anchor="end">0</text><text class="d-al" x="54" y="202" text-anchor="end">1</text><text class="d-al" x="54" y="160" text-anchor="end">2</text><text class="d-al" x="54" y="118" text-anchor="end">3</text><text class="d-al" x="54" y="76" text-anchor="end">4</text><text class="d-al" x="54" y="34" text-anchor="end">5</text>
+            <text class="d-s" x="240" y="272" text-anchor="middle">predicted probability ŷ</text>
+            <text class="d-s" x="60" y="20">loss</text>
+            <polyline points="62.4,30.0 62.9,37.5 63.5,45.1 64.2,52.6 65.0,60.1 65.9,67.6 67.1,75.1 68.5,82.7 70.2,90.2 72.2,97.7 74.6,105.3 77.4,112.8 80.8,120.3 84.9,127.8 89.8,135.4 95.6,142.9 102.6,150.4 111.0,157.9 121.0,165.4 133.0,173.0 147.3,180.5 164.4,188.0 184.9,195.6 209.4,203.1 238.8,210.6 240.0,210.9 251.2,213.4 262.5,215.8 273.8,218.1 285.0,220.3 296.2,222.3 307.5,224.3 318.8,226.1 330.0,227.9 341.2,229.6 352.5,231.3 363.8,232.9 375.0,234.4 386.2,235.9 397.5,237.3 408.8,238.7 420.0,240.0" style="fill: none; stroke: var(--accent); stroke-width: 2.2"/>
+            <polyline points="417.6,30.0 417.1,37.5 416.5,45.1 415.8,52.6 415.0,60.1 414.1,67.6 412.9,75.1 411.5,82.7 409.8,90.2 407.8,97.7 405.4,105.3 402.6,112.8 399.2,120.3 395.1,127.8 390.2,135.4 384.4,142.9 377.4,150.4 369.0,157.9 359.0,165.4 347.0,173.0 332.7,180.5 315.6,188.0 295.1,195.6 270.6,203.1 241.2,210.6 240.0,210.9 228.8,213.4 217.5,215.8 206.2,218.1 195.0,220.3 183.8,222.3 172.5,224.3 161.2,226.1 150.0,227.9 138.8,229.6 127.5,231.3 116.2,232.9 105.0,234.4 93.8,235.9 82.5,237.3 71.2,238.7 60.0,240.0" style="fill: none; stroke: var(--ink-2); stroke-width: 2.2"/>
+            <text class="d-t" x="100" y="104" style="fill: var(--accent)">y = 1: −ln ŷ</text>
+            <text class="d-t" x="395" y="104" text-anchor="end" style="fill: var(--ink-2)">y = 0: −ln(1 − ŷ)</text>
+            <circle class="pt-new" cx="384" cy="235.6" r="5"/><text class="d-s" x="384" y="224" text-anchor="middle">0.11</text>
+            <circle class="pt-new" cx="96" cy="143.3" r="5"/><text class="d-s" x="102" y="134">2.30</text>
+            <text class="d-t" x="444" y="50">Two cases with y = 1</text>
+            <text class="d-s" x="444" y="70">ŷ = 0.9: −ln 0.9 = 0.11</text>
+            <text class="d-s" x="444" y="88">ŷ = 0.1: −ln 0.1 = 2.30</text>
+            <text class="d-t" x="444" y="120">As ŷ → 0 with y = 1</text>
+            <text class="d-s" x="444" y="140">the loss grows without limit,</text>
+            <text class="d-s" x="444" y="158">so confident wrong answers</text>
+            <text class="d-s" x="444" y="176">cost the most</text>
+            <text class="d-t" x="444" y="208">Where ŷ comes from</text>
+            <text class="d-s" x="444" y="228">a sigmoid output, so 0 &lt; ŷ &lt; 1</text>
+            <text class="d-s" x="444" y="246">and both logarithms exist</text>
+          </svg>
+        </div>
+        <figcaption><b>Binary cross-entropy rewards confident correct predictions and punishes confident wrong ones.</b> Each curve is one case of the piecewise form, drawn to scale with natural logarithms. The two marked points are an illustrative example, not from the video. For the IIT Madras treatment of cross-entropy, see Lecture 4 (<a href="lecture-04.html#cross-entropy">lecture-04.html</a>).</figcaption>
+      </figure>
+    </section>
+
+    <section id="cce">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8674s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:24:34</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8710s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:25:10 one-hot encoding</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8745s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:25:45 formula</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8813s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:26:53 notation</a>
+        </div>
+        <h2>Categorical cross-entropy</h2>
+      </div>
+      <p>Categorical cross-entropy is for multi-class classification. Krish's example data set has features \(f_1, f_2, f_3\) with numeric values and an output with three categories: good, bad and neutral.</p>
+      <p>The first step is to <dfn>one-hot encode</dfn> the output. It becomes three columns, good, bad and neutral. In each row the column of that row's class is 1 and the others are 0.</p>
+      <div class="tbl-wrap">
+        <table class="mini">
+          <thead><tr><th>Output</th><th class="num">good</th><th class="num">bad</th><th class="num">neutral</th></tr></thead>
+          <tbody>
+            <tr><td>good</td><td class="num">1</td><td class="num">0</td><td class="num">0</td></tr>
+            <tr><td>bad</td><td class="num">0</td><td class="num">1</td><td class="num">0</td></tr>
+            <tr><td>neutral</td><td class="num">0</td><td class="num">0</td><td class="num">1</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The loss for record \(i\), with \(C\) the number of categories, is</p>
+      <div class="result">
+        <span class="lbl">Categorical cross-entropy</span>
+        \[ L(\mathbf{x}_i, \mathbf{y}_i) = -\sum_{j=1}^{C} y_{ij}\, \ln \hat y_{ij}, \qquad y_{ij} = \begin{cases} 1 & \text{if record } i \text{ is in class } j \\ 0 & \text{otherwise} \end{cases} \]
+      </div>
+      <p>The notation: \(i\) is the row (the record) and \(j\) the column (the category). Row \(i\)'s label is the one-hot vector \(\mathbf{y}_i = (y_{i1}, y_{i2}, \dots, y_{iC})\). If the record is good, \(y_{i1} = 1\) and the rest are 0. The predicted \(\hat y_{ij}\) come from another activation function in the output layer, softmax.</p>
+      <p class="note">The captions do not include the minus sign in front; it is needed, because \(\ln \hat y_{ij} \le 0\) and the loss must be positive. Not in the video: only one \(y_{ij}\) is 1, so the sum is just \(-\ln\) of the probability given to the true class. With \(C = 2\) it reduces to binary cross-entropy.</p>
+    </section>
+
+    <section id="softmax">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8912s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:28:32</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8945s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:29:05 formula</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=8978s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:29:38 example</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9049s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:30:49 sigmoid vs softmax</a>
+        </div>
+        <h2>Softmax: from output scores to probabilities</h2>
+      </div>
+      <p>Softmax is the activation that Krish earlier placed in the output layer of a multi-class classifier. For the scores \(z_1, \dots, z_K\) arriving at the \(K\) output units,</p>
+      <div class="eq">\[ \operatorname{softmax}(\mathbf{z})_i = \frac{e^{z_i}}{\sum_{j=1}^{K} e^{z_j}} \]</div>
+      <p>His example network has three hidden neurons connected to the output units. After the weights are applied, the output units receive scores, which he calls 10, 20, 30, 40 and 50. The probability of the first class is then</p>
+      <div class="eq">\[ \frac{e^{10}}{e^{10} + e^{20} + e^{30} + e^{40} + e^{50}} . \]</div>
+      <p>Each output becomes a probability, all of them add up to 1, and the class with the highest probability is the prediction. The probabilities he quotes (0.4, 0.5, 0.6) are placeholders and do not add up to 1.</p>
+      <p class="note">Not in the video: with his scores, softmax gives the class scored 50 a probability of about 0.99995 and the class scored 10 about \(4 \times 10^{-18}\). Exponentials turn score gaps into large probability ratios.</p>
+      <p>The figure works through a smaller illustrative example with three classes, then computes the categorical cross-entropy.</p>
+
+      <figure id="fig-softmax">
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 290" role="img" aria-label="Three output scores 2.0, 1.0 and 0.1 for the classes good, bad and neutral are exponentiated to 7.39, 2.72 and 1.11, which sum to 11.21. Dividing by the sum gives probabilities 0.659, 0.242 and 0.099, drawn as bars, which sum to 1. The one-hot target is 1, 0, 0, so the categorical cross-entropy is minus the log of 0.659, which is 0.417.">
+            <defs><marker id="kdl04-f6-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="d-ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+            <text class="d-al" x="20" y="34">class</text>
+            <text class="d-t" x="115" y="34" text-anchor="middle">score z</text>
+            <text class="d-t" x="225" y="34" text-anchor="middle">eᶻ</text>
+            <text class="d-t" x="335" y="34" text-anchor="middle">p = eᶻ ÷ 11.21</text>
+            <text class="d-t" x="585" y="34" text-anchor="middle">one-hot y</text>
+
+            <text class="d-s" x="20" y="74">good</text>
+            <text class="d-s" x="20" y="119">bad</text>
+            <text class="d-s" x="20" y="164">neutral</text>
+
+            <rect class="d-box" x="80" y="55" width="70" height="30" rx="5"/><text class="d-t" x="115" y="75" text-anchor="middle">2.0</text>
+            <rect class="d-box" x="80" y="100" width="70" height="30" rx="5"/><text class="d-t" x="115" y="120" text-anchor="middle">1.0</text>
+            <rect class="d-box" x="80" y="145" width="70" height="30" rx="5"/><text class="d-t" x="115" y="165" text-anchor="middle">0.1</text>
+
+            <line class="d-ln" x1="152" y1="70" x2="188" y2="70" marker-end="url(#kdl04-f6-ah)"/>
+            <line class="d-ln" x1="152" y1="115" x2="188" y2="115" marker-end="url(#kdl04-f6-ah)"/>
+            <line class="d-ln" x1="152" y1="160" x2="188" y2="160" marker-end="url(#kdl04-f6-ah)"/>
+            <text class="d-al" x="170" y="62" text-anchor="middle">exp</text>
+
+            <rect class="d-box" x="190" y="55" width="70" height="30" rx="5"/><text class="d-t" x="225" y="75" text-anchor="middle">7.39</text>
+            <rect class="d-box" x="190" y="100" width="70" height="30" rx="5"/><text class="d-t" x="225" y="120" text-anchor="middle">2.72</text>
+            <rect class="d-box" x="190" y="145" width="70" height="30" rx="5"/><text class="d-t" x="225" y="165" text-anchor="middle">1.11</text>
+            <text class="d-s" x="225" y="196" text-anchor="middle">sum 11.21</text>
+
+            <line class="d-ln" x1="262" y1="70" x2="298" y2="70" marker-end="url(#kdl04-f6-ah)"/>
+            <line class="d-ln" x1="262" y1="115" x2="298" y2="115" marker-end="url(#kdl04-f6-ah)"/>
+            <line class="d-ln" x1="262" y1="160" x2="298" y2="160" marker-end="url(#kdl04-f6-ah)"/>
+
+            <rect class="d-box-acc" x="300" y="55" width="70" height="30" rx="5"/><text class="d-t" x="335" y="75" text-anchor="middle">0.659</text>
+            <rect class="d-box-acc" x="300" y="100" width="70" height="30" rx="5"/><text class="d-t" x="335" y="120" text-anchor="middle">0.242</text>
+            <rect class="d-box-acc" x="300" y="145" width="70" height="30" rx="5"/><text class="d-t" x="335" y="165" text-anchor="middle">0.099</text>
+            <text class="d-s" x="335" y="196" text-anchor="middle">sum 1</text>
+
+            <rect x="380" y="63" width="98.9" height="14" style="fill: var(--accent)"/>
+            <rect x="380" y="108" width="36.3" height="14" style="fill: var(--accent); fill-opacity: .6"/>
+            <rect x="380" y="153" width="14.8" height="14" style="fill: var(--accent); fill-opacity: .6"/>
+            <text class="d-al" x="484" y="74">largest</text>
+
+            <rect class="d-box" x="560" y="55" width="50" height="30" rx="5"/><text class="d-t" x="585" y="75" text-anchor="middle">1</text>
+            <rect class="d-box" x="560" y="100" width="50" height="30" rx="5"/><text class="d-t" x="585" y="120" text-anchor="middle">0</text>
+            <rect class="d-box" x="560" y="145" width="50" height="30" rx="5"/><text class="d-t" x="585" y="165" text-anchor="middle">0</text>
+
+            <text class="d-s" x="20" y="232">loss = −Σⱼ yⱼ ln pⱼ = −(1 · ln 0.659 + 0 · ln 0.242 + 0 · ln 0.099) = −ln 0.659 = 0.417</text>
+            <text class="d-s" x="20" y="254">Only the true class's probability enters the loss. The prediction is the class with the largest p, here good.</text>
+            <text class="d-s" x="20" y="276" style="fill: var(--accent)">Pushing p(good) toward 1 drives the loss toward 0.</text>
+          </svg>
+        </div>
+        <figcaption><b>Softmax and categorical cross-entropy on one record</b> (illustrative numbers, not Krish's). Softmax exponentiates the scores and divides by their sum, so the outputs are positive and add up to 1. With the one-hot label for good, the loss is \(-\ln 0.659 = 0.417\). For the IIT Madras treatment, see Lecture 4 (<a href="lecture-04.html#softmax">lecture-04.html</a>).</figcaption>
+      </figure>
+      <p>He repeats the pairing that matters for coding: softmax in the output layer for a multi-class problem, sigmoid for a binary one.</p>
+      <p class="note">Not in the video: <b>sparse categorical cross-entropy</b> is the same loss with the labels given as class indices (0, 1, 2) instead of one-hot vectors. In Keras, use <code>loss="sparse_categorical_crossentropy"</code> with integer labels and <code>loss="categorical_crossentropy"</code> with one-hot labels.</p>
+    </section>
+
+    <section id="summary">
+      <div class="sec-head">
+        <div class="ts-row">
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9083s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:31:23</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9117s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:31:57 recap</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9148s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:32:28 regression</a>
+          <a class="ts" href="https://www.youtube.com/watch?v=d2kxUVwWWwU&amp;t=9181s" target="_blank" rel="noopener"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 0.5 L9.5 5 L1 9.5 Z"/></svg>2:33:01 what's next</a>
+        </div>
+        <h2>Putting it together: activation and loss for each problem</h2>
+      </div>
+      <p>Krish closes the day by asking which combination goes with which problem. If he codes a binary classifier, he will use ReLU in the hidden layers and sigmoid in the output layer; for multi-class, ReLU in the middle and softmax at the output.</p>
+      <ul>
+        <li><b>ReLU (or PReLU) in the hidden layers, softmax at the output:</b> multi-class classification, with categorical cross-entropy.</li>
+        <li><b>ReLU in the hidden layers, sigmoid at the output:</b> binary classification, with binary cross-entropy.</li>
+        <li><b>ReLU in the hidden layers, linear at the output:</b> regression, with MSE, MAE or Huber loss.</li>
+      </ul>
+
+      <figure id="fig-pairings">
+        <div class="fig-scroll">
+          <svg class="dg" viewBox="0 0 660 296" role="img" aria-label="Three small networks side by side, each with three inputs and a hidden layer of four ReLU units. Binary classification: one sigmoid output unit, loss binary cross-entropy. Multi-class classification: three softmax output units, loss categorical cross-entropy. Regression: one linear output unit, loss MSE, MAE or Huber.">
+            <line class="d-ln-mut" x1="35" y1="72" x2="110" y2="60" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="35" y1="72" x2="110" y2="92" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="35" y1="72" x2="110" y2="124" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="35" y1="72" x2="110" y2="156" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="35" y1="108" x2="110" y2="60" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="35" y1="108" x2="110" y2="92" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="35" y1="108" x2="110" y2="124" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="35" y1="108" x2="110" y2="156" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="35" y1="144" x2="110" y2="60" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="35" y1="144" x2="110" y2="92" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="35" y1="144" x2="110" y2="124" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="35" y1="144" x2="110" y2="156" style="stroke-width:1"/>
+            <line class="d-ln" x1="110" y1="60" x2="185" y2="108" style="stroke-width:1"/>
+            <line class="d-ln" x1="110" y1="92" x2="185" y2="108" style="stroke-width:1"/>
+            <line class="d-ln" x1="110" y1="124" x2="185" y2="108" style="stroke-width:1"/>
+            <line class="d-ln" x1="110" y1="156" x2="185" y2="108" style="stroke-width:1"/>
+            <circle class="node" cx="35" cy="72" r="10"/>
+            <circle class="node" cx="35" cy="108" r="10"/>
+            <circle class="node" cx="35" cy="144" r="10"/>
+            <circle class="node" cx="110" cy="60" r="10"/>
+            <circle class="node" cx="110" cy="92" r="10"/>
+            <circle class="node" cx="110" cy="124" r="10"/>
+            <circle class="node" cx="110" cy="156" r="10"/>
+            <circle class="node-acc" cx="185" cy="108" r="10"/>
+            <line class="d-ln-mut" x1="255" y1="72" x2="330" y2="60" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="255" y1="72" x2="330" y2="92" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="255" y1="72" x2="330" y2="124" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="255" y1="72" x2="330" y2="156" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="255" y1="108" x2="330" y2="60" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="255" y1="108" x2="330" y2="92" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="255" y1="108" x2="330" y2="124" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="255" y1="108" x2="330" y2="156" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="255" y1="144" x2="330" y2="60" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="255" y1="144" x2="330" y2="92" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="255" y1="144" x2="330" y2="124" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="255" y1="144" x2="330" y2="156" style="stroke-width:1"/>
+            <line class="d-ln" x1="330" y1="60" x2="405" y2="76" style="stroke-width:1"/>
+            <line class="d-ln" x1="330" y1="60" x2="405" y2="108" style="stroke-width:1"/>
+            <line class="d-ln" x1="330" y1="60" x2="405" y2="140" style="stroke-width:1"/>
+            <line class="d-ln" x1="330" y1="92" x2="405" y2="76" style="stroke-width:1"/>
+            <line class="d-ln" x1="330" y1="92" x2="405" y2="108" style="stroke-width:1"/>
+            <line class="d-ln" x1="330" y1="92" x2="405" y2="140" style="stroke-width:1"/>
+            <line class="d-ln" x1="330" y1="124" x2="405" y2="76" style="stroke-width:1"/>
+            <line class="d-ln" x1="330" y1="124" x2="405" y2="108" style="stroke-width:1"/>
+            <line class="d-ln" x1="330" y1="124" x2="405" y2="140" style="stroke-width:1"/>
+            <line class="d-ln" x1="330" y1="156" x2="405" y2="76" style="stroke-width:1"/>
+            <line class="d-ln" x1="330" y1="156" x2="405" y2="108" style="stroke-width:1"/>
+            <line class="d-ln" x1="330" y1="156" x2="405" y2="140" style="stroke-width:1"/>
+            <circle class="node" cx="255" cy="72" r="10"/>
+            <circle class="node" cx="255" cy="108" r="10"/>
+            <circle class="node" cx="255" cy="144" r="10"/>
+            <circle class="node" cx="330" cy="60" r="10"/>
+            <circle class="node" cx="330" cy="92" r="10"/>
+            <circle class="node" cx="330" cy="124" r="10"/>
+            <circle class="node" cx="330" cy="156" r="10"/>
+            <circle class="node-acc" cx="405" cy="76" r="10"/>
+            <circle class="node-acc" cx="405" cy="108" r="10"/>
+            <circle class="node-acc" cx="405" cy="140" r="10"/>
+            <line class="d-ln-mut" x1="475" y1="72" x2="550" y2="60" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="475" y1="72" x2="550" y2="92" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="475" y1="72" x2="550" y2="124" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="475" y1="72" x2="550" y2="156" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="475" y1="108" x2="550" y2="60" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="475" y1="108" x2="550" y2="92" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="475" y1="108" x2="550" y2="124" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="475" y1="108" x2="550" y2="156" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="475" y1="144" x2="550" y2="60" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="475" y1="144" x2="550" y2="92" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="475" y1="144" x2="550" y2="124" style="stroke-width:1"/>
+            <line class="d-ln-mut" x1="475" y1="144" x2="550" y2="156" style="stroke-width:1"/>
+            <line class="d-ln" x1="550" y1="60" x2="625" y2="108" style="stroke-width:1"/>
+            <line class="d-ln" x1="550" y1="92" x2="625" y2="108" style="stroke-width:1"/>
+            <line class="d-ln" x1="550" y1="124" x2="625" y2="108" style="stroke-width:1"/>
+            <line class="d-ln" x1="550" y1="156" x2="625" y2="108" style="stroke-width:1"/>
+            <circle class="node" cx="475" cy="72" r="10"/>
+            <circle class="node" cx="475" cy="108" r="10"/>
+            <circle class="node" cx="475" cy="144" r="10"/>
+            <circle class="node" cx="550" cy="60" r="10"/>
+            <circle class="node" cx="550" cy="92" r="10"/>
+            <circle class="node" cx="550" cy="124" r="10"/>
+            <circle class="node" cx="550" cy="156" r="10"/>
+            <circle class="node-acc" cx="625" cy="108" r="10"/>
+            <text class="d-t" x="110" y="22" text-anchor="middle">Binary classification</text>
+            <text class="d-t" x="330" y="22" text-anchor="middle">Multi-class classification</text>
+            <text class="d-t" x="550" y="22" text-anchor="middle">Regression</text>
+            <text class="d-al" x="35" y="54" text-anchor="middle">inputs</text><text class="d-s" x="110" y="42" text-anchor="middle">ReLU</text><text class="d-s" x="185" y="88" text-anchor="middle" style="fill: var(--accent)">sigmoid</text>
+            <text class="d-al" x="255" y="54" text-anchor="middle">inputs</text><text class="d-s" x="330" y="42" text-anchor="middle">ReLU</text><text class="d-s" x="405" y="56" text-anchor="middle" style="fill: var(--accent)">softmax</text>
+            <text class="d-al" x="475" y="54" text-anchor="middle">inputs</text><text class="d-s" x="550" y="42" text-anchor="middle">ReLU</text><text class="d-s" x="625" y="88" text-anchor="middle" style="fill: var(--accent)">linear</text>
+            <line class="d-rule" x1="220" y1="10" x2="220" y2="262"/><line class="d-rule" x1="440" y1="10" x2="440" y2="262"/>
+            <text class="d-s" x="110" y="186" text-anchor="middle">hidden: ReLU (or PReLU, ELU)</text>
+            <text class="d-s" x="330" y="186" text-anchor="middle">hidden: ReLU (or PReLU, ELU)</text>
+            <text class="d-s" x="550" y="186" text-anchor="middle">hidden: ReLU (or PReLU, ELU)</text>
+            <text class="d-s" x="110" y="204" text-anchor="middle">output: sigmoid, 0 &lt; ŷ &lt; 1</text>
+            <text class="d-s" x="330" y="204" text-anchor="middle">output: softmax, probabilities sum to 1</text>
+            <text class="d-s" x="550" y="204" text-anchor="middle">output: linear, any real ŷ</text>
+            <text class="d-al" x="110" y="222" text-anchor="middle">loss</text><text class="d-al" x="330" y="222" text-anchor="middle">loss</text><text class="d-al" x="550" y="222" text-anchor="middle">loss</text>
+            <rect class="pill" x="10" y="228" width="200" height="28" rx="14"/><text class="d-t" x="110" y="247" text-anchor="middle">binary cross-entropy</text>
+            <rect class="pill" x="230" y="228" width="200" height="28" rx="14"/><text class="d-t" x="330" y="247" text-anchor="middle">categorical cross-entropy</text>
+            <rect class="pill" x="450" y="228" width="200" height="28" rx="14"/><text class="d-t" x="550" y="247" text-anchor="middle">MSE, MAE or Huber</text>
+            <text class="d-s" x="330" y="286" text-anchor="middle">All three: ReLU in hidden layers by default, PReLU or ELU if training does not converge.</text>
+          </svg>
+        </div>
+        <figcaption><b>Krish's pairings of output activation and loss.</b> The hidden layers are the same in all three problems. What changes is the output layer and the loss that reads it: a sigmoid probability with binary cross-entropy, softmax probabilities with categorical cross-entropy, or an unbounded linear output with a regression loss.</figcaption>
+      </figure>
+
+      <p>He then lists what the two days have covered: forward propagation, the chain rule of derivatives, the vanishing gradient problem, loss functions and activation functions. He stresses that these are standard interview questions. The next session covers optimizers (Part 5, <a href="krish-dl-05.html">krish-dl-05.html</a>), then an implementation of an ANN (Part 6, <a href="krish-dl-06.html">krish-dl-06.html</a>).</p>
+      <p class="note">Not in the video: Krish codes these networks in Part 6. Here is how his summary looks in Keras, as a reference for that part. The optimizer is Part 5's topic.</p>
+      <pre class="codeblock"><code>from tensorflow import keras
+from tensorflow.keras import layers
+
+n_features, C = 3, 3   <span class="cm"># e.g. features f1, f2, f3 and classes good, bad, neutral</span>
+
+<span class="cm"># Binary classification: ReLU hidden layers, one sigmoid output, binary cross-entropy</span>
+binary = keras.Sequential([
+    keras.Input(shape=(n_features,)),
+    layers.Dense(16, activation="relu"),
+    layers.Dense(8, activation="relu"),
+    layers.Dense(1, activation="sigmoid"),
+])
+binary.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
+
+<span class="cm"># Multi-class: C softmax outputs, categorical cross-entropy on one-hot labels</span>
+multi = keras.Sequential([
+    keras.Input(shape=(n_features,)),
+    layers.Dense(16, activation="relu"),
+    layers.Dense(C, activation="softmax"),
+])
+multi.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"])
+<span class="cm"># with integer labels 0 .. C-1 instead: loss="sparse_categorical_crossentropy"</span>
+
+<span class="cm"># Regression: linear output, MSE (or "mae", or keras.losses.Huber(delta=1.0))</span>
+reg = keras.Sequential([
+    keras.Input(shape=(n_features,)),
+    layers.Dense(16, activation="relu"),
+    layers.Dense(1, activation="linear"),
+])
+reg.compile(optimizer="adam", loss="mse")
+
+<span class="cm"># If ReLU does not converge, swap the hidden activation, for example</span>
+layers.Dense(16, activation="elu")     <span class="cm"># ELU, alpha = 1</span>
+layers.Dense(16, activation="swish")   <span class="cm"># Swish, x * sigmoid(x)</span>
+layers.PReLU()                         <span class="cm"># after a Dense layer with no activation</span></code></pre>
+    </section>
+
+    <!-- ============ REVISION ============ -->
+    <section id="terms">
+      <div class="sec-head"><h2>Key terms</h2></div>
+      <dl class="terms">
+        <div><dt>Activation function</dt><dd>The function a neuron applies to its weighted sum. Its derivative enters the chain rule in backpropagation.</dd></div>
+        <div><dt>Zero-centred</dt><dd>A curve through the origin with negative and positive outputs, such as tanh. Sigmoid and ReLU are not zero-centred.</dd></div>
+        <div><dt>Vanishing gradient</dt><dd>Gradients shrink toward 0 as they pass back through layers whose activation derivatives are small, such as sigmoid's (at most 0.25).</dd></div>
+        <div><dt>Dead neuron</dt><dd>A ReLU unit with negative input: its output and derivative are 0, so its weights get no update, \(w_{\text{new}} = w_{\text{old}}\).</dd></div>
+        <div><dt>Leaky ReLU and PReLU</dt><dd>\(x\) for \(x \gt 0\) and \(a x\) otherwise. Leaky ReLU fixes \(a = 0.01\); PReLU learns \(a\); \(a = 0\) is ReLU.</dd></div>
+        <div><dt>ELU</dt><dd>\(x\) for \(x \gt 0\), \(\alpha(e^x - 1)\) otherwise. No dead neurons, mean output near 0, but an exponential to compute.</dd></div>
+        <div><dt>Swish</dt><dd>A smooth self-gated activation from Google, \(x\,\sigma(x)\) (formula not given in the video).</dd></div>
+        <div><dt>Softmax</dt><dd>\(e^{z_i} / \sum_j e^{z_j}\): turns the output scores into probabilities that sum to 1. Output layer of a multi-class classifier.</dd></div>
+        <div><dt>Loss vs cost function</dt><dd>The loss measures the error on one record; the cost function adds up the losses over a batch of records.</dd></div>
+        <div><dt>Mean squared error (MSE)</dt><dd>\(\tfrac{1}{2}(y - \hat y)^2\) per record. Differentiable with one minimum and fast to converge, but not robust to outliers.</dd></div>
+        <div><dt>Mean absolute error (MAE)</dt><dd>\(\lvert y - \hat y \rvert\) per record. Robust to outliers; at its corner a sub-gradient replaces the derivative.</dd></div>
+        <div><dt>Huber loss</dt><dd>Squared for \(\lvert y - \hat y \rvert \le \delta\) and \(\delta\lvert y - \hat y \rvert - \tfrac{1}{2}\delta^2\) beyond; \(\delta\) is a hyperparameter.</dd></div>
+        <div><dt>Binary cross-entropy</dt><dd>Log loss, \(-y \log \hat y - (1 - y)\log(1 - \hat y)\), on a sigmoid output.</dd></div>
+        <div><dt>Categorical cross-entropy</dt><dd>\(-\sum_j y_{ij} \ln \hat y_{ij}\) with one-hot labels \(y_{ij}\) and softmax outputs \(\hat y_{ij}\).</dd></div>
+      </dl>
+    </section>
+
+    <section id="test">
+      <div class="sec-head"><h2>Test yourself</h2></div>
+      <div class="quiz">
+        <details><summary><span class="q">Q1</span><span>Each sigmoid layer contributes one derivative to the chain-rule product. What is the largest factor it can contribute, what does that give for 5 layers, and why is tanh better but not a cure?</span><span class="tog"></span></summary>
+          <p>\(\sigma'(x) \le 0.25\), reached at \(x = 0\). Five layers give at best \(0.25^5 \approx 0.00098\), about a thousandth, before the weights are counted; away from \(x = 0\) each factor is smaller still. tanh's derivative reaches 1 at \(x = 0\), so the best case does not shrink. Everywhere else it is below 1 and near 0 for large \(\lvert x \rvert\), so in a very deep network the product can still vanish.</p></details>
+        <details><summary><span class="q">Q2</span><span>A ReLU neuron has pre-activation \(z = -1.7\). What is its output, what gradient reaches its incoming weights, and what changes with leaky ReLU?</span><span class="tog"></span></summary>
+          <p>Output \(\max(0, -1.7) = 0\). The derivative \(\operatorname{ReLU}'(-1.7) = 0\), so \(\partial L/\partial w = \partial L/\partial h \cdot 0 \cdot x = 0\) and \(w_{\text{new}} = w_{\text{old}}\). If every input gives a negative \(z\), the neuron never changes again: it is dead. With leaky ReLU the output is \(-0.017\) and the derivative 0.01, so \(\partial L/\partial w = 0.01 \cdot \partial L/\partial h \cdot x\), a small update that lets the neuron recover.</p></details>
+        <details><summary><span class="q">Q3</span><span>In \(f(y_i) = y_i\) for \(y_i \gt 0\) and \(a_i y_i\) otherwise, which choice of \(a_i\) gives ReLU, which gives leaky ReLU, and what makes it PReLU?</span><span class="tog"></span></summary>
+          <p>\(a_i = 0\) gives ReLU, and a small fixed value such as \(a_i = 0.01\) gives leaky ReLU. In PReLU \(a_i\) is a learnable parameter: backpropagation updates it along with the weights, so the negative-side slope changes during training.</p></details>
+        <details><summary><span class="q">Q4</span><span>With \(\alpha = 1\), compute ELU and its derivative at \(x = -1\) and \(x = 2\), and compare with ReLU at \(x = -1\).</span><span class="tog"></span></summary>
+          <p>\(\operatorname{ELU}(-1) = e^{-1} - 1 \approx -0.632\) and \(\operatorname{ELU}'(-1) = e^{-1} \approx 0.368\); \(\operatorname{ELU}(2) = 2\) and \(\operatorname{ELU}'(2) = 1\). ReLU gives 0 and derivative 0 at \(x = -1\). ELU still passes a gradient and a negative output, which keeps the mean output near 0, at the cost of an exponential.</p></details>
+        <details><summary><span class="q">Q5</span><span>Four residuals are \(1, -1, 2, 10\). Compute the total loss under \(\tfrac{1}{2}e^2\), \(\lvert e \rvert\) and Huber with \(\delta = 1\). What share does the outlier contribute, and how hard does it pull under each?</span><span class="tog"></span></summary>
+          <p>Squared: \(0.5 + 0.5 + 2 + 50 = 53\); the outlier contributes 94%. Absolute: \(1 + 1 + 2 + 10 = 14\); 71%. Huber: \(0.5 + 0.5 + 1.5 + 9.5 = 12\) (for \(\lvert e \rvert = 2\): \(1 \cdot 2 - 0.5\); for 10: \(10 - 0.5\)); 79%. The outlier's slope is 10 under MSE but 1 under MAE and Huber, so under MSE it pulls the fit ten times harder than under the other two.</p></details>
+        <details><summary><span class="q">Q6</span><span>Compute the binary cross-entropy for \(y = 1\) with \(\hat y = 0.8\) and with \(\hat y = 0.2\), and for \(y = 0\) with \(\hat y = 0.8\).</span><span class="tog"></span></summary>
+          <p>\(y = 1\): \(-\ln 0.8 \approx 0.223\) and \(-\ln 0.2 \approx 1.609\). \(y = 0\), \(\hat y = 0.8\): \(-\ln(1 - 0.8) = -\ln 0.2 \approx 1.609\). A confident wrong answer costs about seven times as much as a fairly confident right one.</p></details>
+        <details><summary><span class="q">Q7</span><span>Three output units receive scores \(z = (1, 2, 3)\) and the true class is the second. Compute the softmax probabilities, the prediction and the categorical cross-entropy.</span><span class="tog"></span></summary>
+          <p>\(e^z \approx (2.718, 7.389, 20.086)\), sum 30.193, so \(p \approx (0.090, 0.245, 0.665)\), which add up to 1. The prediction is the third class. With one-hot label \((0, 1, 0)\) the loss is \(-\ln 0.245 \approx 1.41\). Only the true class's probability enters it.</p></details>
+        <details><summary><span class="q">Q8</span><span>Choose the output activation and the loss for: (a) predicting a house price, (b) spam or not spam, (c) a digit 0–9 with the labels stored as integers.</span><span class="tog"></span></summary>
+          <p>(a) Regression: a linear output with MSE, or MAE or Huber if the data has outliers. (b) Binary classification: one sigmoid output with binary cross-entropy. (c) Multi-class: ten softmax outputs with categorical cross-entropy on one-hot labels. With integer labels, Keras's sparse categorical cross-entropy computes the same loss (not in the video). In all three, the hidden layers use ReLU.</p></details>
+      </div>
+    </section>
+
+    <!-- PAGER:START --><nav class="pager" aria-label="Previous and next part"><a href="krish-dl-02.html"><span class="dir">← Part 2</span><span class="nm">Weights and bias, forward and backward propagation</span></a><a class="next" href="krish-dl-06.html"><span class="dir">Part 6 →</span><span class="nm">Practical: building an ANN</span></a></nav><!-- PAGER:END -->
+  </main>
+</div>
+
+<footer class="foot">
+  <div class="foot-inner gutter">Written from the YouTube auto-generated captions of Krish Naik's video «Deep Learning In-depth Tutorials in 5 Hours». Timestamp links open the video at that moment. Code is reconstructed from the audio. Charts marked synthetic use data generated for these notes. Not affiliated with Krish Naik or IIT Madras.</div>
+</footer>
+
+<script src="notes.js"></script>
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const num = (v, d) => { const s = (Math.abs(v) < 0.5 * Math.pow(10, -d) ? 0 : v).toFixed(d); return s.replace('-', '−'); };
+  const SUP = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+  const sci = v => {
+    if (v === 0) return '0';
+    const a = Math.abs(v);
+    if (a >= 0.001 && a < 100) return num(v, a >= 1 ? 2 : 4);
+    let e = Math.floor(Math.log10(a)), m = v / Math.pow(10, e);
+    if (Math.abs(m) >= 9.95) { m /= 10; e++; }
+    return num(m, 1) + ' × 10' + (e < 0 ? '⁻' : '') + String(Math.abs(e)).split('').map(c => SUP[+c]).join('');
+  };
+  const sig = x => 1 / (1 + Math.exp(-x));
+
+  /* ---------- Activation explorer: function and derivative ---------- */
+  (() => {
+    const svg = document.getElementById('act-svg'); if (!svg) return;
+    const X0 = 50, X1 = 620, Y0 = 16, Y1 = 330, XL = -5, XH = 5, YL = -1.5, YH = 2.5;
+    const sx = x => X0 + (x - XL) / (XH - XL) * (X1 - X0);
+    const sy = y => Y1 - (y - YL) / (YH - YL) * (Y1 - Y0);
+    let a = 0.25;
+    const F = {
+      sigmoid: { label: 'sigmoid', f: sig, d: x => sig(x) * (1 - sig(x)), kink: false, range: () => '(0, 1)',
+        desc: 'Sigmoid: output in (0, 1), derivative at most 0.25, not zero-centred. Use it in the output layer for binary classification.' },
+      tanh: { label: 'tanh', f: Math.tanh, d: x => 1 - Math.tanh(x) * Math.tanh(x), kink: false, range: () => '(−1, 1)',
+        desc: 'tanh: zero-centred output in (−1, 1) and a derivative of up to 1, but it still flattens for large |x|.' },
+      relu: { label: 'ReLU', f: x => Math.max(0, x), d: x => (x > 0 ? 1 : 0), kink: true, range: () => '[0, ∞)',
+        desc: 'ReLU: no exponential and a derivative of 1 for x > 0; for x < 0 output and derivative are 0 (dead neurons). The default for hidden layers.' },
+      leaky: { label: 'leaky ReLU', f: x => (x > 0 ? x : 0.01 * x), d: x => (x > 0 ? 1 : 0.01), kink: true, range: () => '(−∞, ∞)',
+        desc: 'Leaky ReLU: 0.01x for x < 0, so the derivative there is 0.01 and the neuron cannot die.' },
+      elu: { label: 'ELU', f: x => (x > 0 ? x : Math.exp(x) - 1), d: x => (x > 0 ? 1 : Math.exp(x)), kink: false, range: () => '(−1, ∞)',
+        desc: 'ELU (α = 1): smooth, negative outputs down to −1 keep the mean output near 0, no dead neurons; needs an exponential for x < 0.' },
+      prelu: { label: 'PReLU', f: x => (x > 0 ? x : a * x), d: x => (x > 0 ? 1 : a), kink: true, range: () => (a > 0 ? '(−∞, ∞)' : '[0, ∞)'),
+        desc: 'PReLU: the slope a for x < 0 is learned. a = 0 is ReLU and a = 0.01 is leaky ReLU; move the slider to see other slopes.' },
+      swish: { label: 'Swish', f: x => x * sig(x), d: x => sig(x) * (1 + x * (1 - sig(x))), kink: false, range: () => '[−0.28, ∞)',
+        desc: 'Swish x·σ(x): smooth, dips to about −0.28 near x = −1.28, and close to ReLU for large |x|.' }
+    };
+    const btns = [...document.querySelectorAll('#act-fig button[data-fn]')];
+    const cmpSel = document.getElementById('act-cmp'), dChk = document.getElementById('act-deriv');
+    const xS = document.getElementById('act-x'), xO = document.getElementById('act-x-out');
+    const aS = document.getElementById('act-a'), aO = document.getElementById('act-a-out');
+    const oF = document.getElementById('act-f'), oD = document.getElementById('act-d'), oD10 = document.getElementById('act-d10'), oR = document.getElementById('act-range');
+    const status = document.getElementById('act-status');
+    let main = 'sigmoid';
+
+    const defs = mk('defs', {}, svg);
+    const cp = mk('clipPath', { id: 'kdl04-act-clip' }, defs); mk('rect', { x: X0, y: Y0, width: X1 - X0, height: Y1 - Y0 }, cp);
+    const grid = mk('g', { class: 'c-grid' }, svg);
+    for (let x = -5; x <= 5; x++) mk('line', { x1: sx(x), x2: sx(x), y1: Y0, y2: Y1 }, grid);
+    for (let y = -1.5; y <= 2.5; y += 0.5) mk('line', { x1: X0, x2: X1, y1: sy(y), y2: sy(y) }, grid);
+    mk('line', { x1: X0, x2: X1, y1: sy(0), y2: sy(0), class: 'c-axis' }, svg);
+    mk('line', { x1: sx(0), x2: sx(0), y1: Y0, y2: Y1, class: 'c-axis' }, svg);
+    [-4, -2, 0, 2, 4].forEach(v => { mk('text', { x: sx(v), y: Y1 + 16, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = num(v, 0); });
+    [-1, 0, 1, 2].forEach(v => { mk('text', { x: X0 - 6, y: sy(v) + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = num(v, 0); });
+    mk('text', { x: X1, y: Y1 + 16, 'text-anchor': 'end', class: 'c-note' }, svg).textContent = 'x';
+    const ref = mk('line', { x1: X0, x2: X1, y1: sy(0.25), y2: sy(0.25), style: 'stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 2 3' }, svg);
+    const refT = mk('text', { x: X1 - 4, y: sy(0.25) - 5, 'text-anchor': 'end', class: 'c-tick' }, svg); refT.textContent = 'σ′ max 0.25';
+    const plot = mk('g', { 'clip-path': 'url(#kdl04-act-clip)' }, svg);
+    const pCF = mk('path', { style: 'fill: none; stroke: var(--ink-2); stroke-width: 1.8' }, plot);
+    const pCD = mk('path', { style: 'fill: none; stroke: var(--ink-2); stroke-width: 1.6; stroke-dasharray: 6 4' }, plot);
+    const pMF = mk('path', { style: 'fill: none; stroke: var(--accent); stroke-width: 2.8; stroke-linejoin: round' }, plot);
+    const pMD = mk('path', { style: 'fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 7 4' }, plot);
+    const probe = mk('line', { y1: Y0, y2: Y1, style: 'stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 3 3' }, svg);
+    const dCF = mk('circle', { r: 4.5, style: 'fill: var(--ink-2); stroke: var(--surface); stroke-width: 1.5' }, svg);
+    const dCD = mk('circle', { r: 4.5, style: 'fill: var(--surface); stroke: var(--ink-2); stroke-width: 2' }, svg);
+    const dMF = mk('circle', { r: 5.5, style: 'fill: var(--accent); stroke: var(--surface); stroke-width: 1.5' }, svg);
+    const dMD = mk('circle', { r: 5.5, style: 'fill: var(--surface); stroke: var(--accent); stroke-width: 2.2' }, svg);
+    const legend = mk('g', {}, svg);
+
+    const path = (fn, kink) => {
+      const seg = (lo, hi, n) => { let s = ''; for (let k = 0; k <= n; k++) { const x = lo + (hi - lo) * k / n, y = Math.max(-20, Math.min(20, fn(x))); s += (k ? 'L' : 'M') + sx(x).toFixed(1) + ' ' + sy(y).toFixed(1); } return s; };
+      return kink ? seg(XL, -1e-9, 200) + seg(1e-9, XH, 200) : seg(XL, XH, 400);
+    };
+    const place = (dot, x, y) => {
+      const ok = y >= YL && y <= YH;
+      dot.setAttribute('visibility', ok ? 'visible' : 'hidden');
+      if (ok) { dot.setAttribute('cx', sx(x)); dot.setAttribute('cy', sy(y)); }
+    };
+    const legendRow = (i, txt, style) => {
+      const y = 34 + 18 * i;
+      mk('line', { x1: 62, x2: 90, y1: y - 4, y2: y - 4, style }, legend);
+      mk('text', { x: 96, y, class: 'c-note' }, legend).textContent = txt;
+    };
+    const kinkAt0 = (fn, x) => fn.kink && x === 0 && !(fn === F.prelu && a === 1);
+
+    const draw = () => {
+      const x = Math.round(parseFloat(xS.value) * 10) / 10;
+      a = Math.round(parseFloat(aS.value) * 100) / 100;
+      xO.textContent = num(x, 1); aO.textContent = num(a, 2);
+      const M = F[main], cmpKey = cmpSel.value, C = cmpKey !== 'none' && cmpKey !== main ? F[cmpKey] : null, showD = dChk.checked;
+      pMF.setAttribute('d', path(M.f, false));
+      pMD.setAttribute('d', showD ? path(M.d, M.kink && !(M === F.prelu && a === 1)) : '');
+      pCF.setAttribute('d', C ? path(C.f, false) : '');
+      pCD.setAttribute('d', C && showD ? path(C.d, C.kink) : '');
+      const sigShown = showD && (main === 'sigmoid' || (C && cmpKey === 'sigmoid'));
+      ref.setAttribute('visibility', sigShown ? 'visible' : 'hidden'); refT.setAttribute('visibility', sigShown ? 'visible' : 'hidden');
+      probe.setAttribute('x1', sx(x)); probe.setAttribute('x2', sx(x));
+      const mK = kinkAt0(M, x), mf = M.f(x), md = mK ? NaN : M.d(x);
+      place(dMF, x, mf);
+      if (showD && !mK) place(dMD, x, md); else dMD.setAttribute('visibility', 'hidden');
+      if (C) {
+        place(dCF, x, C.f(x));
+        if (showD && !kinkAt0(C, x)) place(dCD, x, C.d(x)); else dCD.setAttribute('visibility', 'hidden');
+      } else { dCF.setAttribute('visibility', 'hidden'); dCD.setAttribute('visibility', 'hidden'); }
+      while (legend.firstChild) legend.removeChild(legend.firstChild);
+      let r = 0;
+      legendRow(r++, M.label + ', f(x)', 'stroke: var(--accent); stroke-width: 2.8');
+      if (showD) legendRow(r++, M.label + ', f′(x)', 'stroke: var(--accent); stroke-width: 2; stroke-dasharray: 7 4');
+      if (C) { legendRow(r++, C.label + ', f(x)', 'stroke: var(--ink-2); stroke-width: 1.8'); if (showD) legendRow(r++, C.label + ', f′(x)', 'stroke: var(--ink-2); stroke-width: 1.6; stroke-dasharray: 6 4'); }
+
+      oF.textContent = num(mf, 3);
+      oD.textContent = mK ? 'corner' : num(md, 3);
+      oD10.textContent = mK ? '–' : sci(Math.pow(md, 10));
+      oR.textContent = M.range();
+      const xs = 'At x = ' + num(x, 1) + ': ';
+      let s;
+      if (mK) s = xs + M.label + ' has a corner, so the derivative jumps here; a sub-gradient (the slope of either side) is used.';
+      else if (md === 0) s = xs + 'f′ = 0, so no gradient passes and the weights feeding this unit get no update.';
+      else if ((main === 'leaky' || main === 'prelu') && x < 0) s = xs + 'f′ = ' + num(md, 2) + ', small but not 0, so the unit keeps learning.';
+      else if (Math.abs(md) < 0.05) s = xs + 'f′ = ' + num(md, 3) + ' is close to 0, so the gradient almost vanishes here.';
+      else if (Math.abs(md - 1) < 0.005) s = xs + 'f′ = 1, so the gradient passes through unchanged.';
+      else s = xs + 'f′ = ' + num(md, 3) + ', so this unit scales the gradient by that factor.';
+      if (C && !kinkAt0(C, x)) s += ' ' + C.label + ' has f′ = ' + num(C.d(x), 3) + ' here.';
+      status.textContent = s + ' ' + M.desc;
+    };
+    btns.forEach(b => b.addEventListener('click', () => {
+      main = b.dataset.fn;
+      btns.forEach(o => o.setAttribute('aria-pressed', o === b ? 'true' : 'false'));
+      draw();
+    }));
+    [xS, aS].forEach(el => el.addEventListener('input', draw));
+    [cmpSel, dChk].forEach(el => el.addEventListener('change', draw));
+    draw();
+  })();
+
+  /* ---------- Loss explorer: MSE, MAE and Huber as the error grows ---------- */
+  (() => {
+    const svg = document.getElementById('loss-svg'); if (!svg) return;
+    const eS = document.getElementById('loss-e'), eO = document.getElementById('loss-e-out');
+    const dS = document.getElementById('loss-d'), dO = document.getElementById('loss-d-out');
+    const grow = document.getElementById('loss-grow');
+    const oM = document.getElementById('loss-mse'), oA = document.getElementById('loss-mae'), oH = document.getElementById('loss-hub'), oS = document.getElementById('loss-slopes');
+    const status = document.getElementById('loss-status');
+    const P = [{ x0: 50, x1: 300, y0: 34, y1: 264, lo: 0, hi: 12, ticks: [0, 4, 8, 12], title: 'Loss of one point, L(e)' },
+               { x0: 380, x1: 630, y0: 34, y1: 264, lo: -6, hi: 6, ticks: [-6, -3, 0, 3, 6], title: 'Slope dL/de: the pull on the fit' }];
+    const ex = (p, e) => p.x0 + (e + 6) / 12 * (p.x1 - p.x0);
+    const ey = (p, v) => p.y1 - (v - p.lo) / (p.hi - p.lo) * (p.y1 - p.y0);
+    const S = { mse: 'stroke: var(--ink-2); stroke-width: 2', mae: 'stroke: var(--ok); stroke-width: 2; stroke-dasharray: 6 4', hub: 'stroke: var(--accent); stroke-width: 2.8; stroke-linejoin: round' };
+    const DOT = { mse: 'fill: var(--ink-2)', mae: 'fill: var(--ok)', hub: 'fill: var(--accent)' };
+    const defs = mk('defs', {}, svg);
+    const G = P.map((p, i) => {
+      const c = mk('clipPath', { id: 'kdl04-loss-clip-' + i }, defs); mk('rect', { x: p.x0, y: p.y0, width: p.x1 - p.x0, height: p.y1 - p.y0 }, c);
+      const grid = mk('g', { class: 'c-grid' }, svg);
+      [-6, -3, 0, 3, 6].forEach(v => mk('line', { x1: ex(p, v), x2: ex(p, v), y1: p.y0, y2: p.y1 }, grid));
+      p.ticks.forEach(v => mk('line', { x1: p.x0, x2: p.x1, y1: ey(p, v), y2: ey(p, v) }, grid));
+      mk('line', { x1: p.x0, x2: p.x1, y1: ey(p, Math.max(0, p.lo)), y2: ey(p, Math.max(0, p.lo)), class: 'c-axis' }, svg);
+      mk('line', { x1: ex(p, 0), x2: ex(p, 0), y1: p.y0, y2: p.y1, class: 'c-axis' }, svg);
+      [-6, -3, 0, 3, 6].forEach(v => { mk('text', { x: ex(p, v), y: p.y1 + 15, 'text-anchor': 'middle', class: 'c-tick' }, svg).textContent = num(v, 0); });
+      p.ticks.forEach(v => { mk('text', { x: p.x0 - 6, y: ey(p, v) + 4, 'text-anchor': 'end', class: 'c-tick' }, svg).textContent = num(v, 0); });
+      mk('text', { x: p.x0, y: 22, class: 'c-title' }, svg).textContent = p.title;
+      mk('text', { x: (p.x0 + p.x1) / 2, y: p.y1 + 31, 'text-anchor': 'middle', class: 'c-note' }, svg).textContent = 'error e = y − ŷ';
+      const dl = [mk('line', { y1: p.y0, y2: p.y1, style: 'stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 4 4' }, svg), mk('line', { y1: p.y0, y2: p.y1, style: 'stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 4 4' }, svg)];
+      const dt = [mk('text', { y: p.y0 + 12, 'text-anchor': 'end', class: 'c-tick' }, svg), mk('text', { y: p.y0 + 12, 'text-anchor': 'start', class: 'c-tick' }, svg)];
+      dt[0].textContent = '−δ'; dt[1].textContent = 'δ';
+      const eL = mk('line', { y1: p.y0, y2: p.y1, style: 'stroke: var(--ink); stroke-width: 1; opacity: .45' }, svg);
+      const g = mk('g', { 'clip-path': 'url(#kdl04-loss-clip-' + i + ')' }, svg);
+      const paths = { mse: mk('path', { style: 'fill: none; ' + S.mse }, g), mae: mk('path', { style: 'fill: none; ' + S.mae }, g), hub: mk('path', { style: 'fill: none; ' + S.hub }, g) };
+      const dots = {}; ['mse', 'mae', 'hub'].forEach(k => { dots[k] = mk('circle', { r: k === 'hub' ? 5.5 : 4.5, style: DOT[k] + '; stroke: var(--surface); stroke-width: 1.5' }, svg); });
+      return { p, dl, dt, eL, paths, dots };
+    });
+    /* legend */
+    [['mse', 'MSE ½e²', 60], ['mae', 'MAE |e|', 230], ['hub', 'Huber, threshold δ', 390]].forEach(([k, t, x]) => {
+      mk('line', { x1: x, x2: x + 28, y1: 311, y2: 311, style: S[k] }, svg);
+      mk('text', { x: x + 34, y: 315, class: 'c-note' }, svg).textContent = t;
+    });
+
+    const mse = e => 0.5 * e * e, mae = e => Math.abs(e);
+    const hub = (e, d) => (Math.abs(e) <= d ? 0.5 * e * e : d * (Math.abs(e) - 0.5 * d));
+    const sample = (p, fn) => { let s = ''; for (let k = 0; k <= 240; k++) { const e = -6 + 12 * k / 240, v = Math.max(p.lo - 2, Math.min(p.hi + 2, fn(e))); s += (k ? 'L' : 'M') + ex(p, e).toFixed(1) + ' ' + ey(p, v).toFixed(1); } return s; };
+    const pt = (p, e, v) => ex(p, e).toFixed(1) + ' ' + ey(p, v).toFixed(1);
+    const place = (dot, p, e, v) => { const ok = v >= p.lo && v <= p.hi; dot.setAttribute('visibility', ok ? 'visible' : 'hidden'); if (ok) { dot.setAttribute('cx', ex(p, e)); dot.setAttribute('cy', ey(p, v)); } };
+
+    let raf = null;
+    const draw = () => {
+      const e = Math.round(parseFloat(eS.value) * 10) / 10, d = Math.round(parseFloat(dS.value) * 10) / 10;
+      eO.textContent = num(e, 1); dO.textContent = num(d, 1);
+      const L = G[0], R = G[1];
+      L.paths.mse.setAttribute('d', sample(L.p, mse));
+      L.paths.mae.setAttribute('d', 'M' + pt(L.p, -6, 6) + 'L' + pt(L.p, 0, 0) + 'L' + pt(L.p, 6, 6));
+      L.paths.hub.setAttribute('d', sample(L.p, x => hub(x, d)));
+      R.paths.mse.setAttribute('d', 'M' + pt(R.p, -6, -6) + 'L' + pt(R.p, 6, 6));
+      R.paths.mae.setAttribute('d', 'M' + pt(R.p, -6, -1) + 'L' + pt(R.p, 0, -1) + 'M' + pt(R.p, 0, 1) + 'L' + pt(R.p, 6, 1));
+      R.paths.hub.setAttribute('d', 'M' + pt(R.p, -6, -d) + 'L' + pt(R.p, -d, -d) + 'L' + pt(R.p, d, d) + 'L' + pt(R.p, 6, d));
+      G.forEach(g => {
+        [-d, d].forEach((v, j) => { const X = ex(g.p, v); g.dl[j].setAttribute('x1', X); g.dl[j].setAttribute('x2', X); g.dt[j].setAttribute('x', X + (j ? 4 : -4)); });
+        const X = ex(g.p, e); g.eL.setAttribute('x1', X); g.eL.setAttribute('x2', X);
+      });
+      const sM = e, sA = e === 0 ? 0 : Math.sign(e), sH = Math.max(-d, Math.min(d, e));
+      place(L.dots.mse, L.p, e, mse(e)); place(L.dots.mae, L.p, e, mae(e)); place(L.dots.hub, L.p, e, hub(e, d));
+      place(R.dots.mse, R.p, e, sM); place(R.dots.hub, R.p, e, sH);
+      if (e === 0) R.dots.mae.setAttribute('visibility', 'hidden'); else place(R.dots.mae, R.p, e, sA);
+      oM.textContent = num(mse(e), 2); oA.textContent = num(mae(e), 2); oH.textContent = num(hub(e, d), 2);
+      oS.textContent = num(sM, 1) + ' · ' + (e === 0 ? '±1' : num(sA, 0)) + ' · ' + num(sH, 1);
+      const ae = num(Math.abs(e), 1), ds = num(d, 1);
+      let s;
+      if (e === 0) s = 'No error, no loss. MAE has a corner at e = 0, where a sub-gradient between −1 and 1 is used; MSE and Huber have slope 0.';
+      else if (Math.abs(e) <= d) s = '|e| = ' + ae + ' ≤ δ = ' + ds + ': Huber uses its squared branch, so it equals MSE (' + num(mse(e), 2) + ') and pulls as hard (' + num(Math.abs(sM), 1) + '). MAE pulls with 1 at any error.';
+      else s = '|e| = ' + ae + ' > δ = ' + ds + ': Huber switches to its linear branch δ|e| − ½δ² = ' + num(hub(e, d), 2) + ', and its pull is capped at ' + ds + '. MSE is ' + num(mse(e), 2) + ' and pulls with ' + num(Math.abs(sM), 1) + ', growing with the error; MAE pulls with 1.';
+      status.textContent = s;
+    };
+    const stop = () => { if (raf) { cancelAnimationFrame(raf); raf = null; } };
+    eS.addEventListener('input', () => { stop(); draw(); });
+    dS.addEventListener('input', draw);
+    grow.addEventListener('click', () => {
+      stop();
+      if (reduce) { eS.value = '6'; draw(); return; }
+      const t0 = performance.now(), dur = 2400;
+      const tick = now => { const t = Math.min(1, (now - t0) / dur); eS.value = (Math.round(60 * t) / 10).toFixed(1); draw(); raf = t < 1 ? requestAnimationFrame(tick) : null; };
+      raf = requestAnimationFrame(tick);
+    });
+    draw();
+  })();
+})();
+</script>
+</body>
+</html>
