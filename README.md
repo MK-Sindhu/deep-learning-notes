@@ -10,6 +10,8 @@ Not an official IIT Madras resource.
 | --- | --- |
 | `index.html` | Hub page with the lecture list, slides links and status |
 | `lecture-02.html` … `lecture-14.html` | One page per lecture |
+| `krish-dl-01.html` … `krish-dl-07.html` | Extra: notes on Krish Naik's *Deep Learning in 5 Hours* video |
+| `ai-interview-qa.html` | Extra: searchable Q&A from NitMonk's AI agent interview playlist (15 videos, 629 questions) |
 | `notes.css`, `notes.js` | Styles and behaviour shared by every page |
 | `theme.js` | Light/dark theme switch (button in the top-right corner; remembers your choice) |
 | `scripts/sync_nav.py` | Regenerates the lecture list and prev/next links |
